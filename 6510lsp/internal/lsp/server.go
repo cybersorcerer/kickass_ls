@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"strconv"
+	"strings"
 	"sync"
 
 	"github.com/c64-lsp/6510lsp/internal/log"
@@ -122,6 +123,8 @@ func Start() {
 							documentStore.documents[uri] = text
 							documentStore.Unlock()
 							log.Logger.Printf("Stored document %s, length: %d\n", uri, len(text))
+							// Publish diagnostics after opening
+						publishDiagnostics(writer, uri, text)
 						}
 					}
 				}
@@ -140,6 +143,8 @@ func Start() {
 									documentStore.documents[uri] = newText
 									documentStore.Unlock()
 									log.Logger.Printf("Updated document %s, new length: %d\n", uri, len(newText))
+									// Publish diagnostics after changing
+									publishDiagnostics(writer, uri, newText)
 								}
 							}
 						}
@@ -155,6 +160,8 @@ func Start() {
 						delete(documentStore.documents, uri)
 						documentStore.Unlock()
 						log.Logger.Printf("Removed document %s from store.\n", uri)
+						// Clear diagnostics when closing
+						publishDiagnostics(writer, uri, "") // Send empty diagnostics to clear
 					}
 				}
 			}
@@ -172,4 +179,52 @@ func writeResponse(writer *bufio.Writer, response []byte) {
 	writer.Write(response)
 	writer.Flush()
 	log.Logger.Printf("Sent response: %s\n", string(response))
+}
+
+// publishDiagnostics analyzes the text and sends diagnostics to the client.
+func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
+	var diagnostics []map[string]interface{}
+
+	lines := strings.Split(text, "\n")
+	for i, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+			continue // Skip empty lines, comments, and directives for this simple check
+		}
+
+		parts := strings.Fields(trimmedLine)
+		if len(parts) == 0 {
+			continue
+		}
+
+		opcode := strings.ToUpper(parts[0])
+
+		// Very basic check for a few known 6510 opcodes
+		switch opcode {
+		case "LDA", "LDX", "LDY", "STA", "STX", "STY", "JMP", "JSR", "RTS", "BRK", "NOP":
+			// Known opcode, no diagnostic for now
+		default:
+			diagnostics = append(diagnostics, map[string]interface{}{
+				"range": map[string]interface{}{
+					"start": map[string]interface{}{"line": i, "character": 0},
+					"end":   map[string]interface{}{"line": i, "character": len(line)},
+				},
+				"severity": float64(1), // 1 = Error
+				"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
+				"source":   "6510lsp",
+			})
+		}
+	}
+
+	note := map[string]interface{}{
+		"jsonrpc": "2.0",
+		"method":  "textDocument/publishDiagnostics",
+		"params": map[string]interface{}{
+			"uri":         uri,
+			"diagnostics": diagnostics,
+		},
+	}
+
+	response, _ := json.Marshal(note)
+	writeResponse(writer, response)
 }
