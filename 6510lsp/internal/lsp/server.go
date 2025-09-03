@@ -87,13 +87,14 @@ func Start() {
 			// Construct and send InitializeResult
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id": message["id"],
+				"id":      message["id"],
 				"result": map[string]interface{}{
 					"capabilities": map[string]interface{}{
 						"textDocumentSync": map[string]interface{}{
 							"openClose": true,
-							"change": float64(1), // TextDocumentSyncKindFull
+							"change":    float64(1), // TextDocumentSyncKindFull
 						},
+						"hoverProvider": true,
 					},
 				},
 			}
@@ -105,7 +106,7 @@ func Start() {
 			log.Logger.Println("Handling shutdown request.")
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id": message["id"],
+				"id":      message["id"],
 				"result":  nil,
 			}
 			response, _ := json.Marshal(result)
@@ -124,7 +125,7 @@ func Start() {
 							documentStore.Unlock()
 							log.Logger.Printf("Stored document %s, length: %d\n", uri, len(text))
 							// Publish diagnostics after opening
-						publishDiagnostics(writer, uri, text)
+							publishDiagnostics(writer, uri, text)
 						}
 					}
 				}
@@ -162,6 +163,58 @@ func Start() {
 						log.Logger.Printf("Removed document %s from store.\n", uri)
 						// Clear diagnostics when closing
 						publishDiagnostics(writer, uri, "") // Send empty diagnostics to clear
+					}
+				}
+			}
+		case "textDocument/hover":
+			log.Logger.Println("Handling textDocument/hover request.")
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						if position, ok := params["position"].(map[string]interface{}); ok {
+							if lineNum, ok := position["line"].(float64); ok {
+								if charNum, ok := position["character"].(float64); ok {
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
+
+									if docFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+											word := getWordAtPosition(lineContent, int(charNum))
+											log.Logger.Printf("Hovering over: %s\n", word)
+
+											description := getOpcodeDescription(strings.ToUpper(word))
+											if description != "" {
+												hoverResult := map[string]interface{}{
+													"contents": map[string]interface{}{
+														"kind":  "markdown",
+														"value": description,
+													},
+												}
+												result := map[string]interface{}{
+													"jsonrpc": "2.0",
+													"id":      message["id"],
+													"result":  hoverResult,
+												}
+												response, _ := json.Marshal(result)
+												writeResponse(writer, response)
+												return // Handled
+											}
+										}
+									}
+									// If no description or document not found, send null result
+									result := map[string]interface{}{
+										"jsonrpc": "2.0",
+										"id":      message["id"],
+										"result":  nil,
+									}
+									response, _ := json.Marshal(result)
+									writeResponse(writer, response)
+								}
+							}
+						}
 					}
 				}
 			}
@@ -227,4 +280,31 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 	response, _ := json.Marshal(note)
 	writeResponse(writer, response)
+}
+
+func getWordAtPosition(lineContent string, charNum int) string {
+	// Find start of word
+	start := charNum
+	for start > 0 && isWordChar(rune(lineContent[start-1])) {
+		start--
+	}
+
+	// Find end of word
+	end := charNum
+	for end < len(lineContent) && isWordChar(rune(lineContent[end])) {
+		end++
+	}
+
+	return lineContent[start:end]
+}
+
+func isWordChar(r rune) bool {
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+func getOpcodeDescription(opcode string) string {
+	if opcode == "LDA" {
+		return "LDA (short for \"LoaD Accumulator\") is the mnemonic for a machine language instruction which retrieves a copy from the specified RAM or I/O address, and stores it in the accumulator. The content of the memory location is not affected by the operation.\n\n| Addressing mode | Assembler format | Opcode / Bytes |\n| --- | --- | --- |\n| Immediate | LDA #nn | A9 / 2 |\n| Absolute | LDA nnnn | AD / 3 |\n| Absolute,X | LDA nnnn,X | BD / 3 |\n| Absolute,Y | LDA nnnn,Y | B9 / 3 |\n| Zeropage | LDA nn | A5 / 2 |\n| Zeropage,X | LDA nn,X | B5 / 2 |\n| Indexed-indirect | LDA (nn,X) | A1 / 2 |\n| Indirect-indexed | LDA (nn),Y | B1 / 2 |"
+	}
+	return ""
 }
