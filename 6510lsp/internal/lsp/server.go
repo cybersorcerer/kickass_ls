@@ -304,7 +304,7 @@ func isWordChar(r rune) bool {
 
 func getOpcodeDescription(opcode string) string {
 	if opcode == "LDA" {
-		return "LDA (short for \"LoaD Accumulator\") is the mnemonic for a machine language instruction which retrieves a copy from the specified RAM or I/O address, and stores it in the accumulator. The content of the memory location is not affected by the operation.\n\n| Addressing mode | Assembler format | Opcode / Bytes |\n| --- | --- | --- |\n| Immediate | LDA #nn | A9 / 2 |\n| Absolute | LDA nnnn | AD / 3 |\n| Absolute,X | LDA nnnn,X | BD / 3 |\n| Absolute,Y | LDA nnnn,Y | B9 / 3 |\n| Zeropage | LDA nn | A5 / 2 |\n| Zeropage,X | LDA nn,X | B5 / 2 |\n| Indexed-indirect | LDA (nn,X) | A1 / 2 |\n| Indirect-indexed | LDA (nn),Y | B1 / 2 |"
+		return "LDA (short for \"LoaD Accumulator\") is the mnemonic for a machine language instruction which retrieves a copy from the specified RAM or I/O address, and stores it in the accumulator. The content of the memory location is not affected by the operation.\n\n| Addressing mode | Assembler format | Opcode / Bytes |\n| --------------- | ---------------- | -------------- |\n| Immediate       | LDA #nn          | A9 / 2         |\n| Absolute        | LDA nnnn         | AD / 3         |\n| Absolute,X      | LDA nnnn,X       | BD / 3         |\n| Absolute,Y      | LDA nnnn,Y       | B9 / 3         |\n| Zeropage | LDA nn | A5 / 2 |\n| Zeropage,X | LDA nn,X | B5 / 2 |\n| Indexed-indirect | LDA (nn,X) | A1 / 2 |\n| Indirect-indexed | LDA (nn),Y | B1 / 2 |"
 	}
 	return ""
 }
