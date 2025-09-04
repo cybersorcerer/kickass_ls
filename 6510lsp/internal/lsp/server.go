@@ -231,13 +231,53 @@ func writeResponse(writer *bufio.Writer, response []byte) {
 
 // publishDiagnostics analyzes the text and sends diagnostics to the client.
 func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
-	var diagnostics []map[string]interface{}
-
+	diagnostics := make([]map[string]interface{}, 0)
 	lines := strings.Split(text, "\n")
+
+	// Data structures for label diagnostics
+	definedLabels := make(map[string]int) // label -> line number
+	usedLabels := make(map[string]bool)
+	jumpOpcodes := map[string]bool{
+		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
+	}
+	allOpcodes := map[string]bool{
+		"ADC": true, "AND": true, "ASL": true, "BCC": true, "BCS": true, "BEQ": true, "BIT": true, "BMI": true, "BNE": true, "BPL": true, "BRK": true, "BVC": true, "BVS": true, "CLC": true, "CLD": true, "CLI": true, "CLV": true, "CMP": true, "CPX": true, "CPY": true, "DEC": true, "DEX": true, "DEY": true, "EOR": true, "INC": true, "INX": true, "INY": true, "JMP": true, "JSR": true, "LDA": true, "LDX": true, "LDY": true, "LSR": true, "NOP": true, "ORA": true, "PHA": true, "PHP": true, "PLA": true, "PLP": true, "ROL": true, "ROR": true, "RTI": true, "RTS": true, "SBC": true, "SEC": true, "SED": true, "SEI": true, "STA": true, "STX": true, "STY": true, "TAX": true, "TAY": true, "TSX": true, "TXA": true, "TXS": true, "TYA": true,
+	}
+
+	// First pass: find all defined labels and check for duplicates
 	for i, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
 		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
-			continue // Skip empty lines, comments, and directives for this simple check
+			continue
+		}
+		parts := strings.Fields(trimmedLine)
+		if len(parts) > 0 {
+		
+potentialLabel := strings.ToUpper(parts[0])
+			if _, isOpcode := allOpcodes[potentialLabel]; !isOpcode {
+				label := parts[0]
+				if _, exists := definedLabels[label]; exists {
+					diagnostics = append(diagnostics, map[string]interface{}{
+						"range": map[string]interface{}{
+							"start": map[string]interface{}{"line": i, "character": 0},
+							"end":   map[string]interface{}{"line": i, "character": len(line)},
+						},
+						"severity": float64(1), // Error
+						"message":  fmt.Sprintf("Duplicate label definition: %s", label),
+						"source":   "6510lsp",
+					})
+				} else {
+					definedLabels[label] = i
+				}
+			}
+		}
+	}
+
+	// Second pass: find all used labels and check for unknown opcodes
+	for i, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+			continue
 		}
 
 		parts := strings.Fields(trimmedLine)
@@ -245,20 +285,57 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 			continue
 		}
 
-		opcode := strings.ToUpper(parts[0])
+		var opcode, operand string
+		firstWordIsLabel := false
+		if _, isLabel := definedLabels[parts[0]]; isLabel {
+			firstWordIsLabel = true
+		}
 
-		// Very basic check for a few known 6510 opcodes
-		switch opcode {
-		case "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA":
-			// Known opcode, no diagnostic for now
-		default:
+		if firstWordIsLabel {
+			if len(parts) > 1 {
+				opcode = strings.ToUpper(parts[1])
+				if len(parts) > 2 {
+					operand = parts[2]
+				}
+			}
+		} else {
+			opcode = strings.ToUpper(parts[0])
+			if len(parts) > 1 {
+				operand = parts[1]
+			}
+		}
+
+		if opcode != "" {
+			// Check for used labels
+			if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
+				usedLabels[operand] = true
+			}
+
+			// Check for unknown opcodes
+			if _, isKnown := allOpcodes[opcode]; !isKnown {
+				diagnostics = append(diagnostics, map[string]interface{}{
+					"range": map[string]interface{}{
+						"start": map[string]interface{}{"line": i, "character": 0},
+						"end":   map[string]interface{}{"line": i, "character": len(line)},
+					},
+					"severity": float64(1), // 1 = Error
+					"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
+					"source":   "6510lsp",
+				})
+			}
+		}
+	}
+
+	// Third pass: check for unused labels
+	for label, lineNum := range definedLabels {
+		if _, used := usedLabels[label]; !used {
 			diagnostics = append(diagnostics, map[string]interface{}{
 				"range": map[string]interface{}{
-					"start": map[string]interface{}{"line": i, "character": 0},
-					"end":   map[string]interface{}{"line": i, "character": len(line)},
+					"start": map[string]interface{}{"line": lineNum, "character": 0},
+					"end":   map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])},
 				},
-				"severity": float64(1), // 1 = Error
-				"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
+				"severity": float64(2), // Warning
+				"message":  fmt.Sprintf("Unused label: %s", label),
 				"source":   "6510lsp",
 			})
 		}
