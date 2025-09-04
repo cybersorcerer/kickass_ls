@@ -168,6 +168,9 @@ func Start() {
 			}
 		case "textDocument/hover":
 			log.Logger.Println("Handling textDocument/hover request.")
+
+			var responseResult interface{} = nil
+
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
@@ -187,37 +190,29 @@ func Start() {
 
 											description := getOpcodeDescription(strings.ToUpper(word))
 											if description != "" {
-												hoverResult := map[string]interface{}{
+												responseResult = map[string]interface{}{
 													"contents": map[string]interface{}{
 														"kind":  "markdown",
 														"value": description,
 													},
 												}
-												result := map[string]interface{}{
-													"jsonrpc": "2.0",
-													"id":      message["id"],
-													"result":  hoverResult,
-												}
-												response, _ := json.Marshal(result)
-												writeResponse(writer, response)
-												return // Handled
 											}
 										}
 									}
-									// If no description or document not found, send null result
-									result := map[string]interface{}{
-										"jsonrpc": "2.0",
-										"id":      message["id"],
-										"result":  nil,
-									}
-									response, _ := json.Marshal(result)
-									writeResponse(writer, response)
 								}
 							}
 						}
 					}
 				}
 			}
+
+			finalResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  responseResult,
+			}
+			responseBytes, _ := json.Marshal(finalResponse)
+			writeResponse(writer, responseBytes)
 		default:
 			log.Logger.Printf("Unhandled method: %s\n", method)
 		}
@@ -254,7 +249,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 		// Very basic check for a few known 6510 opcodes
 		switch opcode {
-		case "LDA", "LDX", "LDY", "STA", "STX", "STY", "JMP", "JSR", "RTS", "BRK", "NOP":
+		case "ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA":
 			// Known opcode, no diagnostic for now
 		default:
 			diagnostics = append(diagnostics, map[string]interface{}{
@@ -283,6 +278,9 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 }
 
 func getWordAtPosition(lineContent string, charNum int) string {
+	if charNum < 0 || charNum >= len(lineContent) {
+		return ""
+	}
 	// Find start of word
 	start := charNum
 	for start > 0 && isWordChar(rune(lineContent[start-1])) {
@@ -295,6 +293,10 @@ func getWordAtPosition(lineContent string, charNum int) string {
 		end++
 	}
 
+	if start >= end {
+		return ""
+	}
+
 	return lineContent[start:end]
 }
 
@@ -304,7 +306,7 @@ func isWordChar(r rune) bool {
 
 func getOpcodeDescription(opcode string) string {
 	if opcode == "LDA" {
-		return "LDA (short for \"LoaD Accumulator\") is the mnemonic for a machine language instruction which retrieves a copy from the specified RAM or I/O address, and stores it in the accumulator. The content of the memory location is not affected by the operation.\n\n| Addressing mode | Assembler format | Opcode / Bytes |\n| --------------- | ---------------- | -------------- |\n| Immediate       | LDA #nn          | A9 / 2         |\n| Absolute        | LDA nnnn         | AD / 3         |\n| Absolute,X      | LDA nnnn,X       | BD / 3         |\n| Absolute,Y      | LDA nnnn,Y       | B9 / 3         |\n| Zeropage | LDA nn | A5 / 2 |\n| Zeropage,X | LDA nn,X | B5 / 2 |\n| Indexed-indirect | LDA (nn,X) | A1 / 2 |\n| Indirect-indexed | LDA (nn),Y | B1 / 2 |"
+		return "**LDA LoaD Accumulator**\n\nretrieves a copy from the specified **RAM** or **I/O** address, and stores\nit in the accumulator. The content of the memory location is not affected\nby the operation.\n\n| Addressing mode | Assembler format | Opcode / Bytes |\n| --------------- | ---------------- | -------------- |\n| Immediate       | LDA #nn          | A9 / 2         |\n| Absolute        | LDA nnnn         | AD / 3         |\n| Absolute,X      | LDA nnnn,X       | BD / 3         |\n| Absolute,Y      | LDA nnnn,Y       | B9 / 3         |\n| Zeropage        | LDA nn           | A5 / 2         |\n| Zeropage,X      | LDA nn,X         | B5 / 2         |\n| Indexed-indirect| LDA (nn,X).      | A1 / 2         |\n| Indirect-indexed| LDA (nn),Y       | B1 / 2         |"
 	}
 	return ""
 }
