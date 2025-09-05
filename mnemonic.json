@@ -1,0 +1,374 @@
+[
+  {
+    "mnemonic": "LDA",
+    "description": "LDA (LoaD Accumulator) loads a value from memory into the accumulator. The content of the memory location is not affected.",
+    "addressing_modes": [
+      {
+        "opcode": "A9",
+        "addressing_mode": "Immediate",
+        "assembler_format": "LDA #nn",
+        "length": 2,
+        "cycles": 2
+      },
+      {
+        "opcode": "AD",
+        "addressing_mode": "Absolute",
+        "assembler_format": "LDA nnnn",
+        "length": 3,
+        "cycles": 4
+      },
+      {
+        "opcode": "BD",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "LDA nnnn,X",
+        "length": 3,
+        "cycles": 4
+      },
+      {
+        "opcode": "B9",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "LDA nnnn,Y",
+        "length": 3,
+        "cycles": 4
+      },
+      {
+        "opcode": "A5",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LDA nn",
+        "length": 2,
+        "cycles": 3
+      },
+      {
+        "opcode": "B5",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "LDA nn,X",
+        "length": 2,
+        "cycles": 4
+      },
+      {
+        "opcode": "A1",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "LDA (nn,X)",
+        "length": 2,
+        "cycles": 6
+      },
+      {
+        "opcode": "B1",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "LDA (nn),Y",
+        "length": 2,
+        "cycles": 5
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has it's most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "ADC",
+    "description": "ADC (ADd with Carry) is a machine language instruction which adds the byte held in the accumulator with that held in the memory address specified. The state of the carry flag before the addition takes place, is taken as the incoming carry in the addition. After the addition, the carry flag will hold the outgoing carry. To perform an addition without a prior carry, the carry flag must be explicitly cleared, typically using the CLC instruction.",
+    "addressing_modes": [
+      {
+        "opcode": "69",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ADC #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "6D",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ADC nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "7D",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ADC nnnn,X",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "79",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "ADC nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "65",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ADC nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "75",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ADC nn,X",
+        "length": 2,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "61",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "ADC (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "71",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "ADC (nn),Y",
+        "length": 2,
+        "cycles": "5*"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has it's most significant bit set.",
+      "V - The overflow flag is set if the operation results in an overflow.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set if the addition resulted in an outgoing carry."
+    ]
+  },
+  {
+    "mnemonic": "AND",
+    "description": "The AND instruction performs a bit-wise boolean \"and\" operation between the accumulator and a given operand. The result is then stored back in the accumulator. This operation is often used to \"mask\" bits, as the resulting bit is 1 only if the corresponding bits in both the operand and the accumulator are 1.",
+    "addressing_modes": [
+      {
+        "opcode": "29",
+        "addressing_mode": "Immediate",
+        "assembler_format": "AND #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "2D",
+        "addressing_mode": "Absolute",
+        "assembler_format": "AND nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "3D",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "AND nnnn,X",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "39",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "AND nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "25",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "AND nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "35",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "AND nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "21",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "AND (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "31",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "AND (nn),Y",
+        "length": 2,
+        "cycles": "5*"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the most significant bit (bit 7) of the result is 1.",
+      "Z - The zero flag is set if the result is 0, otherwise it is cleared."
+    ]
+  },
+  {
+    "mnemonic": "ASL",
+    "description": "ASL (Arithmetic Shift Left) shifts all bits in either the accumulator or a specified memory location one position to the left. The bit from the most significant position (bit 7) is moved into the carry flag. A zero is placed in the least significant bit position (bit 0). This operation effectively doubles an unsigned 8-bit integer.",
+    "addressing_modes": [
+      {
+        "opcode": "0A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "ASL A",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "0E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ASL nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "1E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ASL nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "06",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ASL nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "16",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ASL nn,X",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "N - Set if the most significant bit of the result is 1.",
+      "Z - Set if the result is 0.",
+      "C - Set to the value of the bit that was shifted out."
+    ]
+  },
+  {
+    "mnemonic": "BCC",
+    "description": "BCC (Branch if Carry is Clear) is a machine language instruction that branches, or \"jumps\", to the address specified if, and only if the carry flag is clear. If the carry flag is set when the CPU encounters a BCC instruction, the CPU will continue at the instruction following the BCC rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "90",
+        "addressing_mode": "Relative",
+        "assembler_format": "BCC nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "BCS",
+    "description": "BCS (Branch if Carry is Set) is a machine language instruction that branches, or \"jumps\", to the address specified if, and only if the carry flag is set. If the carry flag is clear when the CPU encounters a BCS instruction, the CPU will continue at the instruction following the BCS rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "B0",
+        "addressing_mode": "Relative",
+        "assembler_format": "BCS nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "BEQ",
+    "description": "BEQ (Branch if EQual) is a machine language instruction which branches, or \"jumps\", to the address specified if, and only if the zero flag is set. If the zero flag is clear when the CPU encounters a BEQ instruction, the CPU will continue at the instruction following the BEQ rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "F0",
+        "addressing_mode": "Relative",
+        "assembler_format": "BEQ nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "BIT",
+    "description": "BIT tests specific bits in the contents of the specified address and sets the zero, negative, and overflow flags accordingly, without affecting the contents of the accumulator. Bit 7 is transferred directly to the negative flag. Bit 6 is transferred directly to the overflow flag. A bitwise AND is performed between the contents of the designated memory address and that of the accumulator; If the result is a zero byte, the zero flag is set.",
+    "addressing_modes": [
+      {
+        "opcode": "2C",
+        "addressing_mode": "Absolute",
+        "assembler_format": "BIT nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "24",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "BIT nn",
+        "length": 2,
+        "cycles": "3"
+      }
+    ],
+    "cpu_flags": [
+      "N - Set from bit 7 of the memory location.",
+      "V - Set from bit 6 of the memory location.",
+      "Z - Set if the result of a bitwise AND between the accumulator and the memory location is zero."
+    ]
+  },
+  {
+    "mnemonic": "BMI",
+    "description": "BMI (Branch if MInus) is a machine language instruction which branches, or \"jumps\", to the address specified if, and only if the negative flag is set. If the negative flag is clear when the CPU encounters a BMI instruction, the CPU will continue at the instruction following the BMI rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "30",
+        "addressing_mode": "Relative",
+        "assembler_format": "BMI nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "BNE",
+    "description": "BNE (Branch if Not Equal) is a machine language instruction that jumps to a specified address only if the zero flag in the status register is clear (value of 0). If the zero flag is set, the program will not branch and will continue to the next instruction.",
+    "addressing_modes": [
+      {
+        "opcode": "D0",
+        "addressing_mode": "Relative",
+        "assembler_format": "BNE nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "BPL",
+    "description": "BPL (Branch if PLus) is a machine language instruction which branches, or \"jumps\", to the address specified if, and only if the negative flag is clear. If the negative flag is set when the CPU encounters a BPL instruction, the CPU will continue at the instruction following the BPL rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "10",
+        "addressing_mode": "Relative",
+        "assembler_format": "BPL nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "BRK",
+    "description": "BRK (short for \"BReaKpoint\") is the mnemonic for a machine language instruction which sets the break and interrupt flags, increments the program counter by two and stores it along with the processor status flags onto the stack. Finally it raises an IRQ interrupt event.",
+    "addressing_modes": [
+      {
+        "opcode": "00",
+        "addressing_mode": "Implied",
+        "assembler_format": "BRK",
+        "length": 1,
+        "cycles": "7"
+      }
+    ],
+    "cpu_flags": [
+      "B - The break status flag is set.",
+      "I - The interrupt status flag is set."
+    ]
+  }
+]
