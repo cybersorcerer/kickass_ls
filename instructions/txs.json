@@ -1,0 +1,16 @@
+[
+  {
+    "mnemonic": "TXS",
+    "description": "The TXS instruction, short for \"Transfer X to Stack pointer,\" is a machine language instruction that copies the contents of the X index register into the stack pointer.",
+    "addressing_modes": [
+      {
+        "opcode": "9A",
+        "addressing_mode": "Implied",
+        "assembler_format": "TXS",
+        "length": 1,
+        "cycles": 2
+      }
+    ],
+    "cpu_flags": []
+  }
+]

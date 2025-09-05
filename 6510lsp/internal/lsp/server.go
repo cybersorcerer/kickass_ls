@@ -13,6 +13,26 @@ import (
 	"github.com/c64-lsp/6510lsp/internal/log"
 )
 
+// Mnemonic represents the structure of a single mnemonic entry in mnemonic.json
+type Mnemonic struct {
+	Mnemonic        string           `json:"mnemonic"`
+	Description     string           `json:"description"`
+	AddressingModes []AddressingMode `json:"addressing_modes"`
+	CPUFlags        []string         `json:"cpu_flags"`
+}
+
+// AddressingMode represents the structure of an addressing mode within a mnemonic
+type AddressingMode struct {
+	Opcode         string `json:"opcode"`
+	AddressingMode string `json:"addressing_mode"`
+	AssemblerFormat string `json:"assembler_format"`
+	Length         int    `json:"length"`
+	Cycles         string `json:"cycles"` // Can be "2", "4*", "2/3/4"
+}
+
+// Global variable to store mnemonic data
+var mnemonics []Mnemonic
+
 // documentStore holds the content of opened text documents.
 var documentStore = struct {
 	sync.RWMutex
@@ -24,6 +44,13 @@ var documentStore = struct {
 // Start initializes and runs the LSP server.
 func Start() {
 	log.Logger.Println("LSP server starting...")
+
+	// Load mnemonic data
+	err := loadMnemonics("/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/mnemonic.json")
+	if err != nil {
+		log.Logger.Printf("Error loading mnemonics: %v\n", err)
+		// Depending on severity, you might want to exit or continue without mnemonic data
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
@@ -95,6 +122,10 @@ func Start() {
 							"change":    float64(1), // TextDocumentSyncKindFull
 						},
 						"hoverProvider": true,
+						"completionProvider": map[string]interface{}{
+							"resolveProvider":   false,
+							"triggerCharacters": []string{" ", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"},
+						},
 					},
 				},
 			}
@@ -213,6 +244,96 @@ func Start() {
 			}
 			responseBytes, _ := json.Marshal(finalResponse)
 			writeResponse(writer, responseBytes)
+		case "textDocument/completion":
+			log.Logger.Println("Handling textDocument/completion request.")
+
+			var completionItems []map[string]interface{}
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						if position, ok := params["position"].(map[string]interface{}); ok {
+							if lineNum, ok := position["line"].(float64); ok {
+								if charNum, ok := position["character"].(float64); ok {
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
+
+									if docFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+
+											// Basic context analysis
+											parts := strings.Fields(lineContent[:int(charNum)])
+											if len(parts) > 0 {
+												lastPart := parts[len(parts)-1]
+												jumpOpcodes := map[string]bool{"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true}
+
+												if _, isJump := jumpOpcodes[strings.ToUpper(lastPart)]; isJump {
+													// Label completion context
+													definedLabels := make(map[string]int)
+													allOpcodes := make(map[string]bool)
+											for _, m := range mnemonics {
+												allOpcodes[strings.ToUpper(m.Mnemonic)] = true
+											}
+													for i, l := range lines {
+														p := strings.Fields(strings.TrimSpace(l))
+														if len(p) > 0 {
+															if _, isOpcode := allOpcodes[strings.ToUpper(p[0])]; !isOpcode {
+																definedLabels[p[0]] = i
+															}
+														}
+													}
+													for label := range definedLabels {
+														completionItems = append(completionItems, map[string]interface{}{
+															"label": label,
+															"kind":  float64(10), // 10 = Property (for labels)
+														})
+													}
+												} else {
+													// Opcode completion context
+													allOpcodes := []string{"ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"}
+													for _, opcode := range allOpcodes {
+														if strings.HasPrefix(opcode, strings.ToUpper(lastPart)) {
+															completionItems = append(completionItems, map[string]interface{}{
+																"label": opcode,
+																"kind":  float64(14), // 14 = Keyword
+															})
+														}
+													}
+												}
+											} else {
+												// Opcode completion context (empty line)
+												allOpcodes := []string{"ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"}
+												for _, opcode := range allOpcodes {
+													completionItems = append(completionItems, map[string]interface{}{
+														"label": opcode,
+														"kind":  float64(14), // 14 = Keyword
+													})
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			completionList := map[string]interface{}{
+				"isIncomplete": false,
+				"items":        completionItems,
+			}
+
+			result := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  completionList,
+			}
+			response, _ := json.Marshal(result)
+			writeResponse(writer, response)
 		default:
 			log.Logger.Printf("Unhandled method: %s\n", method)
 		}
@@ -240,8 +361,9 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	jumpOpcodes := map[string]bool{
 		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
 	}
-	allOpcodes := map[string]bool{
-		"ADC": true, "AND": true, "ASL": true, "BCC": true, "BCS": true, "BEQ": true, "BIT": true, "BMI": true, "BNE": true, "BPL": true, "BRK": true, "BVC": true, "BVS": true, "CLC": true, "CLD": true, "CLI": true, "CLV": true, "CMP": true, "CPX": true, "CPY": true, "DEC": true, "DEX": true, "DEY": true, "EOR": true, "INC": true, "INX": true, "INY": true, "JMP": true, "JSR": true, "LDA": true, "LDX": true, "LDY": true, "LSR": true, "NOP": true, "ORA": true, "PHA": true, "PHP": true, "PLA": true, "PLP": true, "ROL": true, "ROR": true, "RTI": true, "RTS": true, "SBC": true, "SEC": true, "SED": true, "SEI": true, "STA": true, "STX": true, "STY": true, "TAX": true, "TAY": true, "TSX": true, "TXA": true, "TXS": true, "TYA": true,
+	allOpcodes := make(map[string]bool)
+	for _, m := range mnemonics {
+		allOpcodes[strings.ToUpper(m.Mnemonic)] = true
 	}
 
 	// First pass: find all defined labels and check for duplicates
@@ -252,8 +374,55 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		}
 		parts := strings.Fields(trimmedLine)
 		if len(parts) > 0 {
-		
-potentialLabel := strings.ToUpper(parts[0])
+			potentialLabel := parts[0]
+
+			// Check for labels ending with ':'
+			if strings.HasSuffix(potentialLabel, ":") {
+				label := potentialLabel[:len(potentialLabel)-1] // Remove the colon
+				// Handle multi-labels starting with '!'
+				if strings.HasPrefix(label, "!") {
+					label = label[1:] // Remove the '!' for storage, actual resolution happens later
+				}
+
+				if _, isOpcode := allOpcodes[strings.ToUpper(label)]; !isOpcode {
+					if _, exists := definedLabels[label]; exists {
+						diagnostics = append(diagnostics, map[string]interface{}{
+							"range": map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end":   map[string]interface{}{"line": i, "character": len(line)},},
+							"severity": float64(1), // Error
+							"message":  fmt.Sprintf("Duplicate label definition: %s", label),
+							"source":   "6510lsp",
+						})
+					} else {
+						definedLabels[label] = i
+					}
+				}
+			} else {
+				// If it doesn't end with ':', it's either an opcode or an invalid label definition
+				// For now, we'll treat it as an opcode if it matches one, otherwise it's an unknown opcode.
+				// The assumption here is that labels *must* end with ':' in Kick Assembler.
+				// If the first word is not an opcode, and doesn't end with ':', it's an error.
+				if _, isOpcode := allOpcodes[strings.ToUpper(potentialLabel)]; !isOpcode {
+					diagnostics = append(diagnostics, map[string]interface{}{
+						"range": map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end":   map[string]interface{}{"line": i, "character": len(line)},},
+						"severity": float64(1), // Error
+						"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
+						"source":   "6510lsp",
+					})
+				}
+			}
+		}
+	}
+
+	// First pass: find all defined labels and check for duplicates
+	for i, line := range lines {
+		trimmedLine := strings.TrimSpace(line)
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+			continue
+		}
+		parts := strings.Fields(trimmedLine)
+		if len(parts) > 0 {
+
+			potentialLabel := strings.ToUpper(parts[0])
 			if _, isOpcode := allOpcodes[potentialLabel]; !isOpcode {
 				label := parts[0]
 				if _, exists := definedLabels[label]; exists {
@@ -308,7 +477,17 @@ potentialLabel := strings.ToUpper(parts[0])
 		if opcode != "" {
 			// Check for used labels
 			if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
-				usedLabels[operand] = true
+				// Handle multi-label references (e.g., !label+, !label-)
+				if strings.HasPrefix(operand, "!") {
+					// Remove '!' and any '+' or '-' suffixes for lookup in definedLabels
+					baseLabel := strings.TrimPrefix(operand, "!")
+					baseLabel = strings.TrimRightFunc(baseLabel, func(r rune) bool {
+						return r == '+' || r == '-'
+					})
+					usedLabels[baseLabel] = true
+				} else {
+					usedLabels[operand] = true
+				}
 			}
 
 			// Check for unknown opcodes
@@ -354,6 +533,20 @@ potentialLabel := strings.ToUpper(parts[0])
 	writeResponse(writer, response)
 }
 
+func loadMnemonics(filePath string) error {
+	file, err := os.ReadFile(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to read mnemonic.json: %w", err)
+	}
+
+	if err := json.Unmarshal(file, &mnemonics); err != nil {
+		return fmt.Errorf("failed to unmarshal mnemonic.json: %w", err)
+	}
+
+	log.Logger.Println("Successfully loaded mnemonic.json")
+	return nil
+}
+
 func getWordAtPosition(lineContent string, charNum int) string {
 	if charNum < 0 || charNum >= len(lineContent) {
 		return ""
@@ -382,8 +575,75 @@ func isWordChar(r rune) bool {
 }
 
 func getOpcodeDescription(opcode string) string {
-	if opcode == "LDA" {
-		return "**LDA LoaD Accumulator**\n\nretrieves a copy from the specified **RAM** or **I/O** address, and stores\nit in the accumulator. The content of the memory location is not affected\nby the operation.\n\n| Addressing mode | Assembler format | Opcode / Bytes |\n| --------------- | ---------------- | -------------- |\n| Immediate       | LDA #nn          | A9 / 2         |\n| Absolute        | LDA nnnn         | AD / 3         |\n| Absolute,X      | LDA nnnn,X       | BD / 3         |\n| Absolute,Y      | LDA nnnn,Y       | B9 / 3         |\n| Zeropage        | LDA nn           | A5 / 2         |\n| Zeropage,X      | LDA nn,X         | B5 / 2         |\n| Indexed-indirect| LDA (nn,X).      | A1 / 2         |\n| Indirect-indexed| LDA (nn),Y       | B1 / 2         |"
+	for _, m := range mnemonics {
+		if strings.ToUpper(m.Mnemonic) == opcode {
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", m.Mnemonic, m.Description))
+
+			if len(m.AddressingModes) > 0 {
+				// Calculate maximum widths for each column
+				maxAddrModeLen := len("Addressing mode")
+				maxAsmFormatLen := len("Assembler format")
+				maxOpcodeLen := len("Opcode")
+				maxLengthLen := len("Length")
+				maxCyclesLen := len("Cycles")
+
+				for _, am := range m.AddressingModes {
+					if len(am.AddressingMode) > maxAddrModeLen {
+						maxAddrModeLen = len(am.AddressingMode)
+					}
+					if len(am.AssemblerFormat) > maxAsmFormatLen {
+						maxAsmFormatLen = len(am.AssemblerFormat)
+					}
+					if len(am.Opcode) > maxOpcodeLen {
+						maxOpcodeLen = len(am.Opcode)
+					}
+					// Length is int, convert to string for length calculation
+					if len(fmt.Sprintf("%d", am.Length)) > maxLengthLen {
+						maxLengthLen = len(fmt.Sprintf("%d", am.Length))
+					}
+					if len(fmt.Sprintf("%v", am.Cycles)) > maxCyclesLen {
+						maxCyclesLen = len(fmt.Sprintf("%v", am.Cycles))
+					}
+				}
+
+				// Format header
+			sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
+					maxAddrModeLen, "Addressing mode",
+					maxAsmFormatLen, "Assembler format",
+					maxOpcodeLen, "Opcode",
+					maxLengthLen, "Length",
+					maxCyclesLen, "Cycles"))
+
+				// Format separator
+			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+					strings.Repeat("-", maxAddrModeLen),
+					strings.Repeat("-", maxAsmFormatLen),
+					strings.Repeat("-", maxOpcodeLen),
+					strings.Repeat("-", maxLengthLen),
+					strings.Repeat("-", maxCyclesLen)))
+
+				// Format data rows
+				for _, am := range m.AddressingModes {
+					sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s | %-*d | %-*v |\n",
+						maxAddrModeLen, am.AddressingMode,
+						maxAsmFormatLen, am.AssemblerFormat,
+						maxOpcodeLen, am.Opcode,
+						maxLengthLen, am.Length,
+						maxCyclesLen, am.Cycles)) // Use %v for interface{} type
+				}
+			}
+
+			if len(m.CPUFlags) > 0 {
+				sb.WriteString("\n**CPU Flags:**\n")
+				for _, flag := range m.CPUFlags {
+					sb.WriteString(fmt.Sprintf("- %s\n", flag))
+				}
+			}
+			return sb.String()
+		}
 	}
-	return ""
+	return "" // No description found
 }
+
+

@@ -1,0 +1,48 @@
+[
+  {
+    "mnemonic": "LSR",
+    "description": "LSR (Logic Shift Right) is a machine language instruction that shifts bits in either the accumulator or a specified RAM address one position to the right. The bit shifted out goes into the carry flag, and the most significant bit is filled with a zero. If the byte is an unsigned 8-bit integer, LSR effectively halves the number, with the carry flag holding the remainder. LSR and ASL (Arithmetic Shift Left) are complemented by ROL (Rotate Left) and ROR (Rotate Right) instructions, which fill the vacant bit with the carry flag's prior value.",
+    "addressing_modes": [
+      {
+        "opcode": "4A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "LSR A",
+        "length": 1,
+        "cycles": 2
+      },
+      {
+        "opcode": "4E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "LSR nnnn",
+        "length": 3,
+        "cycles": 6
+      },
+      {
+        "opcode": "5E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "LSR nnnn,X",
+        "length": 3,
+        "cycles": 7
+      },
+      {
+        "opcode": "46",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LSR nn",
+        "length": 2,
+        "cycles": 5
+      },
+      {
+        "opcode": "56",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "LSR nn,X",
+        "length": 2,
+        "cycles": 6
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is always cleared.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is copied from the least significant bit."
+    ]
+  }
+]

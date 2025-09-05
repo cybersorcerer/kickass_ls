@@ -1,0 +1,48 @@
+[
+  {
+    "mnemonic": "ROL",
+    "description": "ROL (ROtate Left) is a machine language instruction for the C64. It rotates the bits of the accumulator or a memory location one bit to the left. The bit from position 7 is shifted into the Carry-Flag, and the Carry-Flag is shifted into bit 0.",
+    "addressing_modes": [
+      {
+        "opcode": "2A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "ROL A",
+        "length": 1,
+        "cycles": 2
+      },
+      {
+        "opcode": "2E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ROL nnnn",
+        "length": 3,
+        "cycles": 6
+      },
+      {
+        "opcode": "3E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ROL nnnn,X",
+        "length": 3,
+        "cycles": 7
+      },
+      {
+        "opcode": "26",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ROL nn",
+        "length": 2,
+        "cycles": 5
+      },
+      {
+        "opcode": "36",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ROL nn,X",
+        "length": 2,
+        "cycles": 6
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set to the value of the bit that was shifted out (bit 7)."
+    ]
+  }
+]

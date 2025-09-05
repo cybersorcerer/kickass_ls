@@ -1,0 +1,48 @@
+[
+  {
+    "mnemonic": "ROR",
+    "description": "ROR (ROtate Right) is an assembler instruction for the C64. It rotates the bits of the accumulator or a memory location one bit to the right. The bit from position 0 is shifted into the Carry-Flag, and the Carry-Flag is shifted into bit 7.",
+    "addressing_modes": [
+      {
+        "opcode": "6A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "ROR A",
+        "length": 1,
+        "cycles": 2
+      },
+      {
+        "opcode": "6E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ROR nnnn",
+        "length": 3,
+        "cycles": 6
+      },
+      {
+        "opcode": "7E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ROR nnnn,X",
+        "length": 3,
+        "cycles": 7
+      },
+      {
+        "opcode": "66",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ROR nn",
+        "length": 2,
+        "cycles": 5
+      },
+      {
+        "opcode": "76",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ROR nn,X",
+        "length": 2,
+        "cycles": 6
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set to the value of the bit that was shifted out (bit 0)."
+    ]
+  }
+]

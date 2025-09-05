@@ -1,0 +1,66 @@
+{
+  "mnemonic": "EOR",
+  "description": "EOR (short for \"Exclusive OR\") is a machine language instruction which performs a bit-wise boolean \"Exclusive-or\" between each of the eight bits in the accumulator and their corresponding bits in the memory address specified. The eight resulting bits form a byte, which is stored in the accumulator.",
+  "addressing_modes": [
+    {
+      "opcode": "49",
+      "addressing_mode": "Immediate",
+      "assembler_format": "EOR #nn",
+      "length": 2,
+      "cycles": 2
+    },
+    {
+      "opcode": "4D",
+      "addressing_mode": "Absolute",
+      "assembler_format": "EOR nnnn",
+      "length": 3,
+      "cycles": 4
+    },
+    {
+      "opcode": "5D",
+      "addressing_mode": "Absolute,X",
+      "assembler_format": "EOR nnnn,X",
+      "length": 3,
+      "cycles": "4*"
+    },
+    {
+      "opcode": "59",
+      "addressing_mode": "Absolute,Y",
+      "assembler_format": "EOR nnnn,Y",
+      "length": 3,
+      "cycles": "4*"
+    },
+    {
+      "opcode": "45",
+      "addressing_mode": "Zeropage",
+      "assembler_format": "EOR nn",
+      "length": 2,
+      "cycles": 3
+    },
+    {
+      "opcode": "55",
+      "addressing_mode": "Zeropage,X",
+      "assembler_format": "EOR nn,X",
+      "length": 2,
+      "cycles": 4
+    },
+    {
+      "opcode": "41",
+      "addressing_mode": "Indexed-indirect",
+      "assembler_format": "EOR (nn,X)",
+      "length": 2,
+      "cycles": 6
+    },
+    {
+      "opcode": "51",
+      "addressing_mode": "Indirect-indexed",
+      "assembler_format": "EOR (nn),Y",
+      "length": 2,
+      "cycles": "5*"
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+    "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+  ]
+}

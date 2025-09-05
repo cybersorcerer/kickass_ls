@@ -1,0 +1,16 @@
+[
+  {
+    "mnemonic": "JSR",
+    "description": "JSR (Jump to SubRoutine) is a machine language instruction which saves the current program counter on the stack and then jumps to the address specified. The program counter is saved on the stack in such a way that a subsequent RTS instruction will return to the instruction immediately following the JSR instruction.",
+    "addressing_modes": [
+      {
+        "opcode": "20",
+        "addressing_mode": "Absolute",
+        "assembler_format": "JSR nnnn",
+        "length": 3,
+        "cycles": 6
+      }
+    ],
+    "cpu_flags": []
+  }
+]

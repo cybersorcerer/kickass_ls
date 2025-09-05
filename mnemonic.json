@@ -8,56 +8,56 @@
         "addressing_mode": "Immediate",
         "assembler_format": "LDA #nn",
         "length": 2,
-        "cycles": 2
+        "cycles": "2"
       },
       {
         "opcode": "AD",
         "addressing_mode": "Absolute",
         "assembler_format": "LDA nnnn",
         "length": 3,
-        "cycles": 4
+        "cycles": "4"
       },
       {
         "opcode": "BD",
         "addressing_mode": "Absolute,X",
         "assembler_format": "LDA nnnn,X",
         "length": 3,
-        "cycles": 4
+        "cycles": "4"
       },
       {
         "opcode": "B9",
         "addressing_mode": "Absolute,Y",
         "assembler_format": "LDA nnnn,Y",
         "length": 3,
-        "cycles": 4
+        "cycles": "4"
       },
       {
         "opcode": "A5",
         "addressing_mode": "Zeropage",
         "assembler_format": "LDA nn",
         "length": 2,
-        "cycles": 3
+        "cycles": "3"
       },
       {
         "opcode": "B5",
         "addressing_mode": "Zeropage,X",
         "assembler_format": "LDA nn,X",
         "length": 2,
-        "cycles": 4
+        "cycles": "4"
       },
       {
         "opcode": "A1",
         "addressing_mode": "Indexed-indirect",
         "assembler_format": "LDA (nn,X)",
         "length": 2,
-        "cycles": 6
+        "cycles": "6"
       },
       {
         "opcode": "B1",
         "addressing_mode": "Indirect-indexed",
         "assembler_format": "LDA (nn),Y",
         "length": 2,
-        "cycles": 5
+        "cycles": "5"
       }
     ],
     "cpu_flags": [
@@ -370,5 +370,1623 @@
       "B - The break status flag is set.",
       "I - The interrupt status flag is set."
     ]
+  },
+  {
+    "mnemonic": "ALR",
+    "description": "ALR (short for \"AND then Logical shift Right\") is a mnemonic for an illegal opcode machine language instruction. This illegal opcode is a combination of two operations using immediate addressing mode: AND, followed by LSR Function: A = (A \u0026 #{imm}) / 2",
+    "addressing_modes": [
+      {
+        "opcode": "4B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ALR #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is always cleared.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag has the value of accumulator's bit 0 if bit 0 of the mask is 1 or cleared otherwise."
+    ]
+  },
+  {
+    "mnemonic": "ANC",
+    "description": "ANC (short for \"Logic ANd altering Carry\") is an illegal opcode that works the same as AND, except that the Carry Flag is set to the same state that the Negative Flag is set to.",
+    "addressing_modes": [
+      {
+        "opcode": "0B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ANC #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "2B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ANC #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag to the same state that the Negative Flag is set to."
+    ]
+  },
+  {
+    "mnemonic": "ARR",
+    "description": "ARR is the mnemonic for the illegal opcode machine language instruction which ANDs the content of accumulator register with an immediate value and then RORs the result. This illegal opcode is a combination of two operations with the same addressing mode: AND, ROR",
+    "addressing_modes": [
+      {
+        "opcode": "6B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ARR #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has it's most significant bit set (not in decimal mode).",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero (not in decimal mode).",
+      "C - The carry flag is set or cleared depending on the result."
+    ]
+  },
+  {
+    "mnemonic": "BVC",
+    "description": "BVC (Branch if oVerflow Clear) is a machine language instruction which branches, or \"jumps\", to the address specified if, and only if the overflow flag is clear. If the overflow flag is set when the CPU encounters a BVC instruction, the CPU will continue at the instruction following the BVC rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "50",
+        "addressing_mode": "Relative",
+        "assembler_format": "BVC nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "CLC",
+    "description": "CLC (short for \"CLear Carry\") is the mnemonic for a machine language instruction which unconditionally clears the carry flag.",
+    "addressing_modes": [
+      {
+        "opcode": "18",
+        "addressing_mode": "Implied",
+        "assembler_format": "CLC",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "C - The carry flag is cleared."
+    ]
+  },
+  {
+    "mnemonic": "BVS",
+    "description": "BVS (short for \"Branch if oVerflow Set\") is the mnemonic for a machine language instruction which branches, or \"jumps\", to the address specified if, and only if the overflow flag is set. If the overflow flag is clear when the CPU encounters a BVC instruction, the CPU will continue at the instruction following the BVC rather than taking the jump.",
+    "addressing_modes": [
+      {
+        "opcode": "70",
+        "addressing_mode": "Relative",
+        "assembler_format": "BVS nn",
+        "length": 2,
+        "cycles": "2/3/4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "CLD",
+    "description": "CLD (short for \"CLear Decimal\") is the mnemonic for a machine language instruction which unconditionally clears the decimal flag. This means that all subsequent additions and subtractions will be performed in binary mode.",
+    "addressing_modes": [
+      {
+        "opcode": "D8",
+        "addressing_mode": "Implied",
+        "assembler_format": "CLD",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "D - The decimal flag is cleared."
+    ]
+  },
+  {
+    "mnemonic": "CLI",
+    "description": "CLI (short for \"CLear Interrupt flag\") is the mnemonic for a machine language instruction which clears the interrupt flag, so that the CPU will respond to IRQ interrupt events. To disable the response to IRQs, use the complementary instruction SEI.",
+    "addressing_modes": [
+      {
+        "opcode": "58",
+        "addressing_mode": "Implied",
+        "assembler_format": "CLI",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "I - The interrupt status flag is cleared."
+    ]
+  },
+  {
+    "mnemonic": "CLV",
+    "description": "CLV (short for \"CLear oVerflow\") is the mnemonic for a machine language instruction which clears the Overflow flag.",
+    "addressing_modes": [
+      {
+        "opcode": "B8",
+        "addressing_mode": "Implied",
+        "assembler_format": "CLV",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "V - The overflow flag is cleared."
+    ]
+  },
+  {
+    "mnemonic": "CMP",
+    "description": "CMP (CoMPare accumulator) is a machine language instruction which compares the byte held in the accumulator with the byte held in the memory address specified. The comparison is performed by internally subtracting the memory value from the accumulator value, and setting the N, Z, and C flags according to the result. The accumulator and memory contents are not altered.",
+    "addressing_modes": [
+      {
+        "opcode": "C9",
+        "addressing_mode": "Immediate",
+        "assembler_format": "CMP #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "CD",
+        "addressing_mode": "Absolute",
+        "assembler_format": "CMP nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "DD",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "CMP nnnn,X",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "D9",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "CMP nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "C5",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "CMP nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "D5",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "CMP nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "C1",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "CMP (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "D1",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "CMP (nn),Y",
+        "length": 2,
+        "cycles": "5*"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set if the accumulator value is greater than or equal to the memory value, or cleared if the accumulator value is less than the memory value."
+    ]
+  },
+  {
+    "mnemonic": "CPX",
+    "description": "CPX (short for \"ComPare X\") is the mnemonic for a machine language instruction which compares the contents of the X index register against that of the specified operand by subtracting the latter from the former, and setting the negative and carry flags according to the result. Unlike SBC, the result of the subtraction is discarded rather than stored back into the register, which is thus unaffected by the CPX operation.",
+    "addressing_modes": [
+      {
+        "opcode": "E0",
+        "addressing_mode": "Immediate",
+        "assembler_format": "CPX #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "EC",
+        "addressing_mode": "Absolute",
+        "assembler_format": "CPX nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "E4",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "CPX nn",
+        "length": 2,
+        "cycles": "3"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set if the X register value is greater than or equal to the memory value, or cleared if the X register value is less than the memory value."
+    ]
+  },
+  {
+    "mnemonic": "CPY",
+    "description": "CPY (short for \"ComPare Y\") is a machine language instruction that compares the contents of the Y index register against a specified operand by subtracting the latter from the former. This operation sets the negative and carry flags based on the result, but unlike SBC, the result of the subtraction is discarded, leaving the register unaffected.",
+    "addressing_modes": [
+      {
+        "opcode": "C0",
+        "addressing_mode": "Immediate",
+        "assembler_format": "CPY #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "CC",
+        "addressing_mode": "Absolute",
+        "assembler_format": "CPY nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "C4",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "CPY nn",
+        "length": 2,
+        "cycles": "3"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative (most significant bit set).",
+      "Z - The zero flag is set if the result is zero, or cleared if non-zero.",
+      "C - The carry flag is set or cleared depending on the result."
+    ]
+  },
+  {
+    "mnemonic": "DCP",
+    "description": "DCP (short for \"Decrease then ComPare\") is a mnemonic for an illegal opcode machine language instruction. This illegal opcode is a combination of two operations with the same addressing mode: DEC, followed by CMP. DCP can be used to effectively implement the indexed-indirect and indirect-indexed addressing modes that DEC lacks.",
+    "addressing_modes": [
+      {
+        "opcode": "C3",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "DCP (nn,X)",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "C7",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "DCP nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "CF",
+        "addressing_mode": "Absolute",
+        "assembler_format": "DCP nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "D3",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "DCP (nn),Y",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "D7",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DCP nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "DB",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "DCP nnnn,Y",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "DF",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "DCP nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set if the accumulator value is greater than or equal to the memory value, or cleared if the accumulator value is less than the memory value."
+    ]
+  },
+  {
+    "mnemonic": "DEC",
+    "description": "DEC (DECrement memory) is a machine language instruction which decrements the byte held in the specified memory address by one. The negative and zero flags are set according to the result. The carry and overflow flags are unaffected.",
+    "addressing_modes": [
+      {
+        "opcode": "C6",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "DEC nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "D6",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DEC nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "CE",
+        "addressing_mode": "Absolute",
+        "assembler_format": "DEC nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "DE",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "DEC nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "DEX",
+    "description": "DEX (DEcrement X) is a machine language instruction which decrements the X index register by one. The negative and zero flags are set according to the result. The carry and overflow flags are unaffected.",
+    "addressing_modes": [
+      {
+        "opcode": "CA",
+        "addressing_mode": "Implied",
+        "assembler_format": "DEX",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "DEY",
+    "description": "DEY (DEcrease Y) is a machine language instruction which decrements the numerical value of Y index register, by one, and \"wraps over\" if the value goes below the numerical limits of a byte. If the Y index register is taken as an unsigned integer, DEY \"counts down\" from 255 thru 0/$FF thru $0. If the index register already contains the minimum value of 0/$0 as it is decremented, it \"wraps over\" to the value 255/$FF. If the Y index register is taken as a signed integer, DEY will \"count down\" from +127 thru −128, or +$7F thru −$80. If the register already contains the value −128/−$80 when it is decremented, it \"wraps over\" to the value +127/$7F.",
+    "addressing_modes": [
+      {
+        "opcode": "88",
+        "addressing_mode": "Implied",
+        "assembler_format": "DEY",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e., has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "EOR",
+    "description": "EOR (short for \"Exclusive OR\") is a machine language instruction which performs a bit-wise boolean \"Exclusive-or\" between each of the eight bits in the accumulator and their corresponding bits in the memory address specified. The eight resulting bits form a byte, which is stored in the accumulator.",
+    "addressing_modes": [
+      {
+        "opcode": "49",
+        "addressing_mode": "Immediate",
+        "assembler_format": "EOR #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "4D",
+        "addressing_mode": "Absolute",
+        "assembler_format": "EOR nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "5D",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "EOR nnnn,X",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "59",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "EOR nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "45",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "EOR nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "55",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "EOR nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "41",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "EOR (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "51",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "EOR (nn),Y",
+        "length": 2,
+        "cycles": "5*"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "INC",
+    "description": "INC (INCrease) is the mnemonic for a machine language instruction which increases the numerical value of the contents of the address specified by one, and \"wraps over\" when the numerical limits of a byte are exceeded. If the byte in question is taken as an unsigned integer, INC \"counts\" from 0 thru 255/$0 thru $FF. If a byte already containing the value 255/$FF is INCremented, it \"wraps over\" to the value 0. If the byte is taken as a signed integer, INC will \"count\" from −128 thru +127, or −$80 thru +$7F. If a byte already holding the value 127/$7F is INCremented, it \"wraps over\" to the value −128/−$80.",
+    "addressing_modes": [
+      {
+        "opcode": "EE",
+        "addressing_mode": "Absolute",
+        "assembler_format": "INC nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "FE",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "INC nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "E6",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "INC nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "F6",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "INC nn,X",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "INX",
+    "description": "INX (INcrease X) is a machine language instruction which increases the numerical value held in the X index register by one, and \"wraps over\" when the numerical limits of a byte are exceeded. If the X index register is taken as an unsigned integer, INX \"counts\" from 0 thru 255/$0 thru $FF. If the register already holds value 255/$FF as it is incremented using INX, it \"wraps over\" to the value 0. If the X index register is taken as a signed integer, INX will \"count\" from −128 thru +127, or −$80 thru +$7F. If the register contains 127/$7F when incremented, it \"wraps over\" to the value −128/−$80.",
+    "addressing_modes": [
+      {
+        "opcode": "E8",
+        "addressing_mode": "Implied",
+        "assembler_format": "INX",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "INY",
+    "description": "INY (INcrease Y) is a machine language instruction which increases the numerical value held in the Y index register by one, and \"wraps over\" when the numerical limits of a byte are exceeded. If the Y index register is taken as an unsigned integer, INY \"counts\" from 0 thru 255/$0 thru $FF. If the register already holds value 255/$FF as it is incremented, it \"wraps over\" to the value 0. If the Y index register is taken as a signed integer, INY will \"count\" from −128 thru +127, or −$80 thru +$7F. If the register contains 127/$7F when incremented, it \"wraps over\" to the value −128/−$80.",
+    "addressing_modes": [
+      {
+        "opcode": "C8",
+        "addressing_mode": "Implied",
+        "assembler_format": "INY",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "ISC",
+    "description": "ISC (short for \"Increase then Subtract with Carry\") is a mnemonic for an illegal opcode machine language instruction. This illegal opcode is a combination of two operations with the same addressing mode: INC, followed by SBC Function: {addr} = {addr} + 1; then A = A - {addr}",
+    "addressing_modes": [
+      {
+        "opcode": "EF",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ISC nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "FF",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ISC nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "FB",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "ISC nnnn,Y",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "E7",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ISC nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "F7",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ISC nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "E3",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "ISC (nn,X)",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "F3",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "ISC (nn),Y",
+        "length": 2,
+        "cycles": "8"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "V - The overflow flag is set if the operation results in an overflow.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set or cleared depending on the result."
+    ]
+  },
+  {
+    "mnemonic": "JAM",
+    "description": "JAM opcodes: $02 $12 $22 $32 $42 $52 $62 $72 $92 $B2 $D2 $F2 As soon one of these opcodes is executed, the byte following the opcode will be fetched, data and address bus will be set to $ff (all 1s) and program execution ceases. No hardware interrupts will be executed either. Only a reset is able to restart execution. This opcode leaves no trace of any operation performed! No registers or flags are affected.",
+    "addressing_modes": [
+      {
+        "opcode": "02",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "12",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "22",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "32",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "42",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "52",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "62",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "72",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "92",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "B2",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "D2",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "F2",
+        "addressing_mode": "Implied",
+        "assembler_format": "JAM",
+        "length": 1,
+        "cycles": ""
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "JSR",
+    "description": "JSR (Jump to SubRoutine) is a machine language instruction which saves the current program counter on the stack and then jumps to the address specified. The program counter is saved on the stack in such a way that a subsequent RTS instruction will return to the instruction immediately following the JSR instruction.",
+    "addressing_modes": [
+      {
+        "opcode": "20",
+        "addressing_mode": "Absolute",
+        "assembler_format": "JSR nnnn",
+        "length": 3,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "LAX",
+    "description": "LAX (Load Accumulator and indeX) is an illegal opcode machine language instruction for the C64. It retrieves data from a specified RAM or I/O address and stores it in both the accumulator and the X index register.",
+    "addressing_modes": [
+      {
+        "opcode": "A3",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "LAX (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "A7",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LAX nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "AF",
+        "addressing_mode": "Absolute",
+        "assembler_format": "LAX nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "B3",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "LAX (nn),Y",
+        "length": 2,
+        "cycles": "5*"
+      },
+      {
+        "opcode": "B7",
+        "addressing_mode": "Zeropage,Y",
+        "assembler_format": "LAX nn,Y",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "BF",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "LAX nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      }
+    ],
+    "cpu_flags": [
+      "N - Set if bit 7 of the result is 1.",
+      "Z - Set if the result is 0."
+    ]
+  },
+  {
+    "mnemonic": "LDX",
+    "description": "LDX (short for \"LoaD X\") is a machine language instruction that retrieves a copy from a specified RAM or I/O address and stores it in the X index register. The content of the memory location remains unaffected.",
+    "addressing_modes": [
+      {
+        "opcode": "A2",
+        "addressing_mode": "Immediate",
+        "assembler_format": "LDX #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "AE",
+        "addressing_mode": "Absolute",
+        "assembler_format": "LDX nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "BE",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "LDX nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "A6",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LDX nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "B6",
+        "addressing_mode": "Zeropage,Y",
+        "assembler_format": "LDX nn,Y",
+        "length": 2,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative (most significant bit set).",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "LDY",
+    "description": "LDY (LoaD Y) is a machine language instruction that retrieves a copy from a specified RAM or I/O address and stores it in the Y index register. The content of the memory location remains unaffected.",
+    "addressing_modes": [
+      {
+        "opcode": "A0",
+        "addressing_mode": "Immediate",
+        "assembler_format": "LDY #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "AC",
+        "addressing_mode": "Absolute",
+        "assembler_format": "LDY nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "BC",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "LDY nnnn,X",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "A4",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LDY nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "B4",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "LDY nn,X",
+        "length": 2,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "N - Set if bit 7 of the result is 1.",
+      "Z - Set if the result is 0."
+    ]
+  },
+  {
+    "mnemonic": "LSR",
+    "description": "LSR (Logic Shift Right) is a machine language instruction that shifts bits in either the accumulator or a specified RAM address one position to the right. The bit shifted out goes into the carry flag, and the most significant bit is filled with a zero. If the byte is an unsigned 8-bit integer, LSR effectively halves the number, with the carry flag holding the remainder. LSR and ASL (Arithmetic Shift Left) are complemented by ROL (Rotate Left) and ROR (Rotate Right) instructions, which fill the vacant bit with the carry flag's prior value.",
+    "addressing_modes": [
+      {
+        "opcode": "4A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "LSR A",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "4E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "LSR nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "5E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "LSR nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "46",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LSR nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "56",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "LSR nn,X",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is always cleared.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is copied from the least significant bit."
+    ]
+  },
+  {
+    "mnemonic": "NOP",
+    "description": "NOP (short for \"No OPeration\") is a machine language instruction that simply fills a byte of program memory and takes two machine cycles to execute. This two-microsecond \"coffee break\" for the CPU is useful for debugging and other \"hacks,\" which is why many CPU architectures include such an instruction. For programs in RAM, NOP is used to \"edit out\" instructions by overwriting unwanted instructions with one or more NOPs. This is a \"quick patch\" solution, as actually removing the byte from the code would require recompiling all subsequent code. Many \"cheat POKEs\" for games involve POKEing addresses with the byte 234, which is the opcode for NOP. In time-critical operations, such as raster bars, NOP instructions can prolong the execution time for a given snippet of code in increments of about two microseconds. There are also six undocumented opcodes (26/$1A, 58/$3A, 90/$5A, 122/$7A, 218/$DA, and 250/$FA) that act as \"duplicates\" of the NOP.",
+    "addressing_modes": [
+      {
+        "opcode": "EA",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "1A",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "3A",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "5A",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "7A",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "DA",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "FA",
+        "addressing_mode": "Implied",
+        "assembler_format": "NOP",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "ORA",
+    "description": "ORA (short for \"Logical OR on Accumulator\") is the mnemonic for a machine language instruction which performs a bit-wise boolean \"or\" between each of the eight bits in the accumulator and their corresponding bits in the memory address specified. The eight resulting bits form a byte, which is stored in the accumulator.",
+    "addressing_modes": [
+      {
+        "opcode": "09",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ORA #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "0D",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ORA nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "1D",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ORA nnnn,X",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "19",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "ORA nnnn,Y",
+        "length": 3,
+        "cycles": "4*"
+      },
+      {
+        "opcode": "05",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ORA nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "15",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ORA nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "01",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "ORA (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "11",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "ORA (nn),Y",
+        "length": 2,
+        "cycles": "5*"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "PHA",
+    "description": "PHA (short for \"PusH Accumulator\") is a mnemonic for a machine language instruction that stores a copy of the current content of the accumulator onto the stack, and adjusts the stack pointer to reflect this addition.",
+    "addressing_modes": [
+      {
+        "opcode": "48",
+        "addressing_mode": "Implied",
+        "assembler_format": "PHA",
+        "length": 1,
+        "cycles": "3"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "PHP",
+    "description": "PHP (short for \"PusH Processor flags\") is the mnemonic for a machine language instruction which stores the current state of the processor status flags onto the stack, and adjusting the stack pointer to reflect the addition.",
+    "addressing_modes": [
+      {
+        "opcode": "08",
+        "addressing_mode": "Implied",
+        "assembler_format": "PHP",
+        "length": 1,
+        "cycles": "3"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "PLA",
+    "description": "The assembler instruction PLA increments the stack pointer by 1 and then the accumulator is loaded with the content of the memory cell pointed to by the stack pointer. The programmer must ensure that all bytes pushed onto the stack with PHA during a subroutine are removed again with the PLA, PLP instruction or by direct manipulation of the stack pointer register before returning with RTS. In contrast to PHA, this instruction requires one more clock cycle, because the stack pointer must first be incremented for access to the value, which must be processed sequentially and thus prevents any parallelization in the process.",
+    "addressing_modes": [
+      {
+        "opcode": "68",
+        "addressing_mode": "Implied",
+        "assembler_format": "PLA",
+        "length": 1,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "PLP",
+    "description": "PLP (PulL Processor Status from Stack) is an assembler instruction for the Commodore 64. It increments the stack pointer and then loads the status register with the content from the memory address pointed to by the stack pointer.",
+    "addressing_modes": [
+      {
+        "opcode": "28",
+        "addressing_mode": "Implied",
+        "assembler_format": "PLP",
+        "length": 1,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set or cleared according to the value pulled from the stack.",
+      "V - The overflow status flag is set or cleared according to the value pulled from the stack.",
+      "B - The break status flag is set or cleared according to the value pulled from the stack.",
+      "D - The decimal status flag is set or cleared according to the value pulled from the stack.",
+      "I - The interrupt status flag is set or cleared according to the value pulled from the stack.",
+      "Z - The zero status flag is set or cleared according to the value pulled from the stack.",
+      "C - The carry status flag is set or cleared according to the value pulled from the stack."
+    ]
+  },
+  {
+    "mnemonic": "ROR",
+    "description": "ROR (ROtate Right) is an assembler instruction for the C64. It rotates the bits of the accumulator or a memory location one bit to the right. The bit from position 0 is shifted into the Carry-Flag, and the Carry-Flag is shifted into bit 7.",
+    "addressing_modes": [
+      {
+        "opcode": "6A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "ROR A",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "6E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ROR nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "7E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ROR nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "66",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ROR nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "76",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ROR nn,X",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set to the value of the bit that was shifted out (bit 0)."
+    ]
+  },
+  {
+    "mnemonic": "RTI",
+    "description": "RTI (ReTurn from Interrupt) is a machine language instruction that pulls the processor status flags and then the program counter from the stack, effectively returning from an interrupt service routine.",
+    "addressing_modes": [
+      {
+        "opcode": "40",
+        "addressing_mode": "Implied",
+        "assembler_format": "RTI",
+        "length": 1,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set or cleared according to the value pulled from the stack.",
+      "V - The overflow status flag is set or cleared according to the value pulled from the stack.",
+      "B - The break status flag is set or cleared according to the value pulled from the stack.",
+      "D - The decimal status flag is set or cleared according to the value pulled from the stack.",
+      "I - The interrupt status flag is set or cleared according to the value pulled from the stack.",
+      "Z - The zero status flag is set or cleared according to the value pulled from the stack.",
+      "C - The carry status flag is set or cleared according to the value pulled from the stack."
+    ]
+  },
+  {
+    "mnemonic": "RTS",
+    "description": "RTS (ReTurn from Subroutine) is a machine language instruction used to return to the address that was previously placed on the stack by a JSR (Jump to Subroutine) instruction. It's crucial for the programmer to ensure that all bytes pushed onto the stack after a JSR call are removed before RTS is executed. The process involves incrementing the stack pointer, fetching the program counter's low and high bytes from the stack, and then incrementing the program counter.",
+    "addressing_modes": [
+      {
+        "opcode": "60",
+        "addressing_mode": "Implied",
+        "assembler_format": "RTS",
+        "length": 1,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SEC",
+    "description": "SEC (SEt Carry flag) is a mnemonic for the 6502 processor. It sets the carry flag.",
+    "addressing_modes": [
+      {
+        "opcode": "38",
+        "addressing_mode": "Implied",
+        "assembler_format": "SEC",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "C - The carry flag is set."
+    ]
+  },
+  {
+    "mnemonic": "SED",
+    "description": "The assembler command SED sets the Decimal flag. This means that additions and subtractions in the accumulator will henceforth be performed in BCD (Binary Coded Decimal) encoding instead of binary.",
+    "addressing_modes": [
+      {
+        "opcode": "F8",
+        "addressing_mode": "Implied",
+        "assembler_format": "SED",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "D - The decimal flag is set."
+    ]
+  },
+  {
+    "mnemonic": "SEI",
+    "description": "The assembler instruction SEI sets the Interrupt Flag and suppresses all interrupts (IRQ) except NMI. The assembler instruction CLI lifts this lock again.",
+    "addressing_modes": [
+      {
+        "opcode": "78",
+        "addressing_mode": "Implied",
+        "assembler_format": "SEI",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "I - The interrupt flag is set."
+    ]
+  },
+  {
+    "mnemonic": "SAX",
+    "description": "SAX (short for \"Store Accumulator AND X\") is an illegal opcode machine language instruction that stores the bitwise AND of the accumulator and the X index register at the specified RAM or I/O address. The contents of both the accumulator and the X index register remain unchanged. This illegal opcode combines two operations with the same addressing mode: STA and STX. Function: {addr} = A \u0026 X",
+    "addressing_modes": [
+      {
+        "opcode": "8F",
+        "addressing_mode": "Absolute",
+        "assembler_format": "SAX nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "87",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "SAX nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "97",
+        "addressing_mode": "Zeropage,Y",
+        "assembler_format": "SAX nn,Y",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "83",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "SAX (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SBX",
+    "description": "SBX (short for \"SuBtract and store in X\") is an illegal opcode that ANDs the contents of the A and X registers (leaving the contents of A intact), subtracts an immediate value, and then stores the result into X. This illegal opcode is a combination of an immediate and an implied command: CMP, DEX. The subtraction is performed in the CPU based on the CMP function, meaning it is not affected by the state of the Carry Flag, doesn't change the state of the Overflow Flag, and doesn't respect the decimal mode. Function: X = A \u0026 X - #{imm}",
+    "addressing_modes": [
+      {
+        "opcode": "CB",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SBX #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative (most significant bit set).",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set or cleared depending on the result."
+    ]
+  },
+  {
+    "mnemonic": "SRE",
+    "description": "SRE (Shift Right then EOR) is an illegal opcode machine language instruction for the Commodore 64. It combines two operations: Logical Shift Right (LSR) followed by Exclusive OR (EOR).",
+    "addressing_modes": [
+      {
+        "opcode": "4F",
+        "addressing_mode": "Absolute",
+        "assembler_format": "SRE nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "5F",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SRE nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "5B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "SRE nnnn,Y",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "47",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "SRE nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "57",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "SRE nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "43",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "SRE (nn,X)",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "53",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "SRE (nn),Y",
+        "length": 2,
+        "cycles": "8"
+      }
+    ],
+    "cpu_flags": [
+      "C - The carry flag is set to the value of the bit that was shifted out (bit 0).",
+      "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "STA",
+    "description": "STA (short for \"STore Accumulator\") is a machine language instruction that stores a copy of the byte held in the accumulator at the specified RAM or I/O address. The accumulator's contents remain unchanged after the operation.",
+    "addressing_modes": [
+      {
+        "opcode": "8D",
+        "addressing_mode": "Absolute",
+        "assembler_format": "STA nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "9D",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "STA nnnn,X",
+        "length": 3,
+        "cycles": "5"
+      },
+      {
+        "opcode": "99",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "STA nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      },
+      {
+        "opcode": "85",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "STA nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "95",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "STA nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "81",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "STA (nn,X)",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "91",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "STA (nn),Y",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "STX",
+    "description": "STX (STore X) is a machine language instruction that stores a copy of the byte in the X index register at a specified RAM or I/O address, without changing the X index register itself.",
+    "addressing_modes": [
+      {
+        "opcode": "8E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "STX nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "86",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "STX nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "96",
+        "addressing_mode": "Zeropage,Y",
+        "assembler_format": "STX nn,Y",
+        "length": 2,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "STY",
+    "description": "STY (STore Y) is a machine language instruction that stores a copy of the byte held in the Y index register at a specified RAM or I/O address. The Y index register itself remains unchanged.",
+    "addressing_modes": [
+      {
+        "opcode": "8C",
+        "addressing_mode": "Absolute",
+        "assembler_format": "STY nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "84",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "STY nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "94",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "STY nn,X",
+        "length": 2,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "TAX",
+    "description": "TAX (short for \"Transfer Accumulator to X\") is a machine language instruction that copies the contents of the accumulator to the X index register.",
+    "addressing_modes": [
+      {
+        "opcode": "AA",
+        "addressing_mode": "Implied",
+        "assembler_format": "TAX",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "TAY",
+    "description": "TAY (short for \"Transfer Accumulator to Y\") is a machine language instruction that copies the contents of the accumulator into the Y index register.",
+    "addressing_modes": [
+      {
+        "opcode": "A8",
+        "addressing_mode": "Implied",
+        "assembler_format": "TAY",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the transferred byte is negative.",
+      "Z - The zero flag is set if the transferred byte is zero, or cleared if non-zero."
+    ]
+  },
+  {
+    "mnemonic": "TSX",
+    "description": "TSX (short for \"Transfer Stack pointer to X\") is the mnemonic for a machine language instruction which transfers (\"copies\") the contents of the stack pointer into the X index register.",
+    "addressing_modes": [
+      {
+        "opcode": "BA",
+        "addressing_mode": "Implied",
+        "assembler_format": "TSX",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the byte transferred is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the byte transferred is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "TXA",
+    "description": "TXA (short for \"Transfer X to Accumulator\") is a machine language instruction that copies the contents of the X index register into the accumulator.",
+    "addressing_modes": [
+      {
+        "opcode": "8A",
+        "addressing_mode": "Implied",
+        "assembler_format": "TXA",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the transferred byte is negative.",
+      "Z - The zero flag is set if the transferred byte is zero, or cleared if non-zero."
+    ]
+  },
+  {
+    "mnemonic": "TXS",
+    "description": "The TXS instruction, short for \"Transfer X to Stack pointer,\" is a machine language instruction that copies the contents of the X index register into the stack pointer.",
+    "addressing_modes": [
+      {
+        "opcode": "9A",
+        "addressing_mode": "Implied",
+        "assembler_format": "TXS",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "TYA",
+    "description": "TYA (short for \"Transfer Y to Accumulator\") is the mnemonic for a machine language instruction which transfers (\"copies\") the contents of the Y index register into the accumulator.",
+    "addressing_modes": [
+      {
+        "opcode": "98",
+        "addressing_mode": "Implied",
+        "assembler_format": "TYA",
+        "length": 1,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the byte transferred is negative (most significant bit set).",
+      "Z - The zero flag is set if the byte transferred is zero, or cleared if it is non-zero."
+    ]
+  },
+  {
+    "mnemonic": "ROL",
+    "description": "ROL (ROtate Left) is a machine language instruction for the C64. It rotates the bits of the accumulator or a memory location one bit to the left. The bit from position 7 is shifted into the Carry-Flag, and the Carry-Flag is shifted into bit 0.",
+    "addressing_modes": [
+      {
+        "opcode": "2A",
+        "addressing_mode": "Accumulator",
+        "assembler_format": "ROL A",
+        "length": 1,
+        "cycles": "2"
+      },
+      {
+        "opcode": "2E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ROL nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "3E",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ROL nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "26",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "ROL nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "36",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "ROL nn,X",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set to the value of the bit that was shifted out (bit 7)."
+    ]
+  },
+  {
+    "mnemonic": "JMP",
+    "description": "JMP (short for \"JuMP\") is the mnemonic for a machine language instruction which unconditionally transfers program execution to the specified address. To those familiar with BASIC programming; this is the machine language equivalent to GOTO. JMP is the only instruction in the 65xx instruction set which supports the purely indirect addressing mode. This indirect JMP provides for the use of vectors. While the user has no easy access to modify the contents of either BASIC or KERNAL ROM, both these parts of the system make ample use of vectors, set in RAM that the user can modify. This allows the user to \"divert\" parts of BASIC or KERNAL to custom routines.",
+    "addressing_modes": [
+      {
+        "opcode": "4C",
+        "addressing_mode": "Absolute",
+        "assembler_format": "JMP nnnn",
+        "length": 3,
+        "cycles": "3"
+      },
+      {
+        "opcode": "6C",
+        "addressing_mode": "Indirect",
+        "assembler_format": "JMP (nnnn)",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
   }
 ]

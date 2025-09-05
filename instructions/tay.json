@@ -1,0 +1,19 @@
+[
+  {
+    "mnemonic": "TAY",
+    "description": "TAY (short for \"Transfer Accumulator to Y\") is a machine language instruction that copies the contents of the accumulator into the Y index register.",
+    "addressing_modes": [
+      {
+        "opcode": "A8",
+        "addressing_mode": "Implied",
+        "assembler_format": "TAY",
+        "length": 1,
+        "cycles": 2
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the transferred byte is negative.",
+      "Z - The zero flag is set if the transferred byte is zero, or cleared if non-zero."
+    ]
+  }
+]

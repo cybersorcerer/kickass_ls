@@ -1,0 +1,17 @@
+{
+  "mnemonic": "INX",
+  "description": "INX (INcrease X) is a machine language instruction which increases the numerical value held in the X index register by one, and \"wraps over\" when the numerical limits of a byte are exceeded. If the X index register is taken as an unsigned integer, INX \"counts\" from 0 thru 255/$0 thru $FF. If the register already holds value 255/$FF as it is incremented using INX, it \"wraps over\" to the value 0. If the X index register is taken as a signed integer, INX will \"count\" from −128 thru +127, or −$80 thru +$7F. If the register contains 127/$7F when incremented, it \"wraps over\" to the value −128/−$80.",
+  "addressing_modes": [
+    {
+      "opcode": "E8",
+      "addressing_mode": "Implied",
+      "assembler_format": "INX",
+      "length": 1,
+      "cycles": 2
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+    "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "mnemonic": "CPY",
+  "description": "CPY (short for \"ComPare Y\") is a machine language instruction that compares the contents of the Y index register against a specified operand by subtracting the latter from the former. This operation sets the negative and carry flags based on the result, but unlike SBC, the result of the subtraction is discarded, leaving the register unaffected.",
+  "addressing_modes": [
+    {
+      "opcode": "C0",
+      "addressing_mode": "Immediate",
+      "assembler_format": "CPY #nn",
+      "length": 2,
+      "cycles": 2
+    },
+    {
+      "opcode": "CC",
+      "addressing_mode": "Absolute",
+      "assembler_format": "CPY nnnn",
+      "length": 3,
+      "cycles": 4
+    },
+    {
+      "opcode": "C4",
+      "addressing_mode": "Zeropage",
+      "assembler_format": "CPY nn",
+      "length": 2,
+      "cycles": 3
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative status flag is set if the result is negative (most significant bit set).",
+    "Z - The zero flag is set if the result is zero, or cleared if non-zero.",
+    "C - The carry flag is set or cleared depending on the result."
+  ]
+}

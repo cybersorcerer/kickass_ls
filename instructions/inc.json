@@ -1,0 +1,38 @@
+{
+  "mnemonic": "INC",
+  "description": "INC (INCrease) is the mnemonic for a machine language instruction which increases the numerical value of the contents of the address specified by one, and \"wraps over\" when the numerical limits of a byte are exceeded. If the byte in question is taken as an unsigned integer, INC \"counts\" from 0 thru 255/$0 thru $FF. If a byte already containing the value 255/$FF is INCremented, it \"wraps over\" to the value 0. If the byte is taken as a signed integer, INC will \"count\" from −128 thru +127, or −$80 thru +$7F. If a byte already holding the value 127/$7F is INCremented, it \"wraps over\" to the value −128/−$80.",
+  "addressing_modes": [
+    {
+      "opcode": "EE",
+      "addressing_mode": "Absolute",
+      "assembler_format": "INC nnnn",
+      "length": 3,
+      "cycles": 6
+    },
+    {
+      "opcode": "FE",
+      "addressing_mode": "Absolute,X",
+      "assembler_format": "INC nnnn,X",
+      "length": 3,
+      "cycles": 7
+    },
+    {
+      "opcode": "E6",
+      "addressing_mode": "Zeropage",
+      "assembler_format": "INC nn",
+      "length": 2,
+      "cycles": 5
+    },
+    {
+      "opcode": "F6",
+      "addressing_mode": "Zeropage,X",
+      "assembler_format": "INC nn,X",
+      "length": 2,
+      "cycles": 6
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+    "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+  ]
+}

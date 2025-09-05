@@ -1,0 +1,17 @@
+{
+  "mnemonic": "DEX",
+  "description": "DEX (DEcrement X) is a machine language instruction which decrements the X index register by one. The negative and zero flags are set according to the result. The carry and overflow flags are unaffected.",
+  "addressing_modes": [
+    {
+      "opcode": "CA",
+      "addressing_mode": "Implied",
+      "assembler_format": "DEX",
+      "length": 1,
+      "cycles": 2
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+    "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+  ]
+}

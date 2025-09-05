@@ -1,0 +1,19 @@
+[
+  {
+    "mnemonic": "PLA",
+    "description": "The assembler instruction PLA increments the stack pointer by 1 and then the accumulator is loaded with the content of the memory cell pointed to by the stack pointer. The programmer must ensure that all bytes pushed onto the stack with PHA during a subroutine are removed again with the PLA, PLP instruction or by direct manipulation of the stack pointer register before returning with RTS. In contrast to PHA, this instruction requires one more clock cycle, because the stack pointer must first be incremented for access to the value, which must be processed sequentially and thus prevents any parallelization in the process.",
+    "addressing_modes": [
+      {
+        "opcode": "68",
+        "addressing_mode": "Implied",
+        "assembler_format": "PLA",
+        "length": 1,
+        "cycles": 4
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative status flag is set if the result is negative, i.e. has its most significant bit set.",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+    ]
+  }
+]

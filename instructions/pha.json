@@ -1,0 +1,16 @@
+[
+  {
+    "mnemonic": "PHA",
+    "description": "PHA (short for \"PusH Accumulator\") is a mnemonic for a machine language instruction that stores a copy of the current content of the accumulator onto the stack, and adjusts the stack pointer to reflect this addition.",
+    "addressing_modes": [
+      {
+        "opcode": "48",
+        "addressing_mode": "Implied",
+        "assembler_format": "PHA",
+        "length": 1,
+        "cycles": 3
+      }
+    ],
+    "cpu_flags": []
+  }
+]

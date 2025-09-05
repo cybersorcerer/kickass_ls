@@ -1,0 +1,20 @@
+[
+  {
+    "mnemonic": "SBX",
+    "description": "SBX (short for \"SuBtract and store in X\") is an illegal opcode that ANDs the contents of the A and X registers (leaving the contents of A intact), subtracts an immediate value, and then stores the result into X. This illegal opcode is a combination of an immediate and an implied command: CMP, DEX. The subtraction is performed in the CPU based on the CMP function, meaning it is not affected by the state of the Carry Flag, doesn't change the state of the Overflow Flag, and doesn't respect the decimal mode. Function: X = A & X - #{imm}",
+    "addressing_modes": [
+      {
+        "opcode": "CB",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SBX #nn",
+        "length": 2,
+        "cycles": 2
+      }
+    ],
+    "cpu_flags": [
+      "N - The negative flag is set if the result is negative (most significant bit set).",
+      "Z - The zero flag is set if the result is zero, or cleared if it is non-zero.",
+      "C - The carry flag is set or cleared depending on the result."
+    ]
+  }
+]

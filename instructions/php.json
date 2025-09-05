@@ -1,0 +1,16 @@
+[
+  {
+    "mnemonic": "PHP",
+    "description": "PHP (short for \"PusH Processor flags\") is the mnemonic for a machine language instruction which stores the current state of the processor status flags onto the stack, and adjusting the stack pointer to reflect the addition.",
+    "addressing_modes": [
+      {
+        "opcode": "08",
+        "addressing_mode": "Implied",
+        "assembler_format": "PHP",
+        "length": 1,
+        "cycles": 3
+      }
+    ],
+    "cpu_flags": []
+  }
+]

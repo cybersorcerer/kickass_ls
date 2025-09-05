@@ -1,0 +1,18 @@
+[
+  {
+    "mnemonic": "SEI",
+    "description": "The assembler instruction SEI sets the Interrupt Flag and suppresses all interrupts (IRQ) except NMI. The assembler instruction CLI lifts this lock again.",
+    "addressing_modes": [
+      {
+        "opcode": "78",
+        "addressing_mode": "Implied",
+        "assembler_format": "SEI",
+        "length": 1,
+        "cycles": 2
+      }
+    ],
+    "cpu_flags": [
+      "I - The interrupt flag is set."
+    ]
+  }
+]

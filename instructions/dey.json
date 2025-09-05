@@ -1,0 +1,17 @@
+{
+  "mnemonic": "DEY",
+  "description": "DEY (DEcrease Y) is a machine language instruction which decrements the numerical value of Y index register, by one, and \"wraps over\" if the value goes below the numerical limits of a byte. If the Y index register is taken as an unsigned integer, DEY \"counts down\" from 255 thru 0/$FF thru $0. If the index register already contains the minimum value of 0/$0 as it is decremented, it \"wraps over\" to the value 255/$FF. If the Y index register is taken as a signed integer, DEY will \"count down\" from +127 thru −128, or +$7F thru −$80. If the register already contains the value −128/−$80 when it is decremented, it \"wraps over\" to the value +127/$7F.",
+  "addressing_modes": [
+    {
+      "opcode": "88",
+      "addressing_mode": "Implied",
+      "assembler_format": "DEY",
+      "length": 1,
+      "cycles": 2
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative status flag is set if the result is negative, i.e., has its most significant bit set.",
+    "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "mnemonic": "DEC",
+  "description": "DEC (DECrement memory) is a machine language instruction which decrements the byte held in the specified memory address by one. The negative and zero flags are set according to the result. The carry and overflow flags are unaffected.",
+  "addressing_modes": [
+    {
+      "opcode": "C6",
+      "addressing_mode": "Zeropage",
+      "assembler_format": "DEC nn",
+      "length": 2,
+      "cycles": 5
+    },
+    {
+      "opcode": "D6",
+      "addressing_mode": "Zeropage,X",
+      "assembler_format": "DEC nn,X",
+      "length": 2,
+      "cycles": 6
+    },
+    {
+      "opcode": "CE",
+      "addressing_mode": "Absolute",
+      "assembler_format": "DEC nnnn",
+      "length": 3,
+      "cycles": 6
+    },
+    {
+      "opcode": "DE",
+      "addressing_mode": "Absolute,X",
+      "assembler_format": "DEC nnnn,X",
+      "length": 3,
+      "cycles": 7
+    }
+  ],
+  "cpu_flags": [
+    "N - The negative flag is set if the result is negative, i.e. has its most significant bit set.",
+    "Z - The zero flag is set if the result is zero, or cleared if it is non-zero."
+  ]
+}

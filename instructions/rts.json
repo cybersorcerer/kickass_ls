@@ -1,0 +1,16 @@
+[
+  {
+    "mnemonic": "RTS",
+    "description": "RTS (ReTurn from Subroutine) is a machine language instruction used to return to the address that was previously placed on the stack by a JSR (Jump to Subroutine) instruction. It's crucial for the programmer to ensure that all bytes pushed onto the stack after a JSR call are removed before RTS is executed. The process involves incrementing the stack pointer, fetching the program counter's low and high bytes from the stack, and then incrementing the program counter.",
+    "addressing_modes": [
+      {
+        "opcode": "60",
+        "addressing_mode": "Implied",
+        "assembler_format": "RTS",
+        "length": 1,
+        "cycles": 6
+      }
+    ],
+    "cpu_flags": []
+  }
+]

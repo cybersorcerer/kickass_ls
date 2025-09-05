@@ -1,0 +1,16 @@
+{
+  "mnemonic": "CLC",
+  "description": "CLC (short for \"CLear Carry\") is the mnemonic for a machine language instruction which unconditionally clears the carry flag.",
+  "addressing_modes": [
+    {
+      "opcode": "18",
+      "addressing_mode": "Implied",
+      "assembler_format": "CLC",
+      "length": 1,
+      "cycles": 2
+    }
+  ],
+  "cpu_flags": [
+    "C - The carry flag is cleared."
+  ]
+}

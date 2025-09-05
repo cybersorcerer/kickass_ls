@@ -1,0 +1,30 @@
+[
+  {
+    "mnemonic": "STX",
+    "description": "STX (STore X) is a machine language instruction that stores a copy of the byte in the X index register at a specified RAM or I/O address, without changing the X index register itself.",
+    "addressing_modes": [
+      {
+        "opcode": "8E",
+        "addressing_mode": "Absolute",
+        "assembler_format": "STX nnnn",
+        "length": 3,
+        "cycles": 4
+      },
+      {
+        "opcode": "86",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "STX nn",
+        "length": 2,
+        "cycles": 3
+      },
+      {
+        "opcode": "96",
+        "addressing_mode": "Zeropage,Y",
+        "assembler_format": "STX nn,Y",
+        "length": 2,
+        "cycles": 4
+      }
+    ],
+    "cpu_flags": []
+  }
+]
