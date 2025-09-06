@@ -374,13 +374,15 @@ func Start() {
 											lineContent := lines[int(lineNum)]
 											word := getWordAtPosition(lineContent, int(charNum))
 											if word != "" {
-												// Label-Index aufbauen
-												type LabelPosition struct {
+												// Symbol-Index aufbauen (Labels, Konstanten, Variablen)
+												type SymbolInfo struct {
+													Kind      string
 													Line      int
 													Character int
 												}
-												labelIndex := make(map[string]LabelPosition)
+												symbolIndex := make(map[string]SymbolInfo)
 												var currentGlobalLabel string
+
 												for i, l := range lines {
 													trimmed := strings.TrimSpace(l)
 													if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
@@ -388,24 +390,34 @@ func Start() {
 													}
 													parts := strings.Fields(trimmed)
 													if len(parts) > 0 {
-														potentialLabel := parts[0]
-														if strings.HasSuffix(potentialLabel, ":") {
-															label := normalizeLabel(potentialLabel)
+														firstWord := parts[0]
+														// Konstanten & Variablen (.const, .var)
+														if (strings.ToLower(firstWord) == ".const" || strings.ToLower(firstWord) == ".var") && len(parts) > 1 {
+															symbolName := normalizeLabel(parts[1])
+															symbolIndex[symbolName] = SymbolInfo{
+																Kind:      "variable", // oder "constant"
+																Line:      i,
+																Character: strings.Index(l, parts[1]),
+															}
+														} else if strings.HasSuffix(firstWord, ":") { // Labels
+															label := normalizeLabel(firstWord)
 															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
 																label = currentGlobalLabel + label
 															} else if !strings.HasPrefix(label, ".") {
 																currentGlobalLabel = label
 															}
-															labelIndex[label] = LabelPosition{
+															symbolIndex[label] = SymbolInfo{
+																Kind:      "label",
 																Line:      i,
-																Character: strings.Index(l, potentialLabel),
+																Character: strings.Index(l, firstWord),
 															}
 														}
 													}
 												}
-												// Gesuchten Labelnamen normalisieren und ggf. scopen
-												searchLabel := normalizeLabel(word)
-												if strings.HasPrefix(searchLabel, ".") {
+
+												// Gesuchten Symbolnamen normalisieren und ggf. scopen
+												searchSymbol := normalizeLabel(word)
+												if strings.HasPrefix(word, ".") {
 													// Scope: Finde globales Label oberhalb der aktuellen Zeile
 													currentGlobalLabel = ""
 													for i := int(lineNum); i >= 0; i-- {
@@ -426,10 +438,11 @@ func Start() {
 														}
 													}
 													if currentGlobalLabel != "" {
-														searchLabel = currentGlobalLabel + searchLabel
+														searchSymbol = currentGlobalLabel + searchSymbol
 													}
 												}
-												if pos, ok := labelIndex[searchLabel]; ok {
+
+												if pos, ok := symbolIndex[searchSymbol]; ok {
 													result = []map[string]interface{}{
 														{
 															"uri": uri,
@@ -484,51 +497,55 @@ func Start() {
 											lineContent := lines[int(lineNum)]
 											word := getWordAtPosition(lineContent, int(charNum))
 											if word != "" {
-												searchLabel := normalizeLabel(word)
-												// Scope local labels
-												if strings.HasPrefix(word, ".") {
-													currentGlobalLabel := ""
-													for i := int(lineNum); i >= 0; i-- {
-														trimmed := strings.TrimSpace(lines[i])
-														if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
-															continue
-														}
-														parts := strings.Fields(trimmed)
-														if len(parts) > 0 {
-															potentialLabel := parts[0]
-															if strings.HasSuffix(potentialLabel, ":") {
-																label := normalizeLabel(potentialLabel)
-																if !strings.HasPrefix(label, ".") {
-																	currentGlobalLabel = label
-																	break
-																}
-															}
-														}
+												// Build symbol index to find the type of the word under the cursor
+												type SymbolInfo struct {
+													Kind      string
+													Line      int
+													Character int
+												}
+												symbolIndex := make(map[string]SymbolInfo)
+												var currentGlobalLabel string
+												for i, l := range lines {
+													trimmed := strings.TrimSpace(l)
+													if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
+														continue
 													}
-													if currentGlobalLabel != "" {
-														searchLabel = currentGlobalLabel + searchLabel
+													parts := strings.Fields(trimmed)
+													if len(parts) > 0 {
+														firstWord := parts[0]
+														if (strings.ToLower(firstWord) == ".const" || strings.ToLower(firstWord) == ".var") && len(parts) > 1 {
+															symbolName := normalizeLabel(parts[1])
+															symbolIndex[symbolName] = SymbolInfo{Kind: "variable", Line: i, Character: strings.Index(l, parts[1])}
+														} else if strings.HasSuffix(firstWord, ":") {
+															label := normalizeLabel(firstWord)
+															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
+																label = currentGlobalLabel + label
+															} else if !strings.HasPrefix(label, ".") {
+																currentGlobalLabel = label
+															}
+															symbolIndex[label] = SymbolInfo{Kind: "label", Line: i, Character: strings.Index(l, firstWord)}
+														}
 													}
 												}
 
+												searchSymbol := normalizeLabel(word)
+												def, defFound := symbolIndex[searchSymbol]
+
 												// Find all references
 												locations = make([]map[string]interface{}, 0)
-												var currentGlobalLabel string
-												jumpOpcodes := map[string]bool{
-													"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
-												}
+												currentGlobalLabel = ""
+												jumpOpcodes := map[string]bool{"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true}
 
 												for i, l := range lines {
 													trimmedLine := strings.TrimSpace(l)
 													if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") {
 														continue
 													}
-
 													parts := strings.Fields(trimmedLine)
 													if len(parts) == 0 {
 														continue
 													}
 
-													// Determine opcode and operand
 													var opcode, operand string
 													firstWord := parts[0]
 													if strings.HasSuffix(firstWord, ":") {
@@ -549,15 +566,29 @@ func Start() {
 														}
 													}
 
-													// Check if the operand is a reference to the searched label
-													if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
+													if operand != "" {
 														normalizedOperand := normalizeLabel(operand)
-														scopedOperand := normalizedOperand
-														if strings.HasPrefix(scopedOperand, ".") && currentGlobalLabel != "" {
-															scopedOperand = currentGlobalLabel + scopedOperand
+														match := false
+														if defFound {
+															if def.Kind == "label" {
+																if _, isJump := jumpOpcodes[opcode]; isJump {
+																	scopedOperand := normalizedOperand
+																	if strings.HasPrefix(scopedOperand, ".") && currentGlobalLabel != "" {
+																		scopedOperand = currentGlobalLabel + scopedOperand
+																	}
+																	if scopedOperand == searchSymbol {
+																		match = true
+																	}
+																}
+															} else if def.Kind == "variable" {
+																// For variables/constants, just check for the name
+																if normalizedOperand == searchSymbol {
+																	match = true
+																}
+															}
 														}
 
-														if scopedOperand == searchLabel {
+														if match {
 															charIndex := strings.Index(l, operand)
 															if charIndex != -1 {
 																locations = append(locations, map[string]interface{}{
@@ -668,6 +699,10 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		mnemonicMap[upper] = m
 	}
 
+	kickAssemblerDirectives := map[string]bool{
+		".CONST": true, ".VAR": true, ".WORD": true, ".BYTE": true, ".NAMESPACE": true, ".FUNCTION": true, ".MACRO": true, ".LABEL": true, ".PSEUDOCOMMAND": true, ".IF": true, ".FOR": true, ".WHILE": true, "#IMPORT": true, "#INCLUDE": true,
+	}
+
 	var currentGlobalLabel string
 
 	// First pass: find all defined labels and check for duplicates
@@ -710,17 +745,20 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				}
 			} else {
 				// If it doesn't end with ':', it's either an opcode or an invalid label definition
-				if _, isOpcode := allOpcodes[normalizeLabel(potentialLabel)]; !isOpcode {
-					diagnostics = append(diagnostics, map[string]interface{}{
-						"range": map[string]interface{}{
-							"start": map[string]interface{}{"line": i, "character": 0},
-							"end":   map[string]interface{}{"line": i, "character": len(line)},
-						},
-						"severity": float64(1), // Error
-						"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
-						"source":   "6510lsp",
-					})
-					invalidLabelLines[i] = true // <--- Zeile merken!
+				normalizedFirstWord := normalizeLabel(potentialLabel)
+				if _, isOpcode := allOpcodes[normalizedFirstWord]; !isOpcode {
+					if _, isDirective := kickAssemblerDirectives[strings.ToUpper(potentialLabel)]; !isDirective {
+						diagnostics = append(diagnostics, map[string]interface{}{
+							"range": map[string]interface{}{
+								"start": map[string]interface{}{"line": i, "character": 0},
+								"end":   map[string]interface{}{"line": i, "character": len(line)},
+							},
+							"severity": float64(1), // Error
+							"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
+							"source":   "6510lsp",
+						})
+						invalidLabelLines[i] = true // <--- Zeile merken!
+					}
 				}
 			}
 		}
@@ -775,15 +813,17 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 			// Check for unknown opcodes
 			if _, isKnown := allOpcodes[opcode]; !isKnown {
-				diagnostics = append(diagnostics, map[string]interface{}{
-					"range": map[string]interface{}{
-						"start": map[string]interface{}{"line": i, "character": 0},
-						"end":   map[string]interface{}{"line": i, "character": len(line)},
-					},
-					"severity": float64(1), // 1 = Error
-					"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
-					"source":   "6510lsp",
-				})
+				if _, isDirective := kickAssemblerDirectives[opcode]; !isDirective {
+					diagnostics = append(diagnostics, map[string]interface{}{
+						"range": map[string]interface{}{
+							"start": map[string]interface{}{"line": i, "character": 0},
+							"end":   map[string]interface{}{"line": i, "character": len(line)},
+						},
+						"severity": float64(1), // 1 = Error
+						"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
+						"source":   "6510lsp",
+					})
+				}
 			} else {
 				// Addressing mode check
 				mode := detectAddressingMode(opcode, operand)
