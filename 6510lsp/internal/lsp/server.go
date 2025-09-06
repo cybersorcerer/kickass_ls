@@ -374,7 +374,7 @@ func Start() {
 											lineContent := lines[int(lineNum)]
 											word := getWordAtPosition(lineContent, int(charNum))
 											if word != "" {
-												// Symbol-Index aufbauen (Labels, Konstanten, Variablen)
+												// Symbol-Index aufbauen (Labels, Konstanten, Variablen, etc.)
 												type SymbolInfo struct {
 													Kind      string
 													Line      int
@@ -391,14 +391,15 @@ func Start() {
 													parts := strings.Fields(trimmed)
 													if len(parts) > 0 {
 														firstWord := parts[0]
-														// Konstanten & Variablen (.const, .var)
-														if (strings.ToLower(firstWord) == ".const" || strings.ToLower(firstWord) == ".var") && len(parts) > 1 {
+														lowerFirstWord := strings.ToLower(firstWord)
+
+														if (lowerFirstWord == ".const" || lowerFirstWord == ".var") && len(parts) > 1 {
 															symbolName := normalizeLabel(parts[1])
-															symbolIndex[symbolName] = SymbolInfo{
-																Kind:      "variable", // oder "constant"
-																Line:      i,
-																Character: strings.Index(l, parts[1]),
-															}
+															symbolIndex[symbolName] = SymbolInfo{Kind: "variable", Line: i, Character: strings.Index(l, parts[1])}
+														} else if (lowerFirstWord == ".function" || lowerFirstWord == ".macro") && len(parts) > 1 {
+															symbolNameWithArgs := parts[1]
+															symbolName := normalizeLabel(strings.Split(symbolNameWithArgs, "(")[0])
+															symbolIndex[symbolName] = SymbolInfo{Kind: lowerFirstWord[1:], Line: i, Character: strings.Index(l, symbolName)}
 														} else if strings.HasSuffix(firstWord, ":") { // Labels
 															label := normalizeLabel(firstWord)
 															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
@@ -406,11 +407,7 @@ func Start() {
 															} else if !strings.HasPrefix(label, ".") {
 																currentGlobalLabel = label
 															}
-															symbolIndex[label] = SymbolInfo{
-																Kind:      "label",
-																Line:      i,
-																Character: strings.Index(l, firstWord),
-															}
+															symbolIndex[label] = SymbolInfo{Kind: "label", Line: i, Character: strings.Index(l, firstWord)}
 														}
 													}
 												}
@@ -684,9 +681,9 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	lines := strings.Split(text, "\n")
 
 	// Data structures for label diagnostics
-	definedLabels := make(map[string]int) // label -> line number
+	definedLabels := make(map[string]int)
 	usedLabels := make(map[string]bool)
-	invalidLabelLines := make(map[int]bool) // <--- NEU: Zeilen mit Label-Fehler merken
+	invalidLabelLines := make(map[int]bool)
 
 	jumpOpcodes := map[string]bool{
 		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
@@ -700,7 +697,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	}
 
 	kickAssemblerDirectives := map[string]bool{
-		".CONST": true, ".VAR": true, ".WORD": true, ".BYTE": true, ".NAMESPACE": true, ".FUNCTION": true, ".MACRO": true, ".LABEL": true, ".PSEUDOCOMMAND": true, ".IF": true, ".FOR": true, ".WHILE": true, "#IMPORT": true, "#INCLUDE": true,
+		".CONST": true, ".VAR": true, ".WORD": true, ".BYTE": true, ".NAMESPACE": true, ".FUNCTION": true, ".MACRO": true, ".LABEL": true, ".PSEUDOCOMMAND": true, ".IF": true, ".FOR": true, ".WHILE": true, ".RETURN": true, "#IMPORT": true, "#INCLUDE": true,
 	}
 
 	var currentGlobalLabel string
@@ -708,33 +705,33 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	// First pass: find all defined labels and check for duplicates
 	for i, line := range lines {
 		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") || trimmedLine == "{" || trimmedLine == "}" {
 			continue
 		}
 		parts := strings.Fields(trimmedLine)
 		if len(parts) > 0 {
 			potentialLabel := parts[0]
 
+			// Handle macro invocation with '+'
+			if strings.HasPrefix(potentialLabel, "+") {
+				continue // It's a macro call, not a definition, skip for this pass.
+			}
+
 			// Check for labels ending with ':'
 			if strings.HasSuffix(potentialLabel, ":") {
 				label := normalizeLabel(potentialLabel)
 				originalLabel := label
 				if strings.HasPrefix(label, ".") {
-					// Local label: scope with current global label
 					if currentGlobalLabel != "" {
 						label = currentGlobalLabel + label
 					}
 				} else {
-					// Global label: remember for scoping
 					currentGlobalLabel = label
 				}
 				if _, isOpcode := allOpcodes[label]; !isOpcode {
 					if _, exists := definedLabels[label]; exists {
 						diagnostics = append(diagnostics, map[string]interface{}{
-							"range": map[string]interface{}{
-								"start": map[string]interface{}{"line": i, "character": 0},
-								"end":   map[string]interface{}{"line": i, "character": len(line)},
-							},
+							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 							"severity": float64(1), // Error
 							"message":  fmt.Sprintf("Duplicate label definition: %s", originalLabel),
 							"source":   "6510lsp",
@@ -744,20 +741,16 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 					}
 				}
 			} else {
-				// If it doesn't end with ':', it's either an opcode or an invalid label definition
 				normalizedFirstWord := normalizeLabel(potentialLabel)
 				if _, isOpcode := allOpcodes[normalizedFirstWord]; !isOpcode {
 					if _, isDirective := kickAssemblerDirectives[strings.ToUpper(potentialLabel)]; !isDirective {
 						diagnostics = append(diagnostics, map[string]interface{}{
-							"range": map[string]interface{}{
-								"start": map[string]interface{}{"line": i, "character": 0},
-								"end":   map[string]interface{}{"line": i, "character": len(line)},
-							},
+							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 							"severity": float64(1), // Error
-							"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
+							"message":  fmt.Sprintf("Invalid syntax: '%s' is not a valid command, directive, or label.", potentialLabel),
 							"source":   "6510lsp",
 						})
-						invalidLabelLines[i] = true // <--- Zeile merken!
+						invalidLabelLines[i] = true
 					}
 				}
 			}
@@ -768,10 +761,10 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	currentGlobalLabel = ""
 	for i, line := range lines {
 		if invalidLabelLines[i] {
-			continue // <--- Zeile überspringen, wenn schon als Label-Fehler markiert!
+			continue
 		}
 		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") || trimmedLine == "{" || trimmedLine == "}" {
 			continue
 		}
 
@@ -782,8 +775,10 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 		var opcode, operand string
 		firstWord := parts[0]
-		isLabelDef := strings.HasSuffix(firstWord, ":")
-		if isLabelDef {
+		if strings.HasPrefix(firstWord, "+") {
+			// It's a macro call, for now we don't do advanced diagnostics on it.
+			continue
+		} else if strings.HasSuffix(firstWord, ":") {
 			label := normalizeLabel(firstWord)
 			if !strings.HasPrefix(label, ".") {
 				currentGlobalLabel = label
@@ -802,7 +797,6 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		}
 
 		if opcode != "" {
-			// Check for used labels (jump targets)
 			if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
 				normalizedOperand := normalizeLabel(operand)
 				if strings.HasPrefix(normalizedOperand, ".") && currentGlobalLabel != "" {
@@ -811,21 +805,16 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				usedLabels[normalizedOperand] = true
 			}
 
-			// Check for unknown opcodes
 			if _, isKnown := allOpcodes[opcode]; !isKnown {
 				if _, isDirective := kickAssemblerDirectives[opcode]; !isDirective {
 					diagnostics = append(diagnostics, map[string]interface{}{
-						"range": map[string]interface{}{
-							"start": map[string]interface{}{"line": i, "character": 0},
-							"end":   map[string]interface{}{"line": i, "character": len(line)},
-						},
+						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 						"severity": float64(1), // 1 = Error
-						"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
+						"message":  fmt.Sprintf("Unknown opcode or directive: %s", opcode),
 						"source":   "6510lsp",
 					})
 				}
 			} else {
-				// Addressing mode check
 				mode := detectAddressingMode(opcode, operand)
 				mnemonic := mnemonicMap[opcode]
 				allowed := false
@@ -837,10 +826,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				}
 				if !allowed {
 					diagnostics = append(diagnostics, map[string]interface{}{
-						"range": map[string]interface{}{
-							"start": map[string]interface{}{"line": i, "character": 0},
-							"end":   map[string]interface{}{"line": i, "character": len(line)},
-						},
+						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 						"severity": float64(1), // Error
 						"message":  fmt.Sprintf("Invalid addressing mode for %s: %s (detected: %s)", opcode, operand, mode),
 						"source":   "6510lsp",
@@ -854,10 +840,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	for label, lineNum := range definedLabels {
 		if _, used := usedLabels[label]; !used {
 			diagnostics = append(diagnostics, map[string]interface{}{
-				"range": map[string]interface{}{
-					"start": map[string]interface{}{"line": lineNum, "character": 0},
-					"end":   map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])},
-				},
+				"range":    map[string]interface{}{"start": map[string]interface{}{"line": lineNum, "character": 0}, "end": map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])}},
 				"severity": float64(2), // Warning
 				"message":  fmt.Sprintf("Unused label: %s", label),
 				"source":   "6510lsp",
