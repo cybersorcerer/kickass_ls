@@ -478,6 +478,49 @@ func writeResponse(writer *bufio.Writer, response []byte) {
 	log.Logger.Printf("Sent response: %s\n", string(response))
 }
 
+// Hilfsfunktion: Addressing Mode erkennen (angepasst für Branches)
+func detectAddressingMode(opcode, operand string) string {
+	operand = strings.TrimSpace(operand)
+	if operand == "" {
+		return "Implied"
+	}
+	if strings.HasPrefix(operand, "#") {
+		return "Immediate"
+	}
+	if strings.HasPrefix(operand, "(") && strings.HasSuffix(operand, ",Y)") {
+		return "Indirect-indexed"
+	}
+	if strings.HasPrefix(operand, "(") && strings.Contains(operand, ",X)") {
+		return "Indexed-indirect"
+	}
+	if strings.HasSuffix(operand, ",X") {
+		if len(operand) <= 5 {
+			return "Zeropage,X"
+		}
+		return "Absolute,X"
+	}
+	if strings.HasSuffix(operand, ",Y") {
+		if len(operand) <= 5 {
+			return "Zeropage,Y"
+		}
+		return "Absolute,Y"
+	}
+	if strings.HasPrefix(operand, "(") && strings.HasSuffix(operand, ")") {
+		return "Indirect"
+	}
+	// Branch-Befehle (relative Sprünge)
+	jumpOpcodes := map[string]bool{
+		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true,
+	}
+	if jumpOpcodes[strings.ToUpper(opcode)] {
+		return "Relative"
+	}
+	if len(operand) <= 3 {
+		return "Zeropage"
+	}
+	return "Absolute"
+}
+
 // publishDiagnostics analyzes the text and sends diagnostics to the client.
 func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	diagnostics := make([]map[string]interface{}, 0)
@@ -492,8 +535,11 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
 	}
 	allOpcodes := make(map[string]bool)
+	mnemonicMap := make(map[string]Mnemonic)
 	for _, m := range mnemonics {
-		allOpcodes[strings.ToUpper(m.Mnemonic)] = true
+		upper := strings.ToUpper(m.Mnemonic)
+		allOpcodes[upper] = true
+		mnemonicMap[upper] = m
 	}
 
 	var currentGlobalLabel string
@@ -554,7 +600,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		}
 	}
 
-	// Second pass: find all used labels and check for unknown opcodes
+	// Second pass: find all used labels, check for unknown opcodes and addressing mode errors
 	currentGlobalLabel = ""
 	for i, line := range lines {
 		if invalidLabelLines[i] {
@@ -612,6 +658,28 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 					"message":  fmt.Sprintf("Unknown opcode: %s", opcode),
 					"source":   "6510lsp",
 				})
+			} else {
+				// Addressing mode check
+				mode := detectAddressingMode(opcode, operand)
+				mnemonic := mnemonicMap[opcode]
+				allowed := false
+				for _, am := range mnemonic.AddressingModes {
+					if strings.EqualFold(am.AddressingMode, mode) {
+						allowed = true
+						break
+					}
+				}
+				if !allowed {
+					diagnostics = append(diagnostics, map[string]interface{}{
+						"range": map[string]interface{}{
+							"start": map[string]interface{}{"line": i, "character": 0},
+							"end":   map[string]interface{}{"line": i, "character": len(line)},
+						},
+						"severity": float64(1), // Error
+						"message":  fmt.Sprintf("Invalid addressing mode for %s: %s (detected: %s)", opcode, operand, mode),
+						"source":   "6510lsp",
+					})
+				}
 			}
 		}
 	}
