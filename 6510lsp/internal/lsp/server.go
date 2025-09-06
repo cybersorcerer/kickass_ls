@@ -126,7 +126,8 @@ func Start() {
 							"resolveProvider":   false,
 							"triggerCharacters": []string{" ", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"},
 						},
-						"definitionProvider": true, // <--- HIER HINZUFÜGEN!
+						"definitionProvider": true,
+						"referencesProvider": true,
 					},
 				},
 			}
@@ -462,6 +463,131 @@ func Start() {
 			}
 			response, _ := json.Marshal(defResp)
 			writeResponse(writer, response)
+		case "textDocument/references":
+			log.Debug("Handling textDocument/references request.")
+
+			var locations []map[string]interface{}
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						if position, ok := params["position"].(map[string]interface{}); ok {
+							if lineNum, ok := position["line"].(float64); ok {
+								if charNum, ok := position["character"].(float64); ok {
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
+
+									if docFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+											word := getWordAtPosition(lineContent, int(charNum))
+											if word != "" {
+												searchLabel := normalizeLabel(word)
+												// Scope local labels
+												if strings.HasPrefix(word, ".") {
+													currentGlobalLabel := ""
+													for i := int(lineNum); i >= 0; i-- {
+														trimmed := strings.TrimSpace(lines[i])
+														if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
+															continue
+														}
+														parts := strings.Fields(trimmed)
+														if len(parts) > 0 {
+															potentialLabel := parts[0]
+															if strings.HasSuffix(potentialLabel, ":") {
+																label := normalizeLabel(potentialLabel)
+																if !strings.HasPrefix(label, ".") {
+																	currentGlobalLabel = label
+																	break
+																}
+															}
+														}
+													}
+													if currentGlobalLabel != "" {
+														searchLabel = currentGlobalLabel + searchLabel
+													}
+												}
+
+												// Find all references
+												locations = make([]map[string]interface{}, 0)
+												var currentGlobalLabel string
+												jumpOpcodes := map[string]bool{
+													"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
+												}
+
+												for i, l := range lines {
+													trimmedLine := strings.TrimSpace(l)
+													if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") {
+														continue
+													}
+
+													parts := strings.Fields(trimmedLine)
+													if len(parts) == 0 {
+														continue
+													}
+
+													// Determine opcode and operand
+													var opcode, operand string
+													firstWord := parts[0]
+													if strings.HasSuffix(firstWord, ":") {
+														label := normalizeLabel(firstWord)
+														if !strings.HasPrefix(label, ".") {
+															currentGlobalLabel = label
+														}
+														if len(parts) > 1 {
+															opcode = strings.ToUpper(parts[1])
+															if len(parts) > 2 {
+																operand = parts[2]
+															}
+														}
+													} else {
+														opcode = strings.ToUpper(parts[0])
+														if len(parts) > 1 {
+															operand = parts[1]
+														}
+													}
+
+													// Check if the operand is a reference to the searched label
+													if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
+														normalizedOperand := normalizeLabel(operand)
+														scopedOperand := normalizedOperand
+														if strings.HasPrefix(scopedOperand, ".") && currentGlobalLabel != "" {
+															scopedOperand = currentGlobalLabel + scopedOperand
+														}
+
+														if scopedOperand == searchLabel {
+															charIndex := strings.Index(l, operand)
+															if charIndex != -1 {
+																locations = append(locations, map[string]interface{}{
+																	"uri": uri,
+																	"range": map[string]interface{}{
+																		"start": map[string]interface{}{"line": i, "character": charIndex},
+																		"end":   map[string]interface{}{"line": i, "character": charIndex + len(operand)},
+																	},
+																})
+															}
+														}
+													}
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			refResp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  locations,
+			}
+			response, _ := json.Marshal(refResp)
+			writeResponse(writer, response)
 		default:
 			log.Logger.Printf("Unhandled method: %s\n", method)
 		}
@@ -750,7 +876,7 @@ func getWordAtPosition(lineContent string, charNum int) string {
 }
 
 func isWordChar(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.'
 }
 
 // normalizeLabel removes a leading '!' and any trailing ':' or '+'/'-' characters from a label
