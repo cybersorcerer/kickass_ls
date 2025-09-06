@@ -126,6 +126,7 @@ func Start() {
 							"resolveProvider":   false,
 							"triggerCharacters": []string{" ", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"},
 						},
+						"definitionProvider": true, // <--- HIER HINZUFÜGEN!
 					},
 				},
 			}
@@ -247,7 +248,20 @@ func Start() {
 		case "textDocument/completion":
 			log.Debug("Handling textDocument/completion request.")
 
-			var completionItems []map[string]interface{}
+			// IMMER ein leeres Array initialisieren!
+			completionItems := make([]map[string]interface{}, 0)
+
+			completionList := map[string]interface{}{
+				"isIncomplete": false,
+				"items":        completionItems,
+			}
+
+			var id interface{}
+			if val, ok := message["id"]; ok {
+				id = val
+			} else {
+				id = 1 // Fallback für buggy Clients
+			}
 
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
@@ -263,57 +277,173 @@ func Start() {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
-
-											// Basic context analysis
-											parts := strings.Fields(lineContent[:int(charNum)])
+											context := ""
+											if int(charNum) <= len(lineContent) {
+												context = lineContent[:int(charNum)]
+											} else {
+												context = lineContent
+											}
+											parts := strings.Fields(context)
+											lastPart := ""
 											if len(parts) > 0 {
-												lastPart := parts[len(parts)-1]
-												jumpOpcodes := map[string]bool{"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true}
+												lastPart = parts[len(parts)-1]
+											}
 
-												if _, isJump := jumpOpcodes[strings.ToUpper(lastPart)]; isJump {
-													// Label completion context
-													definedLabels := make(map[string]int)
-													allOpcodes := make(map[string]bool)
-													for _, m := range mnemonics {
-														allOpcodes[strings.ToUpper(m.Mnemonic)] = true
+											jumpOpcodes := map[string]bool{
+												"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
+											}
+
+											// Label completion, wenn vorher ein Sprungbefehl steht
+											if len(parts) > 1 && jumpOpcodes[strings.ToUpper(parts[len(parts)-2])] {
+												definedLabels := make(map[string]struct{})
+												var currentGlobalLabel string
+												for _, l := range lines {
+													p := strings.Fields(strings.TrimSpace(l))
+													if len(p) > 0 {
+														potentialLabel := p[0]
+														if strings.HasSuffix(potentialLabel, ":") {
+															label := normalizeLabel(potentialLabel)
+															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
+																label = currentGlobalLabel + label
+															} else if !strings.HasPrefix(label, ".") {
+																currentGlobalLabel = label
+															}
+															definedLabels[label] = struct{}{}
+														}
 													}
-													for i, l := range lines {
-														p := strings.Fields(strings.TrimSpace(l))
-														if len(p) > 0 {
-															if _, isOpcode := allOpcodes[strings.ToUpper(p[0])]; !isOpcode {
-																definedLabels[p[0]] = i
+												}
+												for label := range definedLabels {
+													completionItems = append(completionItems, map[string]interface{}{
+														"label": label,
+														"kind":  float64(10), // Property
+													})
+												}
+											} else {
+												// Opcode completion
+												for _, m := range mnemonics {
+													if lastPart == "" || strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(lastPart)) {
+														completionItems = append(completionItems, map[string]interface{}{
+															"label": m.Mnemonic,
+															"kind":  float64(14), // Keyword
+														})
+													}
+												}
+											}
+											// Set items for response (IMMER ein Array, nie nil!)
+											completionList["items"] = completionItems
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			result := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  completionList,
+			}
+			response, err := json.Marshal(result)
+			if err != nil {
+				log.Error("Failed to marshal completion response: %v", err)
+				return
+			}
+			log.Debug("Sending completion response: %s", string(response))
+			writeResponse(writer, response)
+		case "textDocument/definition":
+			log.Debug("Handling textDocument/definition request.")
+
+			var result interface{} = nil
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						if position, ok := params["position"].(map[string]interface{}); ok {
+							if lineNum, ok := position["line"].(float64); ok {
+								if charNum, ok := position["character"].(float64); ok {
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
+
+									if docFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+											word := getWordAtPosition(lineContent, int(charNum))
+											if word != "" {
+												// Label-Index aufbauen
+												type LabelPosition struct {
+													Line      int
+													Character int
+												}
+												labelIndex := make(map[string]LabelPosition)
+												var currentGlobalLabel string
+												for i, l := range lines {
+													trimmed := strings.TrimSpace(l)
+													if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
+														continue
+													}
+													parts := strings.Fields(trimmed)
+													if len(parts) > 0 {
+														potentialLabel := parts[0]
+														if strings.HasSuffix(potentialLabel, ":") {
+															label := normalizeLabel(potentialLabel)
+															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
+																label = currentGlobalLabel + label
+															} else if !strings.HasPrefix(label, ".") {
+																currentGlobalLabel = label
+															}
+															labelIndex[label] = LabelPosition{
+																Line:      i,
+																Character: strings.Index(l, potentialLabel),
 															}
 														}
 													}
-													for label := range definedLabels {
-														completionItems = append(completionItems, map[string]interface{}{
-															"label": label,
-															"kind":  float64(10), // 10 = Property (for labels)
-														})
-													}
-												} else {
-													// Opcode completion context
-													for _, m := range mnemonics {
-														if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(lastPart)) {
-															completionItems = append(completionItems, map[string]interface{}{
-																"label": m.Mnemonic,
-																"kind":  float64(14), // 14 = Keyword
-															})
+												}
+												// Gesuchten Labelnamen normalisieren und ggf. scopen
+												searchLabel := normalizeLabel(word)
+												if strings.HasPrefix(searchLabel, ".") {
+													// Scope: Finde globales Label oberhalb der aktuellen Zeile
+													currentGlobalLabel = ""
+													for i := int(lineNum); i >= 0; i-- {
+														trimmed := strings.TrimSpace(lines[i])
+														if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
+															continue
+														}
+														parts := strings.Fields(trimmed)
+														if len(parts) > 0 {
+															potentialLabel := parts[0]
+															if strings.HasSuffix(potentialLabel, ":") {
+																label := normalizeLabel(potentialLabel)
+																if !strings.HasPrefix(label, ".") {
+																	currentGlobalLabel = label
+																	break
+																}
+															}
 														}
 													}
+													if currentGlobalLabel != "" {
+														searchLabel = currentGlobalLabel + searchLabel
+													}
 												}
-											} else {
-												// Opcode completion context (empty line)
-												allOpcodes := make(map[string]bool)
-												for _, m := range mnemonics {
-													allOpcodes[strings.ToUpper(m.Mnemonic)] = true
-												}
-												//allOpcodes := []string{"ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"}
-												for _, opcode := range allOpcodes {
-													completionItems = append(completionItems, map[string]interface{}{
-														"label": opcode,
-														"kind":  float64(14), // 14 = Keyword
-													})
+												if pos, ok := labelIndex[searchLabel]; ok {
+													result = []map[string]interface{}{
+														{
+															"uri": uri,
+															"range": map[string]interface{}{
+																"start": map[string]interface{}{
+																	"line":      pos.Line,
+																	"character": pos.Character,
+																},
+																"end": map[string]interface{}{
+																	"line":      pos.Line,
+																	"character": pos.Character + len(word),
+																},
+															},
+														},
+													}
 												}
 											}
 										}
@@ -325,17 +455,12 @@ func Start() {
 				}
 			}
 
-			completionList := map[string]interface{}{
-				"isIncomplete": false,
-				"items":        completionItems,
-			}
-
-			result := map[string]interface{}{
+			defResp := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      message["id"],
-				"result":  completionList,
+				"result":  result,
 			}
-			response, _ := json.Marshal(result)
+			response, _ := json.Marshal(defResp)
 			writeResponse(writer, response)
 		default:
 			log.Logger.Printf("Unhandled method: %s\n", method)
@@ -361,6 +486,8 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	// Data structures for label diagnostics
 	definedLabels := make(map[string]int) // label -> line number
 	usedLabels := make(map[string]bool)
+	invalidLabelLines := make(map[int]bool) // <--- NEU: Zeilen mit Label-Fehler merken
+
 	jumpOpcodes := map[string]bool{
 		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
 	}
@@ -368,6 +495,8 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	for _, m := range mnemonics {
 		allOpcodes[strings.ToUpper(m.Mnemonic)] = true
 	}
+
+	var currentGlobalLabel string
 
 	// First pass: find all defined labels and check for duplicates
 	for i, line := range lines {
@@ -381,16 +510,26 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 			// Check for labels ending with ':'
 			if strings.HasSuffix(potentialLabel, ":") {
-				label := potentialLabel[:len(potentialLabel)-1] // Remove the colon
-				// Handle multi-labels starting with '!'
-				label = strings.TrimPrefix(label, "!")
-
-				if _, isOpcode := allOpcodes[strings.ToUpper(label)]; !isOpcode {
+				label := normalizeLabel(potentialLabel)
+				originalLabel := label
+				if strings.HasPrefix(label, ".") {
+					// Local label: scope with current global label
+					if currentGlobalLabel != "" {
+						label = currentGlobalLabel + label
+					}
+				} else {
+					// Global label: remember for scoping
+					currentGlobalLabel = label
+				}
+				if _, isOpcode := allOpcodes[label]; !isOpcode {
 					if _, exists := definedLabels[label]; exists {
 						diagnostics = append(diagnostics, map[string]interface{}{
-							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
+							"range": map[string]interface{}{
+								"start": map[string]interface{}{"line": i, "character": 0},
+								"end":   map[string]interface{}{"line": i, "character": len(line)},
+							},
 							"severity": float64(1), // Error
-							"message":  fmt.Sprintf("Duplicate label definition: %s", label),
+							"message":  fmt.Sprintf("Duplicate label definition: %s", originalLabel),
 							"source":   "6510lsp",
 						})
 					} else {
@@ -399,51 +538,28 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				}
 			} else {
 				// If it doesn't end with ':', it's either an opcode or an invalid label definition
-				// For now, we'll treat it as an opcode if it matches one, otherwise it's an unknown opcode.
-				// The assumption here is that labels *must* end with ':' in Kick Assembler.
-				// If the first word is not an opcode, and doesn't end with ':', it's an error.
-				if _, isOpcode := allOpcodes[strings.ToUpper(potentialLabel)]; !isOpcode {
-					diagnostics = append(diagnostics, map[string]interface{}{
-						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
-						"severity": float64(1), // Error
-						"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
-						"source":   "6510lsp",
-					})
-				}
-			}
-		}
-	}
-
-	// First pass: find all defined labels and check for duplicates
-	for i, line := range lines {
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
-			continue
-		}
-		parts := strings.Fields(trimmedLine)
-		if len(parts) > 0 {
-			potentialLabel := strings.ToUpper(parts[0])
-			if _, isOpcode := allOpcodes[potentialLabel]; !isOpcode {
-				label := parts[0]
-				if _, exists := definedLabels[label]; exists {
+				if _, isOpcode := allOpcodes[normalizeLabel(potentialLabel)]; !isOpcode {
 					diagnostics = append(diagnostics, map[string]interface{}{
 						"range": map[string]interface{}{
 							"start": map[string]interface{}{"line": i, "character": 0},
 							"end":   map[string]interface{}{"line": i, "character": len(line)},
 						},
 						"severity": float64(1), // Error
-						"message":  fmt.Sprintf("Duplicate label definition: %s", label),
+						"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
 						"source":   "6510lsp",
 					})
-				} else {
-					definedLabels[label] = i
+					invalidLabelLines[i] = true // <--- Zeile merken!
 				}
 			}
 		}
 	}
 
 	// Second pass: find all used labels and check for unknown opcodes
+	currentGlobalLabel = ""
 	for i, line := range lines {
+		if invalidLabelLines[i] {
+			continue // <--- Zeile überspringen, wenn schon als Label-Fehler markiert!
+		}
 		trimmedLine := strings.TrimSpace(line)
 		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
 			continue
@@ -455,12 +571,13 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		}
 
 		var opcode, operand string
-		firstWordIsLabel := false
-		if _, isLabel := definedLabels[parts[0]]; isLabel {
-			firstWordIsLabel = true
-		}
-
-		if firstWordIsLabel {
+		firstWord := parts[0]
+		isLabelDef := strings.HasSuffix(firstWord, ":")
+		if isLabelDef {
+			label := normalizeLabel(firstWord)
+			if !strings.HasPrefix(label, ".") {
+				currentGlobalLabel = label
+			}
 			if len(parts) > 1 {
 				opcode = strings.ToUpper(parts[1])
 				if len(parts) > 2 {
@@ -475,16 +592,13 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		}
 
 		if opcode != "" {
-			// Check for used labels
+			// Check for used labels (jump targets)
 			if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
-				// Handle multi-label references (e.g., !label+, !label-)
-				if strings.HasPrefix(operand, "!") {
-					// Normalize label for lookup in definedLabels
-					baseLabel := normalizeLabel(operand)
-					usedLabels[baseLabel] = true
-				} else {
-					usedLabels[normalizeLabel(operand)] = true
+				normalizedOperand := normalizeLabel(operand)
+				if strings.HasPrefix(normalizedOperand, ".") && currentGlobalLabel != "" {
+					normalizedOperand = currentGlobalLabel + normalizedOperand
 				}
+				usedLabels[normalizedOperand] = true
 			}
 
 			// Check for unknown opcodes
@@ -571,12 +685,14 @@ func isWordChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
 }
 
-// normalizeLabel removes a leading '!' and any trailing '+' or '-' characters from a label.
+// normalizeLabel removes a leading '!' and any trailing ':' or '+'/'-' characters from a label
+// and converts it to upper case for case-insensitive comparison.
 func normalizeLabel(label string) string {
+	label = strings.TrimSpace(label)
 	label = strings.TrimPrefix(label, "!")
-	label = strings.TrimRightFunc(label, func(r rune) bool {
-		return r == '+' || r == '-'
-	})
+	label = strings.TrimSuffix(label, ":")
+	label = strings.TrimRight(label, "+-")
+	label = strings.ToUpper(label) // Case-insensitive!
 	return label
 }
 
