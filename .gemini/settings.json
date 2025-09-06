@@ -1,0 +1,8 @@
+{
+  "preferredEditor": "vscode",
+  "showMemoryUsage": true,
+  "showLineNumbers": true,
+  "tools": {
+    "useRipgrep": true
+  }
+}

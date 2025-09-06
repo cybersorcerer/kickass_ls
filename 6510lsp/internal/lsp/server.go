@@ -23,11 +23,11 @@ type Mnemonic struct {
 
 // AddressingMode represents the structure of an addressing mode within a mnemonic
 type AddressingMode struct {
-	Opcode         string `json:"opcode"`
-	AddressingMode string `json:"addressing_mode"`
+	Opcode          string `json:"opcode"`
+	AddressingMode  string `json:"addressing_mode"`
 	AssemblerFormat string `json:"assembler_format"`
-	Length         int    `json:"length"`
-	Cycles         string `json:"cycles"` // Can be "2", "4*", "2/3/4"
+	Length          int    `json:"length"`
+	Cycles          string `json:"cycles"` // Can be "2", "4*", "2/3/4"
 }
 
 // Global variable to store mnemonic data
@@ -43,7 +43,7 @@ var documentStore = struct {
 
 // Start initializes and runs the LSP server.
 func Start() {
-	log.Logger.Println("LSP server starting...")
+	log.Info("LSP server starting...")
 
 	// Load mnemonic data
 	err := loadMnemonics("/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/mnemonic.json")
@@ -60,7 +60,7 @@ func Start() {
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
-				log.Logger.Println("EOF received, exiting.")
+				log.Info("EOF received, exiting.")
 				break
 			}
 			log.Logger.Printf("Error reading header: %v\n", err)
@@ -104,13 +104,13 @@ func Start() {
 
 		method, ok := message["method"].(string)
 		if !ok {
-			log.Logger.Println("Method not found or not a string.")
+			log.Warn("Method not found or not a string.")
 			continue
 		}
 
 		switch method {
 		case "initialize":
-			log.Logger.Println("Handling initialize request.")
+			log.Debug("Handling initialize request.")
 			// Construct and send InitializeResult
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
@@ -132,9 +132,9 @@ func Start() {
 			response, _ := json.Marshal(result)
 			writeResponse(writer, response)
 		case "initialized":
-			log.Logger.Println("Handling initialized notification.")
+			log.Debug("Handling initialized notification.")
 		case "shutdown":
-			log.Logger.Println("Handling shutdown request.")
+			log.Debug("Handling shutdown request.")
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      message["id"],
@@ -143,10 +143,10 @@ func Start() {
 			response, _ := json.Marshal(result)
 			writeResponse(writer, response)
 		case "exit":
-			log.Logger.Println("Handling exit notification.")
+			log.Debug("Handling exit notification.")
 			os.Exit(0)
 		case "textDocument/didOpen":
-			log.Logger.Println("Handling textDocument/didOpen notification.")
+			log.Debug("Handling textDocument/didOpen notification.")
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
@@ -162,7 +162,7 @@ func Start() {
 				}
 			}
 		case "textDocument/didChange":
-			log.Logger.Println("Handling textDocument/didChange notification.")
+			log.Debug("Handling textDocument/didChange notification.")
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
@@ -184,7 +184,7 @@ func Start() {
 				}
 			}
 		case "textDocument/didClose":
-			log.Logger.Println("Handling textDocument/didClose notification.")
+			log.Debug("Handling textDocument/didClose notification.")
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
@@ -198,7 +198,7 @@ func Start() {
 				}
 			}
 		case "textDocument/hover":
-			log.Logger.Println("Handling textDocument/hover request.")
+			log.Debug("Handling textDocument/hover request.")
 
 			var responseResult interface{} = nil
 
@@ -245,7 +245,7 @@ func Start() {
 			responseBytes, _ := json.Marshal(finalResponse)
 			writeResponse(writer, responseBytes)
 		case "textDocument/completion":
-			log.Logger.Println("Handling textDocument/completion request.")
+			log.Debug("Handling textDocument/completion request.")
 
 			var completionItems []map[string]interface{}
 
@@ -274,9 +274,9 @@ func Start() {
 													// Label completion context
 													definedLabels := make(map[string]int)
 													allOpcodes := make(map[string]bool)
-											for _, m := range mnemonics {
-												allOpcodes[strings.ToUpper(m.Mnemonic)] = true
-											}
+													for _, m := range mnemonics {
+														allOpcodes[strings.ToUpper(m.Mnemonic)] = true
+													}
 													for i, l := range lines {
 														p := strings.Fields(strings.TrimSpace(l))
 														if len(p) > 0 {
@@ -293,11 +293,10 @@ func Start() {
 													}
 												} else {
 													// Opcode completion context
-													allOpcodes := []string{"ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"}
-													for _, opcode := range allOpcodes {
-														if strings.HasPrefix(opcode, strings.ToUpper(lastPart)) {
+													for _, m := range mnemonics {
+														if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(lastPart)) {
 															completionItems = append(completionItems, map[string]interface{}{
-																"label": opcode,
+																"label": m.Mnemonic,
 																"kind":  float64(14), // 14 = Keyword
 															})
 														}
@@ -305,7 +304,11 @@ func Start() {
 												}
 											} else {
 												// Opcode completion context (empty line)
-												allOpcodes := []string{"ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"}
+												allOpcodes := make(map[string]bool)
+												for _, m := range mnemonics {
+													allOpcodes[strings.ToUpper(m.Mnemonic)] = true
+												}
+												//allOpcodes := []string{"ADC", "AND", "ASL", "BCC", "BCS", "BEQ", "BIT", "BMI", "BNE", "BPL", "BRK", "BVC", "BVS", "CLC", "CLD", "CLI", "CLV", "CMP", "CPX", "CPY", "DEC", "DEX", "DEY", "EOR", "INC", "INX", "INY", "JMP", "JSR", "LDA", "LDX", "LDY", "LSR", "NOP", "ORA", "PHA", "PHP", "PLA", "PLP", "ROL", "ROR", "RTI", "RTS", "SBC", "SEC", "SED", "SEI", "STA", "STX", "STY", "TAX", "TAY", "TSX", "TXA", "TXS", "TYA"}
 												for _, opcode := range allOpcodes {
 													completionItems = append(completionItems, map[string]interface{}{
 														"label": opcode,
@@ -339,7 +342,7 @@ func Start() {
 		}
 	}
 
-	log.Logger.Println("LSP server stopped.")
+	log.Info("LSP server stopped.")
 }
 
 func writeResponse(writer *bufio.Writer, response []byte) {
@@ -380,14 +383,12 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 			if strings.HasSuffix(potentialLabel, ":") {
 				label := potentialLabel[:len(potentialLabel)-1] // Remove the colon
 				// Handle multi-labels starting with '!'
-				if strings.HasPrefix(label, "!") {
-					label = label[1:] // Remove the '!' for storage, actual resolution happens later
-				}
+				label = strings.TrimPrefix(label, "!")
 
 				if _, isOpcode := allOpcodes[strings.ToUpper(label)]; !isOpcode {
 					if _, exists := definedLabels[label]; exists {
 						diagnostics = append(diagnostics, map[string]interface{}{
-							"range": map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end":   map[string]interface{}{"line": i, "character": len(line)},},
+							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 							"severity": float64(1), // Error
 							"message":  fmt.Sprintf("Duplicate label definition: %s", label),
 							"source":   "6510lsp",
@@ -403,7 +404,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				// If the first word is not an opcode, and doesn't end with ':', it's an error.
 				if _, isOpcode := allOpcodes[strings.ToUpper(potentialLabel)]; !isOpcode {
 					diagnostics = append(diagnostics, map[string]interface{}{
-						"range": map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end":   map[string]interface{}{"line": i, "character": len(line)},},
+						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 						"severity": float64(1), // Error
 						"message":  fmt.Sprintf("Invalid label definition (missing colon?): %s", potentialLabel),
 						"source":   "6510lsp",
@@ -421,7 +422,6 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		}
 		parts := strings.Fields(trimmedLine)
 		if len(parts) > 0 {
-
 			potentialLabel := strings.ToUpper(parts[0])
 			if _, isOpcode := allOpcodes[potentialLabel]; !isOpcode {
 				label := parts[0]
@@ -479,14 +479,11 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 			if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
 				// Handle multi-label references (e.g., !label+, !label-)
 				if strings.HasPrefix(operand, "!") {
-					// Remove '!' and any '+' or '-' suffixes for lookup in definedLabels
-					baseLabel := strings.TrimPrefix(operand, "!")
-					baseLabel = strings.TrimRightFunc(baseLabel, func(r rune) bool {
-						return r == '+' || r == '-'
-					})
+					// Normalize label for lookup in definedLabels
+					baseLabel := normalizeLabel(operand)
 					usedLabels[baseLabel] = true
 				} else {
-					usedLabels[operand] = true
+					usedLabels[normalizeLabel(operand)] = true
 				}
 			}
 
@@ -543,7 +540,7 @@ func loadMnemonics(filePath string) error {
 		return fmt.Errorf("failed to unmarshal mnemonic.json: %w", err)
 	}
 
-	log.Logger.Println("Successfully loaded mnemonic.json")
+	log.Info("Successfully loaded mnemonic.json")
 	return nil
 }
 
@@ -572,6 +569,15 @@ func getWordAtPosition(lineContent string, charNum int) string {
 
 func isWordChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_'
+}
+
+// normalizeLabel removes a leading '!' and any trailing '+' or '-' characters from a label.
+func normalizeLabel(label string) string {
+	label = strings.TrimPrefix(label, "!")
+	label = strings.TrimRightFunc(label, func(r rune) bool {
+		return r == '+' || r == '-'
+	})
+	return label
 }
 
 func getOpcodeDescription(opcode string) string {
@@ -608,7 +614,7 @@ func getOpcodeDescription(opcode string) string {
 				}
 
 				// Format header
-			sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
+				sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
 					maxAddrModeLen, "Addressing mode",
 					maxAsmFormatLen, "Assembler format",
 					maxOpcodeLen, "Opcode",
@@ -616,7 +622,7 @@ func getOpcodeDescription(opcode string) string {
 					maxCyclesLen, "Cycles"))
 
 				// Format separator
-			sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
+				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
 					strings.Repeat("-", maxAddrModeLen),
 					strings.Repeat("-", maxAsmFormatLen),
 					strings.Repeat("-", maxOpcodeLen),
@@ -645,5 +651,3 @@ func getOpcodeDescription(opcode string) string {
 	}
 	return "" // No description found
 }
-
-
