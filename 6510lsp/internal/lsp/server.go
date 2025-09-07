@@ -221,6 +221,7 @@ func Start() {
 											word := getWordAtPosition(lineContent, int(charNum))
 											log.Logger.Printf("Hovering over: %s\n", word)
 
+											// First, check for opcode description
 											description := getOpcodeDescription(strings.ToUpper(word))
 											if description != "" {
 												responseResult = map[string]interface{}{
@@ -228,6 +229,36 @@ func Start() {
 														"kind":  "markdown",
 														"value": description,
 													},
+												}
+											} else {
+												// If not an opcode, check for symbol
+												type SymbolInfoWithValue struct {
+													Kind  string
+													Value string
+												}
+												symbolIndex := make(map[string]SymbolInfoWithValue)
+												for _, l := range lines {
+													trimmed := strings.TrimSpace(l)
+													parts := strings.Fields(trimmed)
+													if len(parts) > 2 {
+														firstWord := strings.ToLower(parts[0])
+														if (firstWord == ".const" || firstWord == ".var") && parts[2] == "=" {
+															symbolName := normalizeLabel(parts[1])
+															valueParts := parts[3:]
+															value := strings.Join(valueParts, " ")
+															symbolIndex[symbolName] = SymbolInfoWithValue{Kind: firstWord[1:], Value: value}
+														}
+													}
+												}
+												searchSymbol := normalizeLabel(word)
+												if symbol, ok := symbolIndex[searchSymbol]; ok {
+													markdown := fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind, searchSymbol, symbol.Value)
+													responseResult = map[string]interface{}{
+														"contents": map[string]interface{}{
+															"kind":  "markdown",
+															"value": markdown,
+														},
+													}
 												}
 											}
 										}
@@ -494,109 +525,16 @@ func Start() {
 											lineContent := lines[int(lineNum)]
 											word := getWordAtPosition(lineContent, int(charNum))
 											if word != "" {
-												// Build symbol index to find the type of the word under the cursor
-												type SymbolInfo struct {
-													Kind      string
-													Line      int
-													Character int
-												}
-												symbolIndex := make(map[string]SymbolInfo)
-												var currentGlobalLabel string
 												for i, l := range lines {
-													trimmed := strings.TrimSpace(l)
-													if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
-														continue
-													}
-													parts := strings.Fields(trimmed)
-													if len(parts) > 0 {
-														firstWord := parts[0]
-														if (strings.ToLower(firstWord) == ".const" || strings.ToLower(firstWord) == ".var") && len(parts) > 1 {
-															symbolName := normalizeLabel(parts[1])
-															symbolIndex[symbolName] = SymbolInfo{Kind: "variable", Line: i, Character: strings.Index(l, parts[1])}
-														} else if strings.HasSuffix(firstWord, ":") {
-															label := normalizeLabel(firstWord)
-															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
-																label = currentGlobalLabel + label
-															} else if !strings.HasPrefix(label, ".") {
-																currentGlobalLabel = label
-															}
-															symbolIndex[label] = SymbolInfo{Kind: "label", Line: i, Character: strings.Index(l, firstWord)}
-														}
-													}
-												}
-
-												searchSymbol := normalizeLabel(word)
-												def, defFound := symbolIndex[searchSymbol]
-
-												// Find all references
-												locations = make([]map[string]interface{}, 0)
-												currentGlobalLabel = ""
-												jumpOpcodes := map[string]bool{"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true}
-
-												for i, l := range lines {
-													trimmedLine := strings.TrimSpace(l)
-													if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") {
-														continue
-													}
-													parts := strings.Fields(trimmedLine)
-													if len(parts) == 0 {
-														continue
-													}
-
-													var opcode, operand string
-													firstWord := parts[0]
-													if strings.HasSuffix(firstWord, ":") {
-														label := normalizeLabel(firstWord)
-														if !strings.HasPrefix(label, ".") {
-															currentGlobalLabel = label
-														}
-														if len(parts) > 1 {
-															opcode = strings.ToUpper(parts[1])
-															if len(parts) > 2 {
-																operand = parts[2]
-															}
-														}
-													} else {
-														opcode = strings.ToUpper(parts[0])
-														if len(parts) > 1 {
-															operand = parts[1]
-														}
-													}
-
-													if operand != "" {
-														normalizedOperand := normalizeLabel(operand)
-														match := false
-														if defFound {
-															if def.Kind == "label" {
-																if _, isJump := jumpOpcodes[opcode]; isJump {
-																	scopedOperand := normalizedOperand
-																	if strings.HasPrefix(scopedOperand, ".") && currentGlobalLabel != "" {
-																		scopedOperand = currentGlobalLabel + scopedOperand
-																	}
-																	if scopedOperand == searchSymbol {
-																		match = true
-																	}
-																}
-															} else if def.Kind == "variable" {
-																// For variables/constants, just check for the name
-																if normalizedOperand == searchSymbol {
-																	match = true
-																}
-															}
-														}
-
-														if match {
-															charIndex := strings.Index(l, operand)
-															if charIndex != -1 {
-																locations = append(locations, map[string]interface{}{
-																	"uri": uri,
-																	"range": map[string]interface{}{
-																		"start": map[string]interface{}{"line": i, "character": charIndex},
-																		"end":   map[string]interface{}{"line": i, "character": charIndex + len(operand)},
-																	},
-																})
-															}
-														}
+													if strings.Contains(l, word) {
+													charIndex := strings.Index(l, word)
+														locations = append(locations, map[string]interface{}{
+																"uri": uri,
+																"range": map[string]interface{}{
+																	"start": map[string]interface{}{"line": i, "character": charIndex},
+																	"end":   map[string]interface{}{"line": i, "character": charIndex + len(word)},
+																},
+															})
 													}
 												}
 											}
