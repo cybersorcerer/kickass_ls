@@ -10,7 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/c64-lsp/6510lsp/internal/log"
+	log "c64.nvim/internal/log"
 )
 
 // Mnemonic represents the structure of a single mnemonic entry in mnemonic.json
@@ -39,6 +39,14 @@ var documentStore = struct {
 	documents map[string]string
 }{
 	documents: make(map[string]string),
+}
+
+// symbolStore holds the parsed symbol trees for each document.
+var symbolStore = struct {
+	sync.RWMutex
+	trees map[string]*Scope
+}{
+	trees: make(map[string]*Scope),
 }
 
 // Start initializes and runs the LSP server.
@@ -124,7 +132,7 @@ func Start() {
 						"hoverProvider": true,
 						"completionProvider": map[string]interface{}{
 							"resolveProvider":   false,
-							"triggerCharacters": []string{" ", "a", "b", "c", "d", "e", "f", "g", "h", "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", "s", "t", "u", "v", "w", "x", "y", "z", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z"},
+							"triggerCharacters": []string{"."},
 						},
 						"definitionProvider": true,
 						"referencesProvider": true,
@@ -153,10 +161,19 @@ func Start() {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
 						if text, ok := textDocument["text"].(string); ok {
+							// Store document content
 							documentStore.Lock()
 							documentStore.documents[uri] = text
 							documentStore.Unlock()
-							log.Logger.Printf("Stored document %s, length: %d\n", uri, len(text))
+							log.Info("Stored document %s", uri)
+
+							// Parse document and store symbol tree
+							symbolTree := ParseDocument(uri, text)
+							symbolStore.Lock()
+							symbolStore.trees[uri] = symbolTree
+							symbolStore.Unlock()
+							log.Info("Parsed document and updated symbol store for %s", uri)
+
 							// Publish diagnostics after opening
 							publishDiagnostics(writer, uri, text)
 						}
@@ -169,14 +186,21 @@ func Start() {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
 						if contentChanges, ok := params["contentChanges"].([]interface{}); ok && len(contentChanges) > 0 {
-							// For simplicity, we assume full content update (TextDocumentSyncKindFull)
-							// The first change entry should contain the full new text
 							if change, ok := contentChanges[0].(map[string]interface{}); ok {
 								if newText, ok := change["text"].(string); ok {
+									// Update document content
 									documentStore.Lock()
 									documentStore.documents[uri] = newText
 									documentStore.Unlock()
-									log.Logger.Printf("Updated document %s, new length: %d\n", uri, len(newText))
+									log.Info("Updated document %s", uri)
+
+									// Re-parse document and update symbol tree
+									symbolTree := ParseDocument(uri, newText)
+									symbolStore.Lock()
+									symbolStore.trees[uri] = symbolTree
+									symbolStore.Unlock()
+									log.Info("Reparsed document and updated symbol store for %s", uri)
+
 									// Publish diagnostics after changing
 									publishDiagnostics(writer, uri, newText)
 								}
@@ -190,10 +214,17 @@ func Start() {
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
+						// Remove document from stores
 						documentStore.Lock()
 						delete(documentStore.documents, uri)
 						documentStore.Unlock()
-						log.Logger.Printf("Removed document %s from store.\n", uri)
+
+						symbolStore.Lock()
+						delete(symbolStore.trees, uri)
+						symbolStore.Unlock()
+
+						log.Info("Removed document %s from stores.", uri)
+
 						// Clear diagnostics when closing
 						publishDiagnostics(writer, uri, "") // Send empty diagnostics to clear
 					}
@@ -214,7 +245,11 @@ func Start() {
 									text, docFound := documentStore.documents[uri]
 									documentStore.RUnlock()
 
-									if docFound {
+									symbolStore.RLock()
+									symbolTree, treeFound := symbolStore.trees[uri]
+									symbolStore.RUnlock()
+
+									if docFound && treeFound {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
@@ -222,37 +257,24 @@ func Start() {
 											log.Logger.Printf("Hovering over: %s\n", word)
 
 											// First, check for opcode description
-											description := getOpcodeDescription(strings.ToUpper(word))
+										description := getOpcodeDescription(strings.ToUpper(word))
 											if description != "" {
 												responseResult = map[string]interface{}{
 													"contents": map[string]interface{}{
-														"kind":  "markdown",
-														"value": description,
-													},
+															"kind":  "markdown",
+															"value": description,
+														},
 												}
 											} else {
-												// If not an opcode, check for symbol
-												type SymbolInfoWithValue struct {
-													Kind  string
-													Value string
-												}
-												symbolIndex := make(map[string]SymbolInfoWithValue)
-												for _, l := range lines {
-													trimmed := strings.TrimSpace(l)
-													parts := strings.Fields(trimmed)
-													if len(parts) > 2 {
-														firstWord := strings.ToLower(parts[0])
-														if (firstWord == ".const" || firstWord == ".var") && parts[2] == "=" {
-															symbolName := normalizeLabel(parts[1])
-															valueParts := parts[3:]
-															value := strings.Join(valueParts, " ")
-															symbolIndex[symbolName] = SymbolInfoWithValue{Kind: firstWord[1:], Value: value}
-														}
-													}
-												}
+												// If not an opcode, check for symbol in the symbol tree
 												searchSymbol := normalizeLabel(word)
-												if symbol, ok := symbolIndex[searchSymbol]; ok {
-													markdown := fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind, searchSymbol, symbol.Value)
+												if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
+													var markdown string
+													if symbol.Value != "" {
+															markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
+													} else {
+															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
+													}
 													responseResult = map[string]interface{}{
 														"contents": map[string]interface{}{
 															"kind":  "markdown",
@@ -280,20 +302,8 @@ func Start() {
 		case "textDocument/completion":
 			log.Debug("Handling textDocument/completion request.")
 
-			// IMMER ein leeres Array initialisieren!
 			completionItems := make([]map[string]interface{}, 0)
-
-			completionList := map[string]interface{}{
-				"isIncomplete": false,
-				"items":        completionItems,
-			}
-
-			var id interface{}
-			if val, ok := message["id"]; ok {
-				id = val
-			} else {
-				id = 1 // Fallback für buggy Clients
-			}
+			id := message["id"]
 
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
@@ -305,64 +315,42 @@ func Start() {
 									text, docFound := documentStore.documents[uri]
 									documentStore.RUnlock()
 
-									if docFound {
+									symbolStore.RLock()
+									symbolTree, treeFound := symbolStore.trees[uri]
+									symbolStore.RUnlock()
+
+									if docFound && treeFound {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
-											context := ""
-											if int(charNum) <= len(lineContent) {
-												context = lineContent[:int(charNum)]
-											} else {
-												context = lineContent
-											}
-											parts := strings.Fields(context)
-											lastPart := ""
-											if len(parts) > 0 {
-												lastPart = parts[len(parts)-1]
-											}
+											
+											// Determine context: are we typing a mnemonic or an operand?
+											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
 
-											jumpOpcodes := map[string]bool{
-												"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
-											}
-
-											// Label completion, wenn vorher ein Sprungbefehl steht
-											if len(parts) > 1 && jumpOpcodes[strings.ToUpper(parts[len(parts)-2])] {
-												definedLabels := make(map[string]struct{})
-												var currentGlobalLabel string
-												for _, l := range lines {
-													p := strings.Fields(strings.TrimSpace(l))
-													if len(p) > 0 {
-														potentialLabel := p[0]
-														if strings.HasSuffix(potentialLabel, ":") {
-															label := normalizeLabel(potentialLabel)
-															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
-																label = currentGlobalLabel + label
-															} else if !strings.HasPrefix(label, ".") {
-																currentGlobalLabel = label
-															}
-															definedLabels[label] = struct{}{}
+											if isOperand {
+												// Offer symbols (labels, constants, variables)
+												symbols := symbolTree.FindAllVisibleSymbols(int(lineNum))
+												for _, symbol := range symbols {
+													if strings.HasPrefix(strings.ToUpper(symbol.Name), strings.ToUpper(wordToComplete)) {
+														completionItems = append(completionItems, map[string]interface{}{
+															"label":  symbol.Name,
+															"kind":   toCompletionItemKind(symbol.Kind),
+															"detail": symbol.Value,
+														})
 														}
-													}
-												}
-												for label := range definedLabels {
-													completionItems = append(completionItems, map[string]interface{}{
-														"label": label,
-														"kind":  float64(10), // Property
-													})
 												}
 											} else {
-												// Opcode completion
+												// Offer mnemonics and directives
 												for _, m := range mnemonics {
-													if lastPart == "" || strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(lastPart)) {
+													if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
 														completionItems = append(completionItems, map[string]interface{}{
 															"label": m.Mnemonic,
 															"kind":  float64(14), // Keyword
 														})
-													}
+														}
 												}
+												// Potentially add directives here as well
 											}
-											// Set items for response (IMMER ein Array, nie nil!)
-											completionList["items"] = completionItems
 										}
 									}
 								}
@@ -372,6 +360,10 @@ func Start() {
 				}
 			}
 
+			completionList := map[string]interface{}{
+				"isIncomplete": false,
+				"items":        completionItems,
+			}
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      id,
@@ -399,89 +391,29 @@ func Start() {
 									text, docFound := documentStore.documents[uri]
 									documentStore.RUnlock()
 
-									if docFound {
+									symbolStore.RLock()
+									symbolTree, treeFound := symbolStore.trees[uri]
+									symbolStore.RUnlock()
+
+									if docFound && treeFound {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
 											word := getWordAtPosition(lineContent, int(charNum))
 											if word != "" {
-												// Symbol-Index aufbauen (Labels, Konstanten, Variablen, etc.)
-												type SymbolInfo struct {
-													Kind      string
-													Line      int
-													Character int
-												}
-												symbolIndex := make(map[string]SymbolInfo)
-												var currentGlobalLabel string
-
-												for i, l := range lines {
-													trimmed := strings.TrimSpace(l)
-													if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
-														continue
-													}
-													parts := strings.Fields(trimmed)
-													if len(parts) > 0 {
-														firstWord := parts[0]
-														lowerFirstWord := strings.ToLower(firstWord)
-
-														if (lowerFirstWord == ".const" || lowerFirstWord == ".var") && len(parts) > 1 {
-															symbolName := normalizeLabel(parts[1])
-															symbolIndex[symbolName] = SymbolInfo{Kind: "variable", Line: i, Character: strings.Index(l, parts[1])}
-														} else if (lowerFirstWord == ".function" || lowerFirstWord == ".macro") && len(parts) > 1 {
-															symbolNameWithArgs := parts[1]
-															symbolName := normalizeLabel(strings.Split(symbolNameWithArgs, "(")[0])
-															symbolIndex[symbolName] = SymbolInfo{Kind: lowerFirstWord[1:], Line: i, Character: strings.Index(l, symbolName)}
-														} else if strings.HasSuffix(firstWord, ":") { // Labels
-															label := normalizeLabel(firstWord)
-															if strings.HasPrefix(label, ".") && currentGlobalLabel != "" {
-																label = currentGlobalLabel + label
-															} else if !strings.HasPrefix(label, ".") {
-																currentGlobalLabel = label
-															}
-															symbolIndex[label] = SymbolInfo{Kind: "label", Line: i, Character: strings.Index(l, firstWord)}
-														}
-													}
-												}
-
-												// Gesuchten Symbolnamen normalisieren und ggf. scopen
 												searchSymbol := normalizeLabel(word)
-												if strings.HasPrefix(word, ".") {
-													// Scope: Finde globales Label oberhalb der aktuellen Zeile
-													currentGlobalLabel = ""
-													for i := int(lineNum); i >= 0; i-- {
-														trimmed := strings.TrimSpace(lines[i])
-														if trimmed == "" || strings.HasPrefix(trimmed, ";") || strings.HasPrefix(trimmed, "*") {
-															continue
-														}
-														parts := strings.Fields(trimmed)
-														if len(parts) > 0 {
-															potentialLabel := parts[0]
-															if strings.HasSuffix(potentialLabel, ":") {
-																label := normalizeLabel(potentialLabel)
-																if !strings.HasPrefix(label, ".") {
-																	currentGlobalLabel = label
-																	break
-																}
-															}
-														}
-													}
-													if currentGlobalLabel != "" {
-														searchSymbol = currentGlobalLabel + searchSymbol
-													}
-												}
-
-												if pos, ok := symbolIndex[searchSymbol]; ok {
+												if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
 													result = []map[string]interface{}{
 														{
 															"uri": uri,
 															"range": map[string]interface{}{
 																"start": map[string]interface{}{
-																	"line":      pos.Line,
-																	"character": pos.Character,
+																	"line":      symbol.Position.Line,
+																	"character": symbol.Position.Character,
 																},
 																"end": map[string]interface{}{
-																	"line":      pos.Line,
-																	"character": pos.Character + len(word),
+																	"line":      symbol.Position.Line,
+																	"character": symbol.Position.Character + len(symbol.Name),
 																},
 															},
 														},
@@ -527,7 +459,7 @@ func Start() {
 											if word != "" {
 												for i, l := range lines {
 													if strings.Contains(l, word) {
-													charIndex := strings.Index(l, word)
+														charIndex := strings.Index(l, word)
 														locations = append(locations, map[string]interface{}{
 																"uri": uri,
 																"range": map[string]interface{}{
@@ -840,7 +772,7 @@ func isWordChar(r rune) bool {
 	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.'
 }
 
-// normalizeLabel removes a leading '!' and any trailing ':' or '+'/'-' characters from a label
+// normalizeLabel removes a leading '!' and any trailing ':' or '+'-' characters from a label
 // and converts it to upper case for case-insensitive comparison.
 func normalizeLabel(label string) string {
 	label = strings.TrimSpace(label)
@@ -921,4 +853,64 @@ func getOpcodeDescription(opcode string) string {
 		}
 	}
 	return "" // No description found
+}
+
+func toCompletionItemKind(kind SymbolKind) float64 {
+	switch kind {
+	case Constant:
+		return 21 // Constant
+	case Variable:
+		return 6 // Variable
+	case Label:
+		return 10 // Property
+	case Function:
+		return 3 // Function
+	case Macro:
+		return 15 // Snippet
+	case Namespace:
+		return 19 // Module
+	default:
+		return 1 // Text
+	}
+}
+
+// getCompletionContext determines if we are completing an operand or a mnemonic
+// and returns the word being completed.
+func getCompletionContext(line string, char int) (isOperand bool, word string) {
+	trimmedLine := strings.TrimSpace(line)
+	parts := strings.Fields(trimmedLine)
+
+	if len(parts) == 0 {
+		return false, ""
+	}
+
+	// Find which word the cursor is in
+	cursorInWordIndex := -1
+	currentPos := 0
+	for i, part := range parts {
+		start := strings.Index(line, part)
+		end := start + len(part)
+		if char >= start && char <= end {
+			cursorInWordIndex = i
+			word = part
+			break
+		}
+		currentPos = end
+	}
+
+	if cursorInWordIndex == -1 && char > currentPos {
+		return true, ""
+	}
+
+	// If the first word has a colon, it's a label definition.
+	// The next word is a mnemonic.
+	if strings.HasSuffix(parts[0], ":") {
+		if cursorInWordIndex == 0 {
+			return false, parts[0]
+		}
+		return cursorInWordIndex > 1, word
+	}
+
+	// Otherwise, the first word is the mnemonic, subsequent words are operands.
+	return cursorInWordIndex > 0, word
 }

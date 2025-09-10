@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/c64-lsp/6510lsp/internal/log"
-	lsp "github.com/c64-lsp/6510lsp/internal/lsp"
+	log "c64.nvim/internal/log"
+	lsp "c64.nvim/internal/lsp"
 )
 
 func main() {
