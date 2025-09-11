@@ -257,13 +257,13 @@ func Start() {
 											log.Logger.Printf("Hovering over: %s\n", word)
 
 											// First, check for opcode description
-										description := getOpcodeDescription(strings.ToUpper(word))
+											description := getOpcodeDescription(strings.ToUpper(word))
 											if description != "" {
 												responseResult = map[string]interface{}{
 													"contents": map[string]interface{}{
-															"kind":  "markdown",
-															"value": description,
-														},
+														"kind":  "markdown",
+														"value": description,
+													},
 												}
 											} else {
 												// If not an opcode, check for symbol in the symbol tree
@@ -271,9 +271,9 @@ func Start() {
 												if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
 													var markdown string
 													if symbol.Value != "" {
-															markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
+														markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
 													} else {
-															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
+														markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
 													}
 													responseResult = map[string]interface{}{
 														"contents": map[string]interface{}{
@@ -488,12 +488,12 @@ func Start() {
 													if strings.Contains(l, word) {
 														charIndex := strings.Index(l, word)
 														locations = append(locations, map[string]interface{}{
-																"uri": uri,
-																"range": map[string]interface{}{
-																	"start": map[string]interface{}{"line": i, "character": charIndex},
-																	"end":   map[string]interface{}{"line": i, "character": charIndex + len(word)},
-																},
-															})
+															"uri": uri,
+															"range": map[string]interface{}{
+																"start": map[string]interface{}{"line": i, "character": charIndex},
+																"end":   map[string]interface{}{"line": i, "character": charIndex + len(word)},
+															},
+														})
 													}
 												}
 											}
@@ -574,6 +574,7 @@ func detectAddressingMode(opcode, operand string) string {
 
 // publishDiagnostics analyzes the text and sends diagnostics to the client.
 func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
+
 	diagnostics := make([]map[string]interface{}, 0)
 	lines := strings.Split(text, "\n")
 
@@ -601,6 +602,9 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 	// First pass: find all defined labels and check for duplicates
 	for i, line := range lines {
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
 		trimmedLine := strings.TrimSpace(line)
 		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") || trimmedLine == "{" || trimmedLine == "}" {
 			continue
@@ -627,6 +631,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				}
 				if _, isOpcode := allOpcodes[label]; !isOpcode {
 					if _, exists := definedLabels[label]; exists {
+
 						diagnostics = append(diagnostics, map[string]interface{}{
 							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 							"severity": float64(1), // Error
@@ -641,6 +646,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 				normalizedFirstWord := normalizeLabel(potentialLabel)
 				if _, isOpcode := allOpcodes[normalizedFirstWord]; !isOpcode {
 					if _, isDirective := kickAssemblerDirectives[strings.ToUpper(potentialLabel)]; !isDirective {
+
 						diagnostics = append(diagnostics, map[string]interface{}{
 							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 							"severity": float64(1), // Error
@@ -657,6 +663,9 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	// Second pass: find all used labels, check for unknown opcodes and addressing mode errors
 	currentGlobalLabel = ""
 	for i, line := range lines {
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
 		if invalidLabelLines[i] {
 			continue
 		}
@@ -704,6 +713,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 
 			if _, isKnown := allOpcodes[opcode]; !isKnown {
 				if _, isDirective := kickAssemblerDirectives[opcode]; !isDirective {
+
 					diagnostics = append(diagnostics, map[string]interface{}{
 						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 						"severity": float64(1), // 1 = Error
@@ -722,6 +732,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 					}
 				}
 				if !allowed {
+
 					diagnostics = append(diagnostics, map[string]interface{}{
 						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
 						"severity": float64(1), // Error
@@ -736,6 +747,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	// Third pass: check for unused labels
 	for label, lineNum := range definedLabels {
 		if _, used := usedLabels[label]; !used {
+
 			diagnostics = append(diagnostics, map[string]interface{}{
 				"range":    map[string]interface{}{"start": map[string]interface{}{"line": lineNum, "character": 0}, "end": map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])}},
 				"severity": float64(2), // Warning
@@ -938,7 +950,7 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 		// We need to check if the last word was an opcode.
 		log.Debug("Cursor is in whitespace after the last word.")
 		for _, m := range mnemonics {
-			if strings.ToUpper(m.Mnemonic) == strings.ToUpper(lastPart) {
+			if strings.EqualFold(m.Mnemonic, lastPart) {
 				log.Debug("Last word was an opcode, so we are in operand context.")
 				return true, "" // We are starting a new operand
 			}
@@ -971,7 +983,7 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 
 	// Is the previous part an opcode?
 	for _, m := range mnemonics {
-		if strings.ToUpper(m.Mnemonic) == strings.ToUpper(prevPart) {
+		if strings.EqualFold(m.Mnemonic, prevPart) {
 			log.Debug("Previous part was an opcode, so current is an operand.")
 			return true, lastPart
 		}

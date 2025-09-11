@@ -1,6 +1,6 @@
-; Kick Assembler Test-Datei für den 6510-LSP
+// Kick Assembler Test-Datei für den 6510-LSP
 
-; --- PHASE 1: Symbol- und Scope-Erkennung ---
+// --- PHASE 1: Symbol- und Scope-Erkennung ---
 
 ; .const für Konstanten
 .const MAX_SPRITES = 8

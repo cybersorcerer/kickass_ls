@@ -14,6 +14,11 @@ func ParseDocument(uri string, text string) *Scope {
 	root.Range.Start.Line = 0
 
 	for i, line := range lines {
+		// Handle // comments
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
+
 		trimmedLine := strings.TrimSpace(line)
 
 		// Ignoriere leere Zeilen und Kommentare
