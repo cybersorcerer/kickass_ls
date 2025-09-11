@@ -68,15 +68,26 @@ func ParseDocument(uri string, text string) *Scope {
 		firstWord := parts[0]
 		lowerFirstWord := strings.ToLower(firstWord)
 
-		// .const, .var
-		if (lowerFirstWord == ".const" || lowerFirstWord == ".var") && len(parts) >= 4 && parts[2] == "=" {
-			symbolName := parts[1]
-			symbolValue := strings.Join(parts[3:], " ")
+		// .const, .var, .label
+		if (lowerFirstWord == ".const" || lowerFirstWord == ".var" || lowerFirstWord == ".label") && len(parts) >= 2 {
+			var symbolName, symbolValue string
 			var kind SymbolKind
-			if lowerFirstWord == ".const" {
-				kind = Constant
+
+			if lowerFirstWord == ".label" {
+				kind = Label
+				symbolName = strings.TrimSuffix(parts[1], ":")
 			} else {
-				kind = Variable
+				if len(parts) >= 4 && parts[2] == "=" {
+					symbolName = parts[1]
+					symbolValue = strings.Join(parts[3:], " ")
+					if lowerFirstWord == ".const" {
+						kind = Constant
+					} else {
+						kind = Variable
+					}
+				} else {
+					continue
+				}
 			}
 
 			symbol := &Symbol{

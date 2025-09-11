@@ -10,6 +10,11 @@ import (
 )
 
 func main() {
+	// Truncate log file
+	if f, err := os.OpenFile("6510lsp.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
+		f.Close()
+	}
+
 	// Custom error handling for unknown flags
 	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(os.Stderr)

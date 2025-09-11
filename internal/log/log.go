@@ -43,12 +43,8 @@ func parseLevel(s string) LogLevel {
 }
 
 func InitLogger() error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return err
-	}
-
-	logDir := filepath.Join(homeDir, ".local", "share", "6510lsp", "log")
+	// Use current working directory for logs
+	logDir := "/Users/Ronald.Funk/.local/share/6510lsp/log"
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return err
 	}

@@ -103,6 +103,16 @@ func (s *Scope) FindSymbol(name string) (*Symbol, bool) {
 	return nil, false
 }
 
+// FindNamespace sucht nach einem Namespace-Scope mit dem gegebenen Namen.
+func (s *Scope) FindNamespace(name string) *Scope {
+	for _, child := range s.Children {
+		if child.Name == name {
+			return child
+		}
+	}
+	return nil
+}
+
 // FindAllVisibleSymbols sammelt alle Symbole, die von einem bestimmten Punkt im Code aus sichtbar sind.
 func (s *Scope) FindAllVisibleSymbols(lineNumber int) []*Symbol {
 	var visibleSymbols []*Symbol

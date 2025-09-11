@@ -132,7 +132,7 @@ func Start() {
 						"hoverProvider": true,
 						"completionProvider": map[string]interface{}{
 							"resolveProvider":   false,
-							"triggerCharacters": []string{"."},
+							"triggerCharacters": []string{" ", "."},
 						},
 						"definitionProvider": true,
 						"referencesProvider": true,
@@ -323,21 +323,48 @@ func Start() {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
-											
-											// Determine context: are we typing a mnemonic or an operand?
+
 											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
+											log.Debug("Completion context: isOperand=%v, wordToComplete='%s'", isOperand, wordToComplete)
 
 											if isOperand {
-												// Offer symbols (labels, constants, variables)
-												symbols := symbolTree.FindAllVisibleSymbols(int(lineNum))
-												for _, symbol := range symbols {
-													if strings.HasPrefix(strings.ToUpper(symbol.Name), strings.ToUpper(wordToComplete)) {
-														completionItems = append(completionItems, map[string]interface{}{
-															"label":  symbol.Name,
-															"kind":   toCompletionItemKind(symbol.Kind),
-															"detail": symbol.Value,
-														})
+												wordToComplete = strings.TrimPrefix(wordToComplete, "#")
+												// Handle namespace completion
+												if strings.Contains(wordToComplete, ".") {
+													parts := strings.Split(wordToComplete, ".")
+													namespaceName := parts[0]
+													partialSymbol := ""
+													if len(parts) > 1 {
+														partialSymbol = parts[1]
+													}
+													log.Debug("Namespace completion: namespace='%s', partialSymbol='%s'", namespaceName, partialSymbol)
+
+													namespaceScope := symbolTree.FindNamespace(namespaceName)
+													if namespaceScope != nil {
+														log.Debug("Found namespace scope: %s", namespaceScope.Name)
+														for _, symbol := range namespaceScope.Symbols {
+															log.Debug("Checking symbol: %s", symbol.Name)
+															if strings.HasPrefix(strings.ToUpper(symbol.Name), strings.ToUpper(partialSymbol)) {
+																completionItems = append(completionItems, map[string]interface{}{
+																	"label":  symbol.Name,
+																	"kind":   toCompletionItemKind(symbol.Kind),
+																	"detail": symbol.Value,
+																})
+															}
 														}
+													}
+												} else {
+													// Offer global symbols (labels, constants, variables)
+													symbols := symbolTree.FindAllVisibleSymbols(int(lineNum))
+													for _, symbol := range symbols {
+														if strings.HasPrefix(strings.ToUpper(symbol.Name), strings.ToUpper(wordToComplete)) {
+															completionItems = append(completionItems, map[string]interface{}{
+																"label":  symbol.Name,
+																"kind":   toCompletionItemKind(symbol.Kind),
+																"detail": symbol.Value,
+															})
+														}
+													}
 												}
 											} else {
 												// Offer mnemonics and directives
@@ -347,7 +374,7 @@ func Start() {
 															"label": m.Mnemonic,
 															"kind":  float64(14), // Keyword
 														})
-														}
+													}
 												}
 												// Potentially add directives here as well
 											}
@@ -877,40 +904,89 @@ func toCompletionItemKind(kind SymbolKind) float64 {
 // getCompletionContext determines if we are completing an operand or a mnemonic
 // and returns the word being completed.
 func getCompletionContext(line string, char int) (isOperand bool, word string) {
+	log.Debug("getCompletionContext line: '%s', char: %d", line, char)
+	// Trim whitespace from the beginning of the line
 	trimmedLine := strings.TrimSpace(line)
-	parts := strings.Fields(trimmedLine)
-
-	if len(parts) == 0 {
+	if len(trimmedLine) == 0 || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+		log.Debug("Line is empty or a comment, returning mnemonic context.")
 		return false, ""
 	}
 
-	// Find which word the cursor is in
-	cursorInWordIndex := -1
-	currentPos := 0
-	for i, part := range parts {
-		start := strings.Index(line, part)
-		end := start + len(part)
-		if char >= start && char <= end {
-			cursorInWordIndex = i
-			word = part
-			break
+	// Extract the part of the line before the cursor
+	if char < 0 || char > len(line) {
+		char = len(line)
+	}
+	context := line[:char]
+	log.Debug("Context: '%s'", context)
+
+	// Tokenize the line up to the cursor
+	parts := strings.Fields(context)
+	log.Debug("Parts: %v", parts)
+
+	if len(parts) == 0 {
+		// This can happen if the line has leading spaces and the cursor is among them.
+		// Or if the line is empty.
+		log.Debug("No parts found, assuming mnemonic context.")
+		return false, ""
+	}
+
+	// Check if the cursor is at the end of a word or in the middle of it.
+	lastPart := parts[len(parts)-1]
+	if !strings.HasSuffix(context, lastPart) {
+		// Cursor is likely in whitespace after the last word.
+		// Example: "lda #$12 |" (cursor at |)
+		// We need to check if the last word was an opcode.
+		log.Debug("Cursor is in whitespace after the last word.")
+		for _, m := range mnemonics {
+			if strings.ToUpper(m.Mnemonic) == strings.ToUpper(lastPart) {
+				log.Debug("Last word was an opcode, so we are in operand context.")
+				return true, "" // We are starting a new operand
+			}
 		}
-		currentPos = end
+		log.Debug("Last word was not an opcode, assuming mnemonic context.")
+		return false, "" // Not after an opcode, so it's a new mnemonic/label
 	}
 
-	if cursorInWordIndex == -1 && char > currentPos {
-		return true, ""
-	}
+	// Cursor is part of the last word.
+	// Example: "lda #MAX_SPRI|"
+	log.Debug("Cursor is part of the last word: '%s'", lastPart)
 
-	// If the first word has a colon, it's a label definition.
-	// The next word is a mnemonic.
-	if strings.HasSuffix(parts[0], ":") {
-		if cursorInWordIndex == 0 {
-			return false, parts[0]
+	if len(parts) == 1 {
+		// Only one word on the line up to the cursor.
+		// It could be a label, a mnemonic, or the start of one.
+		// If it contains operand-like characters, treat as operand.
+		if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") || strings.Contains(lastPart, ".") {
+			log.Debug("Single word contains operand characters, treating as operand.")
+			return true, lastPart
 		}
-		return cursorInWordIndex > 1, word
+		// Otherwise, it's a mnemonic or a label definition.
+		log.Debug("Single word, assuming mnemonic/label context.")
+		return false, lastPart
 	}
 
-	// Otherwise, the first word is the mnemonic, subsequent words are operands.
-	return cursorInWordIndex > 0, word
+	// More than one part.
+	// The word before the current one is a good indicator.
+	prevPart := parts[len(parts)-2]
+	log.Debug("Previous part: '%s'", prevPart)
+
+	// Is the previous part an opcode?
+	for _, m := range mnemonics {
+		if strings.ToUpper(m.Mnemonic) == strings.ToUpper(prevPart) {
+			log.Debug("Previous part was an opcode, so current is an operand.")
+			return true, lastPart
+		}
+	}
+
+	// If we are here, the context is more complex.
+	// e.g., "lda #$12,x" or "jmp namespace.label"
+	// A simple check for operand characters in the current word is a good heuristic.
+	if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") || strings.Contains(lastPart, ".") {
+		log.Debug("Current part contains operand characters, treating as operand.")
+		return true, lastPart
+	}
+
+	// Default case: assume it's a mnemonic if we haven't found an operand context.
+	// This could be a new instruction on a line after a label, e.g. "start: lda"
+	log.Debug("Defaulting to mnemonic context.")
+	return false, lastPart
 }

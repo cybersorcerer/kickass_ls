@@ -11,10 +11,10 @@ This project is a standard Go application.
 To build the language server executable:
 
 ```bash
-go build -o 6510lsp ./6510lsp
+go build -o 6510lsp_server ./6510lsp_server
 ```
 
-This will create an executable named `6510lsp` (or `6510lsp.exe` on Windows) in the project root directory.
+This will create an executable named `6510lsp_server` (or `6510lsp_server.exe` on Windows) in the project root directory.
 
 ### Run
 
@@ -23,19 +23,19 @@ The language server communicates via standard input/output, as is typical for LS
 To run it manually (for testing or debugging):
 
 ```bash
-./6510lsp
+./6510lsp_server
 ```
 
 You can enable debug logging by running:
 
 ```bash
-./6510lsp --debug
+./6510lsp_server --debug
 ```
 
 ## Development Conventions
 
 - **Language:** Go
-- **Language Server Protocol (LSP):** The server implements a subset of the LSP to provide language features for 6502/6510 assembly.
+- **Language Server Protocol (LSP):** The server implements a subset of the LSP to provide language features for 6502/6510 Kick Assembler.
 - **Data Management:** CPU mnemonic data, including opcodes, descriptions, and addressing modes, is stored in `mnemonic.json`.
 - **Logging:** The project uses an internal `log` package for structured logging, supporting `INFO` and `DEBUG` levels.
 - **Code Structure:** The Go codebase follows conventional Go project layout, with core LSP logic encapsulated within the `internal/lsp` package.
