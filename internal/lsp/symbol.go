@@ -1,6 +1,10 @@
 package lsp
 
-import "fmt"
+import (
+	"c64.nvim/internal/log"
+	"fmt"
+	"strings"
+)
 
 // SymbolKind definiert die Art eines Symbols (Konstante, Variable, etc.).
 type SymbolKind int
@@ -82,6 +86,7 @@ func (s *Scope) AddSymbol(symbol *Symbol) error {
 	if _, exists := s.Symbols[symbol.Name]; exists {
 		return fmt.Errorf("symbol '%s' already defined in this scope", symbol.Name)
 	}
+	log.Debug("Adding symbol '%s' to scope '%s'", symbol.Name, s.Name)
 	s.Symbols[symbol.Name] = symbol
 	return nil
 }
@@ -93,15 +98,35 @@ func (s *Scope) AddChildScope(child *Scope) {
 }
 
 // FindSymbol sucht nach einem Symbol, beginnend im aktuellen Scope und dann rekursiv in den Eltern-Scopes.
+// Behandelt auch qualifizierte Namen (z.B. namespace.symbol).
 func (s *Scope) FindSymbol(name string) (*Symbol, bool) {
-	if symbol, ok := s.Symbols[name]; ok {
-		return symbol, true
+	parts := strings.Split(name, ".")
+
+	if len(parts) > 1 {
+		// Qualifizierter Name
+		namespaceName := parts[0]
+		symbolName := parts[1]
+
+		// Finde den Namespace-Scope
+		if nsScope := s.FindNamespace(normalizeLabel(namespaceName)); nsScope != nil {
+			// Suche das Symbol innerhalb des Namespace-Scopes
+			if symbol, ok := nsScope.Symbols[normalizeLabel(symbolName)]; ok {
+				return symbol, true
+			}
+		}
+	} else {
+		// Nicht qualifizierter Name
+		if symbol, ok := s.Symbols[normalizeLabel(name)]; ok {
+			return symbol, true
+		}
+		if s.Parent != nil {
+			return s.Parent.FindSymbol(name)
+		}
 	}
-	if s.Parent != nil {
-		return s.Parent.FindSymbol(name)
-	}
+
 	return nil, false
 }
+
 
 // FindNamespace sucht nach einem Namespace-Scope mit dem gegebenen Namen.
 func (s *Scope) FindNamespace(name string) *Scope {

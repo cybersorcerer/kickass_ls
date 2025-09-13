@@ -32,6 +32,7 @@ type AddressingMode struct {
 
 // Global variable to store mnemonic data
 var mnemonics []Mnemonic
+var warnUnusedLabelsEnabled bool
 
 // documentStore holds the content of opened text documents.
 var documentStore = struct {
@@ -47,6 +48,10 @@ var symbolStore = struct {
 	trees map[string]*Scope
 }{
 	trees: make(map[string]*Scope),
+}
+
+func SetWarnUnusedLabels(enabled bool) {
+	warnUnusedLabelsEnabled = enabled
 }
 
 // Start initializes and runs the LSP server.
@@ -136,6 +141,17 @@ func Start() {
 						},
 						"definitionProvider": true,
 						"referencesProvider": true,
+						"semanticTokensProvider": map[string]interface{}{
+							"legend": map[string]interface{}{
+								"tokenTypes": []string{
+									"keyword", "variable", "function", "macro", "number", "comment", "string", "operator",
+								},
+								"tokenModifiers": []string{
+									"declaration", "readonly",
+								},
+							},
+							"full": true,
+						},
 					},
 				},
 			}
@@ -513,6 +529,35 @@ func Start() {
 			}
 			response, _ := json.Marshal(refResp)
 			writeResponse(writer, response)
+		case "textDocument/semanticTokens/full":
+			log.Debug("Handling textDocument/semanticTokens/full request.")
+			id := message["id"]
+			var tokensResult interface{} = nil
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						documentStore.RLock()
+						text, docFound := documentStore.documents[uri]
+						documentStore.RUnlock()
+
+						if docFound {
+							tokens := generateSemanticTokens(uri, text)
+							tokensResult = map[string]interface{}{
+								"data": tokens,
+							}
+						}
+					}
+				}
+			}
+
+			finalResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  tokensResult,
+			}
+			response, _ := json.Marshal(finalResponse)
+			writeResponse(writer, response)
 		default:
 			log.Logger.Printf("Unhandled method: %s\n", method)
 		}
@@ -745,15 +790,17 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	}
 
 	// Third pass: check for unused labels
-	for label, lineNum := range definedLabels {
-		if _, used := usedLabels[label]; !used {
+	if warnUnusedLabelsEnabled {
+		for label, lineNum := range definedLabels {
+			if _, used := usedLabels[label]; !used {
 
-			diagnostics = append(diagnostics, map[string]interface{}{
-				"range":    map[string]interface{}{"start": map[string]interface{}{"line": lineNum, "character": 0}, "end": map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])}},
-				"severity": float64(2), // Warning
-				"message":  fmt.Sprintf("Unused label: %s", label),
-				"source":   "6510lsp",
-			})
+				diagnostics = append(diagnostics, map[string]interface{}{
+					"range":    map[string]interface{}{"start": map[string]interface{}{"line": lineNum, "character": 0}, "end": map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])}},
+					"severity": float64(2), // Warning
+					"message":  fmt.Sprintf("Unused label: %s", label),
+					"source":   "6510lsp",
+				})
+			}
 		}
 	}
 

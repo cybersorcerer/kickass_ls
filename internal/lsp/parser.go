@@ -31,26 +31,32 @@ func ParseDocument(uri string, text string) *Scope {
 			parts := strings.Fields(trimmedLine)
 			if len(parts) > 1 && parts[0] == ".namespace" {
 				namespaceName := parts[1]
-				namespaceSymbol := &Symbol{
-					Name:  namespaceName,
-					Kind:  Namespace,
-					Position: Position{
-						Line:      i,
-						Character: strings.Index(line, namespaceName),
-					},
-					Scope: currentScope,
-				}
-				currentScope.AddSymbol(namespaceSymbol)
+				normalizedNamespaceName := normalizeLabel(namespaceName)
 
-				newScope := &Scope{
-					Name:    namespaceName,
-					Symbols: make(map[string]*Symbol),
-					Children: make([]*Scope, 0),
-					Uri:     uri,
-					Parent:  currentScope, // Set parent explicitly
-					Range:   Range{Start: Position{Line: i, Character: 0}}, // Set start of new scope
+				// Check if namespace already exists
+				newScope := currentScope.FindNamespace(normalizedNamespaceName)
+				if newScope == nil {
+					namespaceSymbol := &Symbol{
+						Name: normalizedNamespaceName,
+						Kind: Namespace,
+						Position: Position{
+							Line:      i,
+							Character: strings.Index(line, namespaceName),
+						},
+						Scope: currentScope,
+					}
+					currentScope.AddSymbol(namespaceSymbol)
+
+					newScope = &Scope{
+						Name:     normalizedNamespaceName,
+						Symbols:  make(map[string]*Symbol),
+						Children: make([]*Scope, 0),
+						Uri:      uri,
+						Parent:   currentScope, // Set parent explicitly
+						Range:    Range{Start: Position{Line: i, Character: 0}}, // Set start of new scope
+					}
+					currentScope.AddChildScope(newScope)
 				}
-				currentScope.AddChildScope(newScope)
 				currentScope = newScope
 			}
 			continue
@@ -81,22 +87,20 @@ func ParseDocument(uri string, text string) *Scope {
 			if lowerFirstWord == ".label" {
 				kind = Label
 				symbolName = strings.TrimSuffix(parts[1], ":")
-			} else {
+			} else { // .const or .var
+				symbolName = parts[1]
 				if len(parts) >= 4 && parts[2] == "=" {
-					symbolName = parts[1]
 					symbolValue = strings.Join(parts[3:], " ")
-					if lowerFirstWord == ".const" {
-						kind = Constant
-					} else {
-						kind = Variable
-					}
+				}
+				if lowerFirstWord == ".const" {
+					kind = Constant
 				} else {
-					continue
+					kind = Variable
 				}
 			}
 
 			symbol := &Symbol{
-				Name:  symbolName,
+				Name:  normalizeLabel(symbolName),
 				Kind:  kind,
 				Value: symbolValue,
 				Position: Position{
@@ -113,7 +117,7 @@ func ParseDocument(uri string, text string) *Scope {
 		if strings.HasSuffix(firstWord, ":") {
 			labelName := strings.TrimSuffix(firstWord, ":")
 			symbol := &Symbol{
-				Name: labelName,
+				Name: normalizeLabel(labelName),
 				Kind: Label,
 				Position: Position{
 					Line:      i,

@@ -19,11 +19,12 @@ func main() {
 	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(os.Stderr)
 	debug := flag.Bool("debug", false, "Enable debug logging")
+	warnUnused := flag.Bool("warn-unused-labels", false, "Enable warnings for unused labels")
 
 	err := flag.CommandLine.Parse(os.Args[1:])
 	if err != nil {
 		// Log warning, but continue startup
-		log.Warn("Invalid command line argument: %v. Valid flags are: --debug", err)
+		log.Warn("Invalid command line argument: %v. Valid flags are: --debug, --warn-unused-labels", err)
 	}
 
 	if *debug {
@@ -32,9 +33,11 @@ func main() {
 		log.SetLevel(log.INFO)
 	}
 
+	lsp.SetWarnUnusedLabels(*warnUnused)
+
 	if err := log.InitLogger(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
-		os.Exit(1)
+		os.Exit(11)
 	}
 
 	log.Info("6510 Language Server started.")

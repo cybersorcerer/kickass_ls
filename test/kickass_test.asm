@@ -24,6 +24,7 @@
 .label global_label:
 .label .local_label:
     lda #.local_label
+    lda %011101
     jmp global_label
 
 
@@ -58,5 +59,5 @@ start:
     lda UNBEKANNTES_SYMBOL
 
 ; Fehler: Doppeltes Label (sollte unterstrichen werden)
-start:
+end:
     nop
