@@ -30,8 +30,19 @@ type AddressingMode struct {
 	Cycles          string `json:"cycles"` // Can be "2", "4*", "2/3/4"
 }
 
+// DocumentSymbol represents a symbol in a text document.
+type DocumentSymbol struct {
+	Name           string           `json:"name"`
+	Detail         string           `json:"detail,omitempty"`
+	Kind           float64          `json:"kind"`
+	Range          Range            `json:"range"`
+	SelectionRange Range            `json:"selectionRange"`
+	Children       []DocumentSymbol `json:"children,omitempty"`
+}
+
 // Global variable to store mnemonic data
 var mnemonics []Mnemonic
+var kickassDirectives []KickassDirective
 var warnUnusedLabelsEnabled bool
 
 // documentStore holds the content of opened text documents.
@@ -63,6 +74,12 @@ func Start() {
 	if err != nil {
 		log.Logger.Printf("Error loading mnemonics: %v\n", err)
 		// Depending on severity, you might want to exit or continue without mnemonic data
+	}
+
+	// Load kickass directives
+	kickassDirectives, err = LoadKickassDirectives("/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim")
+	if err != nil {
+		log.Logger.Printf("Error loading kickass directives: %v\n", err)
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -139,8 +156,9 @@ func Start() {
 							"resolveProvider":   false,
 							"triggerCharacters": []string{" ", "."},
 						},
-						"definitionProvider": true,
-						"referencesProvider": true,
+						"definitionProvider":     true,
+						"referencesProvider":     true,
+						"documentSymbolProvider": true,
 						"semanticTokensProvider": map[string]interface{}{
 							"legend": map[string]interface{}{
 								"tokenTypes": []string{
@@ -152,6 +170,10 @@ func Start() {
 							},
 							"full": true,
 						},
+					},
+					"serverInfo": map[string]interface{}{
+						"name":    "6510lsp",
+						"version": "0.4.0",
 					},
 				},
 			}
@@ -282,20 +304,31 @@ func Start() {
 													},
 												}
 											} else {
-												// If not an opcode, check for symbol in the symbol tree
-												searchSymbol := normalizeLabel(word)
-												if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
-													var markdown string
-													if symbol.Value != "" {
-														markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
-													} else {
-														markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
-													}
+												// Check for directive description
+												directiveDescription := getDirectiveDescription(strings.ToLower(word))
+												if directiveDescription != "" {
 													responseResult = map[string]interface{}{
 														"contents": map[string]interface{}{
 															"kind":  "markdown",
-															"value": markdown,
+															"value": directiveDescription,
 														},
+													}
+												} else {
+													// If not an opcode or directive, check for symbol in the symbol tree
+													searchSymbol := normalizeLabel(word)
+													if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
+														var markdown string
+														if symbol.Value != "" {
+															markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
+														} else {
+															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
+														}
+														responseResult = map[string]interface{}{
+															"contents": map[string]interface{}{
+																"kind":  "markdown",
+																"value": markdown,
+															},
+														}
 													}
 												}
 											}
@@ -383,17 +416,29 @@ func Start() {
 													}
 												}
 											} else {
-												// Offer mnemonics and directives
-												for _, m := range mnemonics {
-													if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
-														completionItems = append(completionItems, map[string]interface{}{
-															"label": m.Mnemonic,
-															"kind":  float64(14), // Keyword
-														})
+													// Offer mnemonics and directives
+													if strings.HasPrefix(wordToComplete, ".") {
+														for _, d := range kickassDirectives {
+															if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+																completionItems = append(completionItems, map[string]interface{}{
+																	"label": d.Directive,
+																	"kind":  float64(14), // Keyword
+																	"detail": d.Description,
+																})
+															}
+														}
+													} else {
+														for _, m := range mnemonics {
+															if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+																completionItems = append(completionItems, map[string]interface{}{
+																	"label": m.Mnemonic,
+																	"kind":  float64(14), // Keyword
+																	"detail": m.Description,
+																})
+															}
+														}
 													}
 												}
-												// Potentially add directives here as well
-											}
 										}
 									}
 								}
@@ -528,6 +573,26 @@ func Start() {
 				"result":  locations,
 			}
 			response, _ := json.Marshal(refResp)
+			writeResponse(writer, response)
+		case "textDocument/documentSymbol":
+			log.Debug("Handling textDocument/documentSymbol request.")
+			id := message["id"]
+			var symbolsResult interface{} = nil
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						symbolsResult = generateDocumentSymbols(uri)
+					}
+				}
+			}
+
+			finalResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  symbolsResult,
+			}
+			response, _ := json.Marshal(finalResponse)
 			writeResponse(writer, response)
 		case "textDocument/semanticTokens/full":
 			log.Debug("Handling textDocument/semanticTokens/full request.")
@@ -941,6 +1006,27 @@ func getOpcodeDescription(opcode string) string {
 	return "" // No description found
 }
 
+func getDirectiveDescription(directive string) string {
+	for _, d := range kickassDirectives {
+		if strings.EqualFold(d.Directive, directive) {
+			var sb strings.Builder
+			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", d.Directive, d.Description))
+
+			if len(d.Examples) > 0 {
+				sb.WriteString("**Examples:**\n")
+				sb.WriteString("```asm\n")
+				for _, example := range d.Examples {
+					sb.WriteString(example)
+					sb.WriteString("\n")
+				}
+				sb.WriteString("```\n")
+			}
+			return sb.String()
+		}
+	}
+	return ""
+}
+
 func toCompletionItemKind(kind SymbolKind) float64 {
 	switch kind {
 	case Constant:
@@ -1012,9 +1098,13 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 
 	if len(parts) == 1 {
 		// Only one word on the line up to the cursor.
-		// It could be a label, a mnemonic, or the start of one.
+		// It could be a label, a mnemonic, or a directive.
+		if strings.HasPrefix(lastPart, ".") {
+			log.Debug("Single word starts with a dot, assuming directive context.")
+			return false, lastPart
+		}
 		// If it contains operand-like characters, treat as operand.
-		if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") || strings.Contains(lastPart, ".") {
+		if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") {
 			log.Debug("Single word contains operand characters, treating as operand.")
 			return true, lastPart
 		}
@@ -1039,7 +1129,15 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	// If we are here, the context is more complex.
 	// e.g., "lda #$12,x" or "jmp namespace.label"
 	// A simple check for operand characters in the current word is a good heuristic.
-	if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") || strings.Contains(lastPart, ".") {
+	if strings.HasPrefix(lastPart, ".") {
+		log.Debug("Current part starts with a dot, could be a local label or a directive.")
+		// if it's the second word, it's likely a directive
+		if len(parts) == 2 && !strings.HasSuffix(parts[0], ":") {
+			return false, lastPart
+		}
+		return true, lastPart
+	}
+	if strings.Contains(lastPart, "#") {
 		log.Debug("Current part contains operand characters, treating as operand.")
 		return true, lastPart
 	}

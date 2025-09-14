@@ -1,0 +1,126 @@
+[
+	{
+		"directive": ".const",
+    	"description": "Defines a constant. A constant can't be assigned a new value. Note that not all values are immutable. If you define a constant that points to a list, the content of the list can still change. If you want to make a mutable value immutable, you can use its lock() function, which will lock it's content",
+		"examples": [
+			".var x=25 //Defines a variable x with a value of 25"
+		]
+	},
+	{
+		"directive": ".var",
+    	"description": "Defines a variable. With variables you can store data for later use. Before you can use a variable you have to declare it. You do this with the .var directive",
+		"examples": [
+			".const c=1                 // Declares the constant c to be 1",
+    	    ".const name = \"MYSTRING\" // Constants can assume any value, for example string"
+		]
+	},
+	{
+		"directive": ".eval",
+    	"description": "The .eval directive is used to make Kick Assembler evaluate expressions. In fact, the .var directive above is just a convenient shorthand of \".eval var x =25\", where var is a subexpression that declares a variable.",
+		"examples": [
+			".eval x=x+10 // Adds 10 to whatever is in variable x",
+    	    ".eval x++    // Gives x=x+1",
+        	".eval x--    // Gives x=x-1",
+        	".eval x+=3   // Gives x=x+3",
+        	".eval x-=7   // Gives x=x-7",
+        	".eval x*=3   // Gives x=x*3",
+        	".eval x/=2   // Gives x=x/2"
+		]
+	},
+	{
+		"directive": ".enum",
+    	"description": "With the .enum statement you can define enumerations, which are series of constants.",
+		"examples": [
+			".enum {singleColor, multiColor}      // Defines singleColor=0, multiColor=1",
+			".enum {effect1=1,effect2=2,end=$ff}  // Assigns values explicitly",
+			".enum {up,down,left,right, none=$ff} // You can mix implicit and explicit",
+			"                                     // assignment of values"
+		]
+	},
+	{
+		"directive": ".label",
+    	"description": "Label declarations in Kick Assembler end with \":\" and have no postfix when referred to. You can put labels in front of mnemonic arguments. This can be useful when creating self modifying code. Kick Assembler also supports multi labels, which are labels that can be declared more than once. These are useful to prevent name conflicts between labels. A multi label starts with a **!** and when your reference it you have to end with a **+** to refer to the next multi label or **-** to refer to the previous multi label.",
+		"examples": [
+			"loop:   inc $d020",
+			"ldx tmpX:#$00"
+		]
+	},
+	{
+		"directive": ".byte",
+    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+		"examples": [
+			".byte 1,2,3,4 // Generates the bytes 1,2,3,4"
+		]
+	},
+	{
+		"directive": ".word",
+    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+		"examples": [
+			".word $2000,$1234 // Generates the bytes $00,$20,$34,$12"
+		]
+	},
+	{
+		"directive": ".dword",
+    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+		"examples": [
+			".dword $12341234 // Generates the bytes $34,$12,$34,$12"
+		]
+	},
+	{
+		"directive": ".text",
+    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+		"examples": [
+			".text \"Hello World\""
+		]
+	},
+	{
+		"directive": ".fill",
+    	"description": "With the .fill directive you can fill a section of the memory with bytes. It works like a loop and automatically sets the variable i to the iteration number.",
+		"examples": [
+			".fill 5, 0  // Generates byte 0,0,0,0,0",
+			".fill 5, i  // Generates byte 0,1,2,3,4",
+			".fill 256, 127.5 + 127.5*sin(toRadians(i*360/256)) // Generates a sine curve",
+			".fill 4, [$10,$20]             // Generates .byte $10,$20,$10,$20,$10,$20,$10,$20",
+			".fill 3, ['D','E','M','O','!'] // Generates the same bytes as .text \"DEMO!DEMO!DEMO!\"",
+			".fill 3, [i,i*$10]             // Generates .byte 0,0,1,$10,2,$20"
+		]
+	},
+	{
+		"directive": "#import",
+    	"description": "Use the preprocessor to import other source files.",
+		"examples": [
+			"#import \"MyLibrary.asm\" // Import the file \"mylibrary.asm\""
+		]
+	},
+	{
+		"directive": "#importif",
+    	"description": "Use the preprocessor to import other source files.",
+		"examples": [
+			"#importif STAND_ALONE \"UpstartCode.asm\" // Only import \"UpstartCode.asm\" if STAND_ALONE is defined"
+		]
+	},
+	{
+		"directive": ".import",
+    	"description": "With the .import directive you can import data from external files into your code. You can import binary, C64, and text files. The binary, c64 and text import takes an offset and a length as optional parameters.",
+		"examples": [
+			".import binary \"Music.bin\" // import the bytes from the file 'music.bin'",
+			".import c64 \"charset.c64\" // (Same as binary but skips the first two address bytes)",
+			".import binary \"Music.bin\", 100 // import the bytes from the file 'music.bin', but skip the first 100 bytes",
+			".import c64 \"charset.c64\", $400, $200 // Imports $200 bytes starting from position $402"
+		]
+	},
+	{
+		"directive": ".print",
+    	"description": "With the .print directive you can output text to the user while assembling.",
+		"examples": [
+			".print \"Hello world\""
+		]
+	},
+	{
+		"directive": ".printnow",
+    	"description": "With the .printnow directive you can print the output immediately. This is useful for debugging script where errors prevent the execution of the output pass. The .printnow command will print the output in each pass, and in some passes the output might be incomplete due to lack of information. In the following example we print a label that isn't resolved in the first pass.",
+		"examples": [
+			".printnow \"loop=$\" + toHexString(loop)"
+		]
+	}
+]

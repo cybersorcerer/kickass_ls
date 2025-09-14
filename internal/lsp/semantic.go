@@ -22,7 +22,7 @@ var (
 		"declaration": 1 << 0,
 		"readonly":    1 << 1,
 	}
-	kickAssemblerDirectives = map[string]bool{
+	KickAssemblerDirectives = map[string]bool{
 		".const":        true,
 		".var":          true,
 		".word":         true,
@@ -95,7 +95,7 @@ func parseLineForTokens(line string, lineNum uint32, symbolTree *Scope) []semant
 		lowerPart := strings.ToLower(part)
 		upperPart := strings.ToUpper(part)
 
-		if _, isDirective := kickAssemblerDirectives[lowerPart]; isDirective {
+		if _, isDirective := KickAssemblerDirectives[lowerPart]; isDirective {
 			log.Debug("Found Directive: '%s'", part)
 			tokens = append(tokens, semanticToken{lineNum, uint32(startChar), uint32(len(part)), tokenTypes["macro"], 0})
 		} else if _, isOpcode := allOpcodes[upperPart]; isOpcode {

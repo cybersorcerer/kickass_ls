@@ -41,8 +41,8 @@ func (sk SymbolKind) String() string {
 
 // Position repräsentiert eine Stelle im Code (Zeile und Spalte).
 type Position struct {
-	Line      int
-	Character int
+	Line      int `json:"line"`
+	Character int `json:"character"`
 }
 
 // Symbol repräsentiert ein einzelnes Symbol im Code.
@@ -66,8 +66,8 @@ type Scope struct {
 
 // Range repräsentiert einen Bereich im Code (Anfang und Ende).
 type Range struct {
-	Start Position
-	End   Position
+	Start Position `json:"start"`
+	End   Position `json:"end"`
 }
 
 
