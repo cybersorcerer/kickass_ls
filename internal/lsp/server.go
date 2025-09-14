@@ -173,7 +173,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.4.0",
+						"version": "0.5.0",
 					},
 				},
 			}
@@ -416,29 +416,29 @@ func Start() {
 													}
 												}
 											} else {
-													// Offer mnemonics and directives
-													if strings.HasPrefix(wordToComplete, ".") {
-														for _, d := range kickassDirectives {
-															if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
-																completionItems = append(completionItems, map[string]interface{}{
-																	"label": d.Directive,
-																	"kind":  float64(14), // Keyword
-																	"detail": d.Description,
-																})
-															}
+												// Offer mnemonics and directives
+												if strings.HasPrefix(wordToComplete, ".") {
+													for _, d := range kickassDirectives {
+														if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+															completionItems = append(completionItems, map[string]interface{}{
+																"label":  d.Directive,
+																"kind":   float64(14), // Keyword
+																"detail": d.Description,
+															})
 														}
-													} else {
-														for _, m := range mnemonics {
-															if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
-																completionItems = append(completionItems, map[string]interface{}{
-																	"label": m.Mnemonic,
-																	"kind":  float64(14), // Keyword
-																	"detail": m.Description,
-																})
-															}
+													}
+												} else {
+													for _, m := range mnemonics {
+														if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+															completionItems = append(completionItems, map[string]interface{}{
+																"label":  m.Mnemonic,
+																"kind":   float64(14), // Keyword
+																"detail": m.Description,
+															})
 														}
 													}
 												}
+											}
 										}
 									}
 								}
@@ -546,7 +546,15 @@ func Start() {
 											word := getWordAtPosition(lineContent, int(charNum))
 											if word != "" {
 												for i, l := range lines {
-													if strings.Contains(l, word) {
+													lineWithoutComments := l
+													if idx := strings.Index(l, "//"); idx != -1 {
+														lineWithoutComments = l[:idx]
+													}
+													if idx := strings.Index(lineWithoutComments, ";"); idx != -1 {
+														lineWithoutComments = lineWithoutComments[:idx]
+													}
+
+													if strings.Contains(lineWithoutComments, word) {
 														charIndex := strings.Index(l, word)
 														locations = append(locations, map[string]interface{}{
 															"uri": uri,
@@ -560,20 +568,21 @@ func Start() {
 											}
 										}
 									}
-								}
-							}
-						}
-					}
-				}
-			}
+										}
+									}
+										}
+									}
+										}
+									}
 
-			refResp := map[string]interface{}{
-				"jsonrpc": "2.0",
-				"id":      message["id"],
-				"result":  locations,
-			}
-			response, _ := json.Marshal(refResp)
-			writeResponse(writer, response)
+							refResp := map[string]interface{}{
+							"jsonrpc": "2.0",
+						"id":      message["id"],
+						"result":  locations,
+					}
+					response, _ := json.Marshal(refResp)
+					writeResponse(writer, response)
+
 		case "textDocument/documentSymbol":
 			log.Debug("Handling textDocument/documentSymbol request.")
 			id := message["id"]
