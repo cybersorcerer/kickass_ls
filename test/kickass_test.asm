@@ -1,6 +1,8 @@
 // Kick Assembler Test-Datei für den 6510-LSP
 
 // --- PHASE 1: Symbol- und Scope-Erkennung ---
+LDA #MAX_SPRITES
+
 
 ; .const für Konstanten
 .const MAX_SPRITES = 8
@@ -49,8 +51,8 @@ start:
 ;    - Tippe nach "jmp" die Buchstaben "gfx." -> gfx.loop sollte erscheinen.
 ;    - Tippe nach "jmp" die Buchstaben ".lo" -> .local_label sollte erscheinen.
 
-    lda #M
-    jmp gfx.
+    lda #MAX_SPRITES
+    jmp GFX.LOOP
 
 
 ; --- PHASE 3: Fehlerdiagnose ---

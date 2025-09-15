@@ -10,6 +10,7 @@ import (
 
 type KickassDirective struct {
 	Directive   string   `json:"directive"`
+	Signature   string   `json:"signature"`
 	Description string   `json:"description"`
 	Examples    []string `json:"examples"`
 }

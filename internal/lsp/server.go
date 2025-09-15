@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	log "c64.nvim/internal/log"
 )
@@ -44,6 +45,15 @@ type DocumentSymbol struct {
 var mnemonics []Mnemonic
 var kickassDirectives []KickassDirective
 var warnUnusedLabelsEnabled bool
+
+func isKickassDirective(directive string) bool {
+	for _, d := range kickassDirectives {
+		if strings.EqualFold(d.Directive, directive) {
+			return true
+		}
+	}
+	return false
+}
 
 // documentStore holds the content of opened text documents.
 var documentStore = struct {
@@ -173,7 +183,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.5.0",
+						"version": "0.5.2",
 					},
 				},
 			}
@@ -421,7 +431,7 @@ func Start() {
 													for _, d := range kickassDirectives {
 														if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
 															completionItems = append(completionItems, map[string]interface{}{
-																"label":  d.Directive,
+																"label":  applyCase(wordToComplete, d.Directive),
 																"kind":   float64(14), // Keyword
 																"detail": d.Description,
 															})
@@ -431,7 +441,7 @@ func Start() {
 													for _, m := range mnemonics {
 														if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
 															completionItems = append(completionItems, map[string]interface{}{
-																"label":  m.Mnemonic,
+																"label":  applyCase(wordToComplete, m.Mnemonic),
 																"kind":   float64(14), // Keyword
 																"detail": m.Description,
 															})
@@ -568,20 +578,20 @@ func Start() {
 											}
 										}
 									}
-										}
-									}
-										}
-									}
-										}
-									}
-
-							refResp := map[string]interface{}{
-							"jsonrpc": "2.0",
-						"id":      message["id"],
-						"result":  locations,
+								}
+							}
+						}
 					}
-					response, _ := json.Marshal(refResp)
-					writeResponse(writer, response)
+				}
+			}
+
+			refResp := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  locations,
+			}
+			response, _ := json.Marshal(refResp)
+			writeResponse(writer, response)
 
 		case "textDocument/documentSymbol":
 			log.Debug("Handling textDocument/documentSymbol request.")
@@ -713,10 +723,6 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 		mnemonicMap[upper] = m
 	}
 
-	kickAssemblerDirectives := map[string]bool{
-		".CONST": true, ".VAR": true, ".WORD": true, ".BYTE": true, ".NAMESPACE": true, ".FUNCTION": true, ".MACRO": true, ".LABEL": true, ".PSEUDOCOMMAND": true, ".IF": true, ".FOR": true, ".WHILE": true, ".RETURN": true, "#IMPORT": true, "#INCLUDE": true,
-	}
-
 	var currentGlobalLabel string
 
 	// First pass: find all defined labels and check for duplicates
@@ -764,7 +770,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 			} else {
 				normalizedFirstWord := normalizeLabel(potentialLabel)
 				if _, isOpcode := allOpcodes[normalizedFirstWord]; !isOpcode {
-					if _, isDirective := kickAssemblerDirectives[strings.ToUpper(potentialLabel)]; !isDirective {
+					if !isKickassDirective(potentialLabel) {
 
 						diagnostics = append(diagnostics, map[string]interface{}{
 							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
@@ -831,7 +837,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 			}
 
 			if _, isKnown := allOpcodes[opcode]; !isKnown {
-				if _, isDirective := kickAssemblerDirectives[opcode]; !isDirective {
+				if !isKickassDirective(opcode) {
 
 					diagnostics = append(diagnostics, map[string]interface{}{
 						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
@@ -1019,7 +1025,10 @@ func getDirectiveDescription(directive string) string {
 	for _, d := range kickassDirectives {
 		if strings.EqualFold(d.Directive, directive) {
 			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", d.Directive, d.Description))
+			if d.Signature != "" {
+				sb.WriteString(fmt.Sprintf("```kickass\n%s\n```\n", d.Signature))
+			}
+			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", strings.ToLower(d.Directive), d.Description))
 
 			if len(d.Examples) > 0 {
 				sb.WriteString("**Examples:**\n")
@@ -1155,4 +1164,46 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	// This could be a new instruction on a line after a label, e.g. "start: lda"
 	log.Debug("Defaulting to mnemonic context.")
 	return false, lastPart
+}
+
+func applyCase(original, suggestion string) string {
+	if original == "" {
+		return strings.ToLower(suggestion) // Default to lowercase if user typed nothing
+	}
+
+	isLower := true
+	isUpper := true
+	isCapitalized := false
+	if len(original) > 0 {
+		isCapitalized = unicode.IsUpper(rune(original[0]))
+	}
+
+	for i, r := range original {
+		if !unicode.IsLetter(r) {
+			continue
+		}
+		if unicode.IsLower(r) {
+			isUpper = false
+		}
+		if unicode.IsUpper(r) {
+			isLower = false
+		}
+		if i > 0 && unicode.IsUpper(r) {
+			isCapitalized = false
+		}
+	}
+
+	if isUpper {
+		return strings.ToUpper(suggestion)
+	}
+	if isLower {
+		return strings.ToLower(suggestion)
+	}
+	if isCapitalized {
+		// Capitalize first letter, rest lowercase
+		return strings.ToUpper(string(suggestion[0])) + strings.ToLower(suggestion[1:])
+	}
+
+	// Default case if mixed case (e.g. lDa) -> return lowercase
+	return strings.ToLower(suggestion)
 }

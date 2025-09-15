@@ -1,70 +1,35 @@
-# Plan: Erweiterung für Kick Assembler-Syntax
+# Neuer Plan für die Weiterentwicklung
 
-  Phase 1: Fundamentale Symbol- und Scope-Erkennung
+  Basierend auf dieser Analyse schlage ich folgenden, aktualisierten Plan vor, der auf dem bisher Erreichten aufbaut:
 
-  Ziel: Dem Language Server beibringen, die grundlegenden und wichtigsten
-  Syntax-Erweiterungen von Kick Assembler zu verstehen, insbesondere wie Symbole
-  und Geltungsbereiche (Scopes) definiert werden.
+  Phase 1: Vervollständigung der Kern-IDE-Funktionen
 
-   1. Parsing von Direktiven: Die Kern-Parsing-Logik wird erweitert, um die
-      wichtigsten Kick Assembler-Direktiven zur Symboldefinition zu erkennen:
-       * .const für Konstanten.
-       * .var für Variablen.
-       * .label und die Kurzform *= für Adress-Labels.
-       * .namespace und { ... }-Blöcke für Namensräume und Scopes.
-       * .function und .macro für wiederverwendbare Codeblöcke.
+   1. Signaturen für Hover & Completion:
+       * Ziel: Beim Hovern über eine Funktion oder ein Makro soll dessen Signatur (Parameter, Rückgabewert) angezeigt werden.
+       * Schritte:
+           1. Erweitere die KickassDirective-Struktur (oder eine neue Struktur für Funktionen/Makros) um Signatur-Informationen.
+           2. Passe den Parser an, um diese Signaturen zu extrahieren.
+           3. Aktualisiere den textDocument/hover-Handler, um diese Informationen anzuzeigen.
 
-   2. Erweitertes Symbol-Modell: Intern wird die Art, wie Symbole gespeichert
-      werden, erweitert. Statt nur "Label" zu kennen, wird ein Symbol nun einen
-      "Typ" haben (z.B. Konstante, Variable, Funktion, Namespace). Dies ist die
-      Grundlage für alle weiteren Verbesserungen.
+   2. Signature Help (Parameter-Info):
+       * Ziel: Während der Eingabe von Argumenten für eine Funktion/Makro soll ein Hilfsfenster mit den erwarteten Parametern erscheinen.
+       * Schritte: Implementiere den textDocument/signatureHelp-Request des Language Server Protocols.
 
-   3. Hierarchisches Scope-Management: Die Logik wird so angepasst, dass sie mit
-      verschachtelten Scopes (z.B. einem Namespace in einer Datei) umgehen kann.
-      Wenn der Code ein Symbol wie gfx.border_color verwendet, muss der Server
-      verstehen, dass border_color im gfx-Namespace gesucht werden muss.
+  Phase 2: Erweiterte Diagnose-Funktionen
 
-  Phase 2: Verbesserung der bestehenden LSP-Funktionen
+   1. Scope-basierte Diagnose:
+       * Ziel: Der Server soll warnen, wenn auf ein Symbol zugegriffen wird, das im aktuellen Geltungsbereich (Scope) nicht sichtbar ist.
+       * Schritte: Erweitere die publishDiagnostics-Funktion, um die Sichtbarkeit von Symbolen bei jeder Verwendung zu prüfen.
 
-  Ziel: Die in Phase 1 gewonnenen Informationen nutzen, um die bereits
-  implementierten IDE-Funktionen (Completion, Hover, etc.) "intelligenter" zu
-  machen.
+   2. Argumenten-Prüfung für Funktionen/Makros:
+       * Ziel: Fehler melden, wenn eine Funktion oder ein Makro mit einer falschen Anzahl von Argumenten aufgerufen wird.
+       * Schritte: Nutze die in Phase 1 gesammelten Signatur-Informationen, um die Aufrufe in der publishDiagnostics-Funktion zu validieren.
 
-   1. Kontextsensitive Code-Vervollständigung (`completion`):
-       * Die Auto-Vervollständigung schlägt nun nicht mehr nur Labels, sondern auch
-         Variablen, Konstanten, Funktionen und Namespaces vor.
-       * Anhand des Symbol-Typs aus Phase 1 werden passende Icons angezeigt (z.B.
-         ein anderes Symbol für eine Funktion als für eine Variable).
-       * Die Vorschläge sind Scope-sensitiv. Innerhalb eines gfx-Namespaces werden
-         gfx-Symbole priorisiert.
+  Phase 3: Projektweite Intelligenz
 
-   2. Detailreichere Hover-Informationen (`hover`):
-       * Beim Überfahren einer Konstante (.const) wird deren Wert angezeigt.
-       * Beim Überfahren einer Variable (.var) wird deren Typ angezeigt.
-       * Beim Überfahren einer Funktion (.function) oder eines Makros (.macro) wird
-         deren Signatur (erwartete Parameter) angezeigt.
-
-   3. Präzises "Go to Definition":
-       * Die Funktion wird auf alle neuen Symbol-Typen erweitert. Man kann dann
-         direkt zur Definition einer Konstante, Variable oder Funktion springen.
-       * Die Navigation zu Symbolen innerhalb von Namespaces (z.B. zu border_color
-         in JMP gfx.border_color) wird korrekt aufgelöst.
-
-  Phase 3: Assembler-spezifische Fehlerdiagnose
-
-  Ziel: Den Server in die Lage versetzen, typische Fehler zu erkennen, die
-  spezifisch für die Kick Assembler-Syntax sind.
-
-   1. Neue Diagnose-Regeln (`diagnostics`):
-       * Warnung bei der Verwendung einer Variable, die im aktuellen Scope nicht
-         sichtbar ist.
-       * Fehler bei falscher Anzahl von Argumenten beim Aufruf einer Funktion oder
-         eines Makros.
-       * Fehler bei Typ-Inkonsistenzen (z.B. wenn eine Zahl an eine Funktion
-         übergeben wird, die einen String erwartet).
-
-   2. Unterstützung für Multi-Datei-Projekte (`#import`):
-       * Als letzten Schritt wird eine grundlegende Unterstützung für die
-         #import-Direktive implementiert. Der Server liest importierte Dateien ein,
-         um deren Symbole für die Code-Vervollständigung und Definitionssuche im
-         gesamten Projekt verfügbar zu machen.
+   1. Multi-Datei-Unterstützung via `#import`:
+       * Ziel: Der Server soll #import-Anweisungen folgen, die importierten Dateien ebenfalls parsen und deren Symbole für das gesamte Projekt verfügbar machen.
+       * Schritte:
+           1. Erweitere den documentStore und symbolStore, um mehrere Dokumente gleichzeitig zu verwalten.
+           2. Implementiere eine Logik, die bei didOpen oder didChange rekursiv Imports auflöst.
+           3. Passe alle Symbol-Suchfunktionen (FindSymbol, FindAllVisibleSymbols etc.) an, damit sie projektweit suchen können.
