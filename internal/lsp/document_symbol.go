@@ -1,85 +1,87 @@
+// internal/lsp/document_symbol.go
 package lsp
 
 import (
-	"sort"
+	"c64.nvim/internal/log"
 )
 
-func generateDocumentSymbols(uri string) []DocumentSymbol {
-	symbolStore.RLock()
-	rootScope, ok := symbolStore.trees[uri]
-	symbolStore.RUnlock()
-
-	if !ok {
-		return nil
-	}
-
-	return convertScopeToDocumentSymbols(rootScope)
-}
-
-func convertScopeToDocumentSymbols(scope *Scope) []DocumentSymbol {
-	var symbols []DocumentSymbol
-
-	// Convert symbols in the current scope
-	for _, symbol := range scope.Symbols {
-		// Skip adding namespaces here as they are handled as child scopes
-		if symbol.Kind == Namespace {
-			continue
-		}
-
-		docSymbol := DocumentSymbol{
-			Name:   symbol.Name,
-			Kind:   toDocumentSymbolKind(symbol.Kind),
-			Detail: symbol.Value,
-			Range: Range{
-				Start: Position{Line: symbol.Position.Line, Character: 0},
-				End:   Position{Line: symbol.Position.Line, Character: 80}, // Default to whole line
-			},
-			SelectionRange: Range{
-				Start: Position{Line: symbol.Position.Line, Character: symbol.Position.Character},
-				End:   Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)},
-			},
-		}
-		symbols = append(symbols, docSymbol)
-	}
-
-	// Convert child scopes (namespaces)
-	for _, childScope := range scope.Children {
-		namespaceSymbol := DocumentSymbol{
-			Name:   childScope.Name,
-			Kind:   3, // Namespace
-			Range:  childScope.Range,
-			SelectionRange: Range{
-				Start: childScope.Range.Start,
-				End:   Position{Line: childScope.Range.Start.Line, Character: childScope.Range.Start.Character + len(childScope.Name)},
-			},
-			Children: convertScopeToDocumentSymbols(childScope),
-		}
-		symbols = append(symbols, namespaceSymbol)
-	}
-
-	// Sort symbols by line number for a clean outline
-	sort.Slice(symbols, func(i, j int) bool {
-		return symbols[i].SelectionRange.Start.Line < symbols[j].SelectionRange.Start.Line
-	})
-
-	return symbols
-}
-
+// toDocumentSymbolKind converts SymbolKind to LSP DocumentSymbol kind
 func toDocumentSymbolKind(kind SymbolKind) float64 {
 	switch kind {
 	case Constant:
 		return 14 // Constant
 	case Variable:
-		return 13 // Variable
+		return 13 // Variable  
 	case Label:
-		return 8 // Field
+		return 12 // Function (closest match for labels)
 	case Function:
 		return 12 // Function
 	case Macro:
-		return 12 // Function
+		return 12 // Function (closest match for macros)
 	case Namespace:
-		return 3 // Namespace
+		return 3  // Namespace
 	default:
-		return 20 // Key
+		return 1 // File (fallback)
 	}
+}
+
+// generateDocumentSymbols creates document symbols from the symbol tree
+func generateDocumentSymbols(uri string) []DocumentSymbol {
+	symbolStore.RLock()
+	tree, exists := symbolStore.trees[uri]
+	symbolStore.RUnlock()
+
+	if !exists {
+		log.Debug("generateDocumentSymbols: No symbol tree found for URI: %s", uri)
+		return []DocumentSymbol{}
+	}
+
+	return convertScopeToDocumentSymbols(tree)
+}
+
+// convertScopeToDocumentSymbols recursively converts a scope to document symbols
+func convertScopeToDocumentSymbols(scope *Scope) []DocumentSymbol {
+	var symbols []DocumentSymbol
+
+	// Add symbols from current scope
+	for _, symbol := range scope.Symbols {
+		docSymbol := DocumentSymbol{
+			Name: symbol.Name,
+			Kind: toDocumentSymbolKind(symbol.Kind),
+			Range: Range{
+				Start: Position{Line: symbol.Position.Line, Character: symbol.Position.Character},
+				End:   Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)},
+			},
+			SelectionRange: Range{
+				Start: Position{Line: symbol.Position.Line, Character: symbol.Position.Character},
+				End:   Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)},
+			},
+			Children: []DocumentSymbol{},
+		}
+
+		if symbol.Value != "" {
+			docSymbol.Detail = symbol.Value
+		} else if symbol.Signature != "" {
+			docSymbol.Detail = symbol.Signature
+		}
+
+		symbols = append(symbols, docSymbol)
+	}
+
+	// Add child scopes as symbols
+	for _, child := range scope.Children {
+		childSymbol := DocumentSymbol{
+			Name: child.Name,
+			Kind: toDocumentSymbolKind(Namespace),
+			Range: child.Range,
+			SelectionRange: Range{
+				Start: child.Range.Start,
+				End:   Position{Line: child.Range.Start.Line, Character: child.Range.Start.Character + len(child.Name)},
+			},
+			Children: convertScopeToDocumentSymbols(child),
+		}
+		symbols = append(symbols, childSymbol)
+	}
+
+	return symbols
 }

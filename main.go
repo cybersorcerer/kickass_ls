@@ -11,10 +11,12 @@ import (
 )
 
 func main() {
+	// Clear log file
 	if f, err := os.OpenFile("6510lsp.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 		f.Close()
 	}
 
+	// Parse command line flags
 	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(os.Stderr)
 	debug := flag.Bool("debug", false, "Enable debug logging")
@@ -25,6 +27,7 @@ func main() {
 		log.Warn("Invalid command line argument: %v. Valid flags are: --debug, --warn-unused-labels", err)
 	}
 
+	// Set log level
 	if *debug {
 		log.SetLevel(log.DEBUG)
 	} else {
@@ -33,6 +36,7 @@ func main() {
 
 	lsp.SetWarnUnusedLabels(*warnUnused)
 
+	// Initialize logger
 	if err := log.InitLogger(); err != nil {
 		fmt.Fprintf(os.Stderr, "Failed to initialize logger: %v\n", err)
 		os.Exit(11)
@@ -40,6 +44,7 @@ func main() {
 
 	log.Info("6510 Language Server started.")
 
+	// Get executable directory for config files
 	exePath, err := os.Executable()
 	if err != nil {
 		log.Error("Failed to get executable path: %v", err)
@@ -47,8 +52,10 @@ func main() {
 	}
 	exeDir := filepath.Dir(exePath)
 
+	// Set paths for configuration files
 	mnemonicPath := filepath.Join(exeDir, "mnemonic.json")
 	kickassDir := exeDir
 
+	// Start LSP server
 	lsp.Start(mnemonicPath, kickassDir)
 }

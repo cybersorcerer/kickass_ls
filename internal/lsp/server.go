@@ -167,7 +167,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.6.3", // Version updated
+						"version": "0.7.1", // Version updated
 					},
 				},
 			}
@@ -198,13 +198,15 @@ func Start(mnemonicPath string, kickassPath string) {
 							documentStore.Unlock()
 							log.Info("Stored document %s", uri)
 
-							symbolTree, parseErrors := ParseDocument(uri, text)
+							symbolTree := ParseDocument(uri, text)
 							symbolStore.Lock()
 							symbolStore.trees[uri] = symbolTree
 							symbolStore.Unlock()
 							log.Info("Parsed document and updated symbol store for %s", uri)
 
-							publishDiagnostics(writer, uri, parseErrors)
+							// Analyze document for semantic diagnostics
+							semanticDiagnostics := AnalyzeDocument(uri, symbolTree)
+							publishDiagnostics(writer, uri, semanticDiagnostics)
 						}
 					}
 				}
@@ -222,13 +224,15 @@ func Start(mnemonicPath string, kickassPath string) {
 									documentStore.Unlock()
 									log.Info("Updated document %s", uri)
 
-									symbolTree, parseErrors := ParseDocument(uri, newText)
+									symbolTree := ParseDocument(uri, newText)
 									symbolStore.Lock()
 									symbolStore.trees[uri] = symbolTree
 									symbolStore.Unlock()
 									log.Info("Reparsed document and updated symbol store for %s", uri)
 
-									publishDiagnostics(writer, uri, parseErrors)
+									// Analyze document for semantic diagnostics
+									semanticDiagnostics := AnalyzeDocument(uri, symbolTree)
+									publishDiagnostics(writer, uri, semanticDiagnostics)
 								}
 							}
 						}
@@ -250,7 +254,7 @@ func Start(mnemonicPath string, kickassPath string) {
 
 						log.Info("Removed document %s from stores.", uri)
 
-						publishDiagnostics(writer, uri, []ParseError{}) // Clear diagnostics
+						publishDiagnostics(writer, uri, []Diagnostic{}) // Clear diagnostics
 					}
 				}
 			}
@@ -477,19 +481,15 @@ func Start(mnemonicPath string, kickassPath string) {
 	}
 }
 
-// publishDiagnostics converts parser errors into LSP diagnostics and sends them to the client.
-func publishDiagnostics(writer *bufio.Writer, uri string, errors []ParseError) {
-	diagnostics := make([]map[string]interface{}, len(errors))
-	for i, err := range errors {
-
-		diagnostics[i] = map[string]interface{}{
-			"range": map[string]interface{}{
-				"start": map[string]interface{}{"line": err.Line - 1, "character": err.Column - 1},
-				"end":   map[string]interface{}{"line": err.Line - 1, "character": err.Column},
-			},
-			"severity": float64(1), // Error
-			"message":  err.Message,
-			"source":   "6510lsp",
+// publishDiagnostics sends a list of diagnostics to the client.
+func publishDiagnostics(writer *bufio.Writer, uri string, diagnostics []Diagnostic) {
+	lspDiagnostics := make([]map[string]interface{}, len(diagnostics))
+	for i, d := range diagnostics {
+		lspDiagnostics[i] = map[string]interface{}{
+			"range":    d.Range,
+			"severity": d.Severity,
+			"message":  d.Message,
+			"source":   d.Source,
 		}
 	}
 
@@ -498,7 +498,7 @@ func publishDiagnostics(writer *bufio.Writer, uri string, errors []ParseError) {
 		"method":  "textDocument/publishDiagnostics",
 		"params": map[string]interface{}{
 			"uri":         uri,
-			"diagnostics": diagnostics,
+			"diagnostics": lspDiagnostics,
 		},
 	}
 
@@ -526,12 +526,25 @@ func getOpcodeDescription(mnemonic string) string {
 		if m.Mnemonic == mnemonic {
 			var builder strings.Builder
 			builder.WriteString(fmt.Sprintf("**%s** - %s\n\n", m.Mnemonic, m.Description))
+
+			// Properly formatted Markdown table
 			builder.WriteString("| Opcode | Addressing Mode | Assembler Format | Length | Cycles |\n")
-			builder.WriteString("|:------:|:----------------|:-----------------|:------:|:------:|\n")
+			builder.WriteString("| :------ | :---------------- | :----------------- | :------ | :------ |\n")
+
 			for _, am := range m.AddressingModes {
-				builder.WriteString(fmt.Sprintf("| $%s | %s | `%s` | %d | %s |\n", am.Opcode, am.AddressingMode, am.AssemblerFormat, am.Length, am.Cycles))
+				// Escape backticks in assembler format for proper code display
+				assemblerFormat := strings.ReplaceAll(am.AssemblerFormat, "`", "\\`")
+				builder.WriteString(fmt.Sprintf("| `$%s` | %s | `%s` | %d | %s |\n",
+					am.Opcode, am.AddressingMode, assemblerFormat, am.Length, am.Cycles))
 			}
-			builder.WriteString("\n**CPU Flags Affected:** " + strings.Join(m.CPUFlags, ", "))
+
+			builder.WriteString("\n**CPU Flags Affected:** ")
+			if len(m.CPUFlags) > 0 {
+				builder.WriteString(strings.Join(m.CPUFlags, ", "))
+			} else {
+				builder.WriteString("None")
+			}
+
 			return builder.String()
 		}
 	}
@@ -542,14 +555,31 @@ func getDirectiveDescription(directive string) string {
 	for _, d := range kickassDirectives {
 		if d.Directive == directive {
 			var builder strings.Builder
-			builder.WriteString(fmt.Sprintf("```kickassembler\n%s\n```\n", d.Signature))
-			builder.WriteString(d.Description + "\n\n")
+
+			// Header with directive name and signature
+			builder.WriteString(fmt.Sprintf("**%s**\n\n", strings.ToUpper(d.Directive)))
+
+			// Signature in code block
+			if d.Signature != "" {
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(d.Signature)
+				builder.WriteString("\n```\n\n")
+			}
+
+			// Description
+			if d.Description != "" {
+				builder.WriteString(d.Description)
+				builder.WriteString("\n\n")
+			}
+
+			// Examples
 			if len(d.Examples) > 0 {
-				builder.WriteString("**Example:**\n")
+				builder.WriteString("**Examples:**\n\n")
 				builder.WriteString("```kickassembler\n")
 				builder.WriteString(strings.Join(d.Examples, "\n"))
 				builder.WriteString("\n```")
 			}
+
 			return builder.String()
 		}
 	}
