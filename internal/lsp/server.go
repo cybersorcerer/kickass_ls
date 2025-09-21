@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"unicode"
 
 	log "c64.nvim/internal/log"
 )
@@ -46,15 +45,6 @@ var mnemonics []Mnemonic
 var kickassDirectives []KickassDirective
 var warnUnusedLabelsEnabled bool
 
-func isKickassDirective(directive string) bool {
-	for _, d := range kickassDirectives {
-		if strings.EqualFold(d.Directive, directive) {
-			return true
-		}
-	}
-	return false
-}
-
 // documentStore holds the content of opened text documents.
 var documentStore = struct {
 	sync.RWMutex
@@ -76,18 +66,17 @@ func SetWarnUnusedLabels(enabled bool) {
 }
 
 // Start initializes and runs the LSP server.
-func Start() {
+func Start(mnemonicPath string, kickassPath string) {
 	log.Info("LSP server starting...")
 
 	// Load mnemonic data
-	err := loadMnemonics("/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/mnemonic.json")
+	err := loadMnemonics(mnemonicPath)
 	if err != nil {
 		log.Logger.Printf("Error loading mnemonics: %v\n", err)
-		// Depending on severity, you might want to exit or continue without mnemonic data
 	}
 
 	// Load kickass directives
-	kickassDirectives, err = LoadKickassDirectives("/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim")
+	kickassDirectives, err = LoadKickassDirectives(kickassPath)
 	if err != nil {
 		log.Logger.Printf("Error loading kickass directives: %v\n", err)
 	}
@@ -96,7 +85,6 @@ func Start() {
 	writer := bufio.NewWriter(os.Stdout)
 
 	for {
-		// Read Content-Length header
 		line, err := reader.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
@@ -108,25 +96,22 @@ func Start() {
 		}
 
 		if len(line) < 16 || line[:16] != "Content-Length: " {
-			// Skip empty lines or non-Content-Length headers
 			continue
 		}
 
-		lengthStr := line[16 : len(line)-2] // Remove "\r\n"
+		lengthStr := line[16 : len(line)-2]
 		contentLength, err := strconv.Atoi(lengthStr)
 		if err != nil {
 			log.Logger.Printf("Error parsing Content-Length: %v\n", err)
 			return
 		}
 
-		// Read the empty line after headers
 		_, err = reader.ReadString('\n')
 		if err != nil {
 			log.Logger.Printf("Error reading empty line: %v\n", err)
 			return
 		}
 
-		// Read the JSON payload
 		payload := make([]byte, contentLength)
 		_, err = io.ReadFull(reader, payload)
 		if err != nil {
@@ -151,7 +136,6 @@ func Start() {
 		switch method {
 		case "initialize":
 			log.Debug("Handling initialize request.")
-			// Construct and send InitializeResult
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      message["id"],
@@ -159,7 +143,7 @@ func Start() {
 					"capabilities": map[string]interface{}{
 						"textDocumentSync": map[string]interface{}{
 							"openClose": true,
-							"change":    float64(1), // TextDocumentSyncKindFull
+							"change":    float64(1), // Full sync
 						},
 						"hoverProvider": true,
 						"completionProvider": map[string]interface{}{
@@ -183,7 +167,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.5.2",
+						"version": "0.6.3", // Version updated
 					},
 				},
 			}
@@ -209,21 +193,18 @@ func Start() {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
 						if text, ok := textDocument["text"].(string); ok {
-							// Store document content
 							documentStore.Lock()
 							documentStore.documents[uri] = text
 							documentStore.Unlock()
 							log.Info("Stored document %s", uri)
 
-							// Parse document and store symbol tree
-							symbolTree := ParseDocument(uri, text)
+							symbolTree, parseErrors := ParseDocument(uri, text)
 							symbolStore.Lock()
 							symbolStore.trees[uri] = symbolTree
 							symbolStore.Unlock()
 							log.Info("Parsed document and updated symbol store for %s", uri)
 
-							// Publish diagnostics after opening
-							publishDiagnostics(writer, uri, text)
+							publishDiagnostics(writer, uri, parseErrors)
 						}
 					}
 				}
@@ -236,21 +217,18 @@ func Start() {
 						if contentChanges, ok := params["contentChanges"].([]interface{}); ok && len(contentChanges) > 0 {
 							if change, ok := contentChanges[0].(map[string]interface{}); ok {
 								if newText, ok := change["text"].(string); ok {
-									// Update document content
 									documentStore.Lock()
 									documentStore.documents[uri] = newText
 									documentStore.Unlock()
 									log.Info("Updated document %s", uri)
 
-									// Re-parse document and update symbol tree
-									symbolTree := ParseDocument(uri, newText)
+									symbolTree, parseErrors := ParseDocument(uri, newText)
 									symbolStore.Lock()
 									symbolStore.trees[uri] = symbolTree
 									symbolStore.Unlock()
 									log.Info("Reparsed document and updated symbol store for %s", uri)
 
-									// Publish diagnostics after changing
-									publishDiagnostics(writer, uri, newText)
+									publishDiagnostics(writer, uri, parseErrors)
 								}
 							}
 						}
@@ -262,7 +240,6 @@ func Start() {
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
-						// Remove document from stores
 						documentStore.Lock()
 						delete(documentStore.documents, uri)
 						documentStore.Unlock()
@@ -273,8 +250,7 @@ func Start() {
 
 						log.Info("Removed document %s from stores.", uri)
 
-						// Clear diagnostics when closing
-						publishDiagnostics(writer, uri, "") // Send empty diagnostics to clear
+						publishDiagnostics(writer, uri, []ParseError{}) // Clear diagnostics
 					}
 				}
 			}
@@ -304,7 +280,6 @@ func Start() {
 											word := getWordAtPosition(lineContent, int(charNum))
 											log.Logger.Printf("Hovering over: %s\n", word)
 
-											// First, check for opcode description
 											description := getOpcodeDescription(strings.ToUpper(word))
 											if description != "" {
 												responseResult = map[string]interface{}{
@@ -314,7 +289,6 @@ func Start() {
 													},
 												}
 											} else {
-												// Check for directive description
 												directiveDescription := getDirectiveDescription(strings.ToLower(word))
 												if directiveDescription != "" {
 													responseResult = map[string]interface{}{
@@ -324,11 +298,12 @@ func Start() {
 														},
 													}
 												} else {
-													// If not an opcode or directive, check for symbol in the symbol tree
 													searchSymbol := normalizeLabel(word)
 													if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
 														var markdown string
-														if symbol.Value != "" {
+														if symbol.Signature != "" {
+															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
+														} else if symbol.Value != "" {
 															markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
 														} else {
 															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
@@ -360,527 +335,161 @@ func Start() {
 			writeResponse(writer, responseBytes)
 		case "textDocument/completion":
 			log.Debug("Handling textDocument/completion request.")
-
-			completionItems := make([]map[string]interface{}, 0)
-			id := message["id"]
+			var responseResult interface{} = nil
 
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
 						if position, ok := params["position"].(map[string]interface{}); ok {
 							if lineNum, ok := position["line"].(float64); ok {
-								if charNum, ok := position["character"].(float64); ok {
-									documentStore.RLock()
-									text, docFound := documentStore.documents[uri]
-									documentStore.RUnlock()
+								documentStore.RLock()
+								text, docFound := documentStore.documents[uri]
+								documentStore.RUnlock()
 
-									symbolStore.RLock()
-									symbolTree, treeFound := symbolStore.trees[uri]
-									symbolStore.RUnlock()
+								symbolStore.RLock()
+								symbolTree, treeFound := symbolStore.trees[uri]
+								symbolStore.RUnlock()
 
-									if docFound && treeFound {
-										lines := strings.Split(text, "\n")
-										if int(lineNum) < len(lines) {
-											lineContent := lines[int(lineNum)]
-
-											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
-											log.Debug("Completion context: isOperand=%v, wordToComplete='%s'", isOperand, wordToComplete)
-
-											if isOperand {
-												wordToComplete = strings.TrimPrefix(wordToComplete, "#")
-												// Handle namespace completion
-												if strings.Contains(wordToComplete, ".") {
-													parts := strings.Split(wordToComplete, ".")
-													namespaceName := parts[0]
-													partialSymbol := ""
-													if len(parts) > 1 {
-														partialSymbol = parts[1]
-													}
-													log.Debug("Namespace completion: namespace='%s', partialSymbol='%s'", namespaceName, partialSymbol)
-
-													namespaceScope := symbolTree.FindNamespace(namespaceName)
-													if namespaceScope != nil {
-														log.Debug("Found namespace scope: %s", namespaceScope.Name)
-														for _, symbol := range namespaceScope.Symbols {
-															log.Debug("Checking symbol: %s", symbol.Name)
-															if strings.HasPrefix(strings.ToUpper(symbol.Name), strings.ToUpper(partialSymbol)) {
-																completionItems = append(completionItems, map[string]interface{}{
-																	"label":  symbol.Name,
-																	"kind":   toCompletionItemKind(symbol.Kind),
-																	"detail": symbol.Value,
-																})
-															}
-														}
-													}
-												} else {
-													// Offer global symbols (labels, constants, variables)
-													symbols := symbolTree.FindAllVisibleSymbols(int(lineNum))
-													for _, symbol := range symbols {
-														if strings.HasPrefix(strings.ToUpper(symbol.Name), strings.ToUpper(wordToComplete)) {
-															completionItems = append(completionItems, map[string]interface{}{
-																"label":  symbol.Name,
-																"kind":   toCompletionItemKind(symbol.Kind),
-																"detail": symbol.Value,
-															})
-														}
-													}
-												}
-											} else {
-												// Offer mnemonics and directives
-												if strings.HasPrefix(wordToComplete, ".") {
-													for _, d := range kickassDirectives {
-														if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
-															completionItems = append(completionItems, map[string]interface{}{
-																"label":  applyCase(wordToComplete, d.Directive),
-																"kind":   float64(14), // Keyword
-																"detail": d.Description,
-															})
-														}
-													}
-												} else {
-													for _, m := range mnemonics {
-														if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
-															completionItems = append(completionItems, map[string]interface{}{
-																"label":  applyCase(wordToComplete, m.Mnemonic),
-																"kind":   float64(14), // Keyword
-																"detail": m.Description,
-															})
-														}
-													}
-												}
-											}
-										}
+								if docFound && treeFound {
+									lines := strings.Split(text, "\n")
+									if int(lineNum) < len(lines) {
+										completions := generateCompletions(symbolTree, int(lineNum))
+										responseResult = completions
 									}
 								}
 							}
 						}
-					}
-				}
-			}
-
-			completionList := map[string]interface{}{
-				"isIncomplete": false,
-				"items":        completionItems,
-			}
-			result := map[string]interface{}{
-				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  completionList,
-			}
-			response, err := json.Marshal(result)
-			if err != nil {
-				log.Error("Failed to marshal completion response: %v", err)
-				return
-			}
-			log.Debug("Sending completion response: %s", string(response))
-			writeResponse(writer, response)
-		case "textDocument/definition":
-			log.Debug("Handling textDocument/definition request.")
-
-			var result interface{} = nil
-
-			if params, ok := message["params"].(map[string]interface{}); ok {
-				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
-					if uri, ok := textDocument["uri"].(string); ok {
-						if position, ok := params["position"].(map[string]interface{}); ok {
-							if lineNum, ok := position["line"].(float64); ok {
-								if charNum, ok := position["character"].(float64); ok {
-									documentStore.RLock()
-									text, docFound := documentStore.documents[uri]
-									documentStore.RUnlock()
-
-									symbolStore.RLock()
-									symbolTree, treeFound := symbolStore.trees[uri]
-									symbolStore.RUnlock()
-
-									if docFound && treeFound {
-										lines := strings.Split(text, "\n")
-										if int(lineNum) < len(lines) {
-											lineContent := lines[int(lineNum)]
-											word := getWordAtPosition(lineContent, int(charNum))
-											if word != "" {
-												searchSymbol := normalizeLabel(word)
-												if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
-													result = []map[string]interface{}{
-														{
-															"uri": uri,
-															"range": map[string]interface{}{
-																"start": map[string]interface{}{
-																	"line":      symbol.Position.Line,
-																	"character": symbol.Position.Character,
-																},
-																"end": map[string]interface{}{
-																	"line":      symbol.Position.Line,
-																	"character": symbol.Position.Character + len(symbol.Name),
-																},
-															},
-														},
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-
-			defResp := map[string]interface{}{
-				"jsonrpc": "2.0",
-				"id":      message["id"],
-				"result":  result,
-			}
-			response, _ := json.Marshal(defResp)
-			writeResponse(writer, response)
-		case "textDocument/references":
-			log.Debug("Handling textDocument/references request.")
-
-			var locations []map[string]interface{}
-
-			if params, ok := message["params"].(map[string]interface{}); ok {
-				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
-					if uri, ok := textDocument["uri"].(string); ok {
-						if position, ok := params["position"].(map[string]interface{}); ok {
-							if lineNum, ok := position["line"].(float64); ok {
-								if charNum, ok := position["character"].(float64); ok {
-									documentStore.RLock()
-									text, docFound := documentStore.documents[uri]
-									documentStore.RUnlock()
-
-									if docFound {
-										lines := strings.Split(text, "\n")
-										if int(lineNum) < len(lines) {
-											lineContent := lines[int(lineNum)]
-											word := getWordAtPosition(lineContent, int(charNum))
-											if word != "" {
-												for i, l := range lines {
-													lineWithoutComments := l
-													if idx := strings.Index(l, "//"); idx != -1 {
-														lineWithoutComments = l[:idx]
-													}
-													if idx := strings.Index(lineWithoutComments, ";"); idx != -1 {
-														lineWithoutComments = lineWithoutComments[:idx]
-													}
-
-													if strings.Contains(lineWithoutComments, word) {
-														charIndex := strings.Index(l, word)
-														locations = append(locations, map[string]interface{}{
-															"uri": uri,
-															"range": map[string]interface{}{
-																"start": map[string]interface{}{"line": i, "character": charIndex},
-																"end":   map[string]interface{}{"line": i, "character": charIndex + len(word)},
-															},
-														})
-													}
-												}
-											}
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-
-			refResp := map[string]interface{}{
-				"jsonrpc": "2.0",
-				"id":      message["id"],
-				"result":  locations,
-			}
-			response, _ := json.Marshal(refResp)
-			writeResponse(writer, response)
-
-		case "textDocument/documentSymbol":
-			log.Debug("Handling textDocument/documentSymbol request.")
-			id := message["id"]
-			var symbolsResult interface{} = nil
-
-			if params, ok := message["params"].(map[string]interface{}); ok {
-				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
-					if uri, ok := textDocument["uri"].(string); ok {
-						symbolsResult = generateDocumentSymbols(uri)
 					}
 				}
 			}
 
 			finalResponse := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  symbolsResult,
+				"id":      message["id"],
+				"result":  responseResult,
 			}
-			response, _ := json.Marshal(finalResponse)
-			writeResponse(writer, response)
+			responseBytes, _ := json.Marshal(finalResponse)
+			writeResponse(writer, responseBytes)
+
+		case "textDocument/definition":
+			log.Debug("Handling textDocument/definition request.")
+			var responseResult interface{} = nil
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						if position, ok := params["position"].(map[string]interface{}); ok {
+							if lineNum, ok := position["line"].(float64); ok {
+								if charNum, ok := position["character"].(float64); ok {
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
+
+									symbolStore.RLock()
+									symbolTree, treeFound := symbolStore.trees[uri]
+									symbolStore.RUnlock()
+
+									if docFound && treeFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+											word := getWordAtPosition(lineContent, int(charNum))
+											if symbol, found := symbolTree.FindSymbol(normalizeLabel(word)); found {
+												responseResult = map[string]interface{}{
+													"uri": uri,
+													"range": map[string]interface{}{
+														"start": map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character},
+														"end":   map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character + len(symbol.Name)},
+													},
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			finalResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  responseResult,
+			}
+			responseBytes, _ := json.Marshal(finalResponse)
+			writeResponse(writer, responseBytes)
+
+		case "textDocument/references":
+			log.Debug("Handling textDocument/references request.")
+			// Placeholder implementation
+			finalResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  nil,
+			}
+			responseBytes, _ := json.Marshal(finalResponse)
+			writeResponse(writer, responseBytes)
+
+		case "textDocument/documentSymbol":
+			log.Debug("Handling textDocument/documentSymbol request.")
+			var responseResult interface{} = nil
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						responseResult = generateDocumentSymbols(uri)
+					}
+				}
+			}
+			finalResponse := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      message["id"],
+				"result":  responseResult,
+			}
+			responseBytes, _ := json.Marshal(finalResponse)
+			writeResponse(writer, responseBytes)
+
 		case "textDocument/semanticTokens/full":
 			log.Debug("Handling textDocument/semanticTokens/full request.")
-			id := message["id"]
-			var tokensResult interface{} = nil
-
+			var responseResult interface{} = nil
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
 						documentStore.RLock()
-						text, docFound := documentStore.documents[uri]
+						text, _ := documentStore.documents[uri]
 						documentStore.RUnlock()
-
-						if docFound {
-							tokens := generateSemanticTokens(uri, text)
-							tokensResult = map[string]interface{}{
-								"data": tokens,
-							}
-						}
+						tokens := generateSemanticTokens(uri, text)
+						responseResult = map[string]interface{}{"data": tokens}
 					}
 				}
 			}
-
 			finalResponse := map[string]interface{}{
 				"jsonrpc": "2.0",
-				"id":      id,
-				"result":  tokensResult,
+				"id":      message["id"],
+				"result":  responseResult,
 			}
-			response, _ := json.Marshal(finalResponse)
-			writeResponse(writer, response)
+			responseBytes, _ := json.Marshal(finalResponse)
+			writeResponse(writer, responseBytes)
+
 		default:
-			log.Logger.Printf("Unhandled method: %s\n", method)
+			log.Warn("Unhandled method: %s", method)
 		}
 	}
-
-	log.Info("LSP server stopped.")
 }
 
-func writeResponse(writer *bufio.Writer, response []byte) {
-	fmt.Fprintf(writer, "Content-Length: %d\r\n", len(response))
-	fmt.Fprintf(writer, "\r\n")
-	writer.Write(response)
-	writer.Flush()
-	log.Logger.Printf("Sent response: %s\n", string(response))
-}
+// publishDiagnostics converts parser errors into LSP diagnostics and sends them to the client.
+func publishDiagnostics(writer *bufio.Writer, uri string, errors []ParseError) {
+	diagnostics := make([]map[string]interface{}, len(errors))
+	for i, err := range errors {
 
-// Hilfsfunktion: Addressing Mode erkennen (angepasst für Branches)
-func detectAddressingMode(opcode, operand string) string {
-	operand = strings.TrimSpace(operand)
-	if operand == "" {
-		return "Implied"
-	}
-	if strings.HasPrefix(operand, "#") {
-		return "Immediate"
-	}
-	if strings.HasPrefix(operand, "(") && strings.HasSuffix(operand, ",Y)") {
-		return "Indirect-indexed"
-	}
-	if strings.HasPrefix(operand, "(") && strings.Contains(operand, ",X)") {
-		return "Indexed-indirect"
-	}
-	if strings.HasSuffix(operand, ",X") {
-		if len(operand) <= 5 {
-			return "Zeropage,X"
-		}
-		return "Absolute,X"
-	}
-	if strings.HasSuffix(operand, ",Y") {
-		if len(operand) <= 5 {
-			return "Zeropage,Y"
-		}
-		return "Absolute,Y"
-	}
-	if strings.HasPrefix(operand, "(") && strings.HasSuffix(operand, ")") {
-		return "Indirect"
-	}
-	// Branch-Befehle (relative Sprünge)
-	jumpOpcodes := map[string]bool{
-		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true,
-	}
-	if jumpOpcodes[strings.ToUpper(opcode)] {
-		return "Relative"
-	}
-	if len(operand) <= 3 {
-		return "Zeropage"
-	}
-	return "Absolute"
-}
-
-// publishDiagnostics analyzes the text and sends diagnostics to the client.
-func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
-
-	diagnostics := make([]map[string]interface{}, 0)
-	lines := strings.Split(text, "\n")
-
-	// Data structures for label diagnostics
-	definedLabels := make(map[string]int)
-	usedLabels := make(map[string]bool)
-	invalidLabelLines := make(map[int]bool)
-
-	jumpOpcodes := map[string]bool{
-		"BCC": true, "BCS": true, "BEQ": true, "BMI": true, "BNE": true, "BPL": true, "BVC": true, "BVS": true, "JMP": true, "JSR": true,
-	}
-	allOpcodes := make(map[string]bool)
-	mnemonicMap := make(map[string]Mnemonic)
-	for _, m := range mnemonics {
-		upper := strings.ToUpper(m.Mnemonic)
-		allOpcodes[upper] = true
-		mnemonicMap[upper] = m
-	}
-
-	var currentGlobalLabel string
-
-	// First pass: find all defined labels and check for duplicates
-	for i, line := range lines {
-		if idx := strings.Index(line, "//"); idx != -1 {
-			line = line[:idx]
-		}
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") || trimmedLine == "{" || trimmedLine == "}" {
-			continue
-		}
-		parts := strings.Fields(trimmedLine)
-		if len(parts) > 0 {
-			potentialLabel := parts[0]
-
-			// Handle macro invocation with '+'
-			if strings.HasPrefix(potentialLabel, "+") {
-				continue // It's a macro call, not a definition, skip for this pass.
-			}
-
-			// Check for labels ending with ':'
-			if strings.HasSuffix(potentialLabel, ":") {
-				label := normalizeLabel(potentialLabel)
-				originalLabel := label
-				if strings.HasPrefix(label, ".") {
-					if currentGlobalLabel != "" {
-						label = currentGlobalLabel + label
-					}
-				} else {
-					currentGlobalLabel = label
-				}
-				if _, isOpcode := allOpcodes[label]; !isOpcode {
-					if _, exists := definedLabels[label]; exists {
-
-						diagnostics = append(diagnostics, map[string]interface{}{
-							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
-							"severity": float64(1), // Error
-							"message":  fmt.Sprintf("Duplicate label definition: %s", originalLabel),
-							"source":   "6510lsp",
-						})
-					} else {
-						definedLabels[label] = i
-					}
-				}
-			} else {
-				normalizedFirstWord := normalizeLabel(potentialLabel)
-				if _, isOpcode := allOpcodes[normalizedFirstWord]; !isOpcode {
-					if !isKickassDirective(potentialLabel) {
-
-						diagnostics = append(diagnostics, map[string]interface{}{
-							"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
-							"severity": float64(1), // Error
-							"message":  fmt.Sprintf("Invalid syntax: '%s' is not a valid command, directive, or label.", potentialLabel),
-							"source":   "6510lsp",
-						})
-						invalidLabelLines[i] = true
-					}
-				}
-			}
-		}
-	}
-
-	// Second pass: find all used labels, check for unknown opcodes and addressing mode errors
-	currentGlobalLabel = ""
-	for i, line := range lines {
-		if idx := strings.Index(line, "//"); idx != -1 {
-			line = line[:idx]
-		}
-		if invalidLabelLines[i] {
-			continue
-		}
-		trimmedLine := strings.TrimSpace(line)
-		if trimmedLine == "" || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") || trimmedLine == "{" || trimmedLine == "}" {
-			continue
-		}
-
-		parts := strings.Fields(trimmedLine)
-		if len(parts) == 0 {
-			continue
-		}
-
-		var opcode, operand string
-		firstWord := parts[0]
-		if strings.HasPrefix(firstWord, "+") {
-			// It's a macro call, for now we don't do advanced diagnostics on it.
-			continue
-		} else if strings.HasSuffix(firstWord, ":") {
-			label := normalizeLabel(firstWord)
-			if !strings.HasPrefix(label, ".") {
-				currentGlobalLabel = label
-			}
-			if len(parts) > 1 {
-				opcode = strings.ToUpper(parts[1])
-				if len(parts) > 2 {
-					operand = parts[2]
-				}
-			}
-		} else {
-			opcode = strings.ToUpper(parts[0])
-			if len(parts) > 1 {
-				operand = parts[1]
-			}
-		}
-
-		if opcode != "" {
-			if _, isJump := jumpOpcodes[opcode]; isJump && operand != "" {
-				normalizedOperand := normalizeLabel(operand)
-				if strings.HasPrefix(normalizedOperand, ".") && currentGlobalLabel != "" {
-					normalizedOperand = currentGlobalLabel + normalizedOperand
-				}
-				usedLabels[normalizedOperand] = true
-			}
-
-			if _, isKnown := allOpcodes[opcode]; !isKnown {
-				if !isKickassDirective(opcode) {
-
-					diagnostics = append(diagnostics, map[string]interface{}{
-						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
-						"severity": float64(1), // 1 = Error
-						"message":  fmt.Sprintf("Unknown opcode or directive: %s", opcode),
-						"source":   "6510lsp",
-					})
-				}
-			} else {
-				mode := detectAddressingMode(opcode, operand)
-				mnemonic := mnemonicMap[opcode]
-				allowed := false
-				for _, am := range mnemonic.AddressingModes {
-					if strings.EqualFold(am.AddressingMode, mode) {
-						allowed = true
-						break
-					}
-				}
-				if !allowed {
-
-					diagnostics = append(diagnostics, map[string]interface{}{
-						"range":    map[string]interface{}{"start": map[string]interface{}{"line": i, "character": 0}, "end": map[string]interface{}{"line": i, "character": len(line)}},
-						"severity": float64(1), // Error
-						"message":  fmt.Sprintf("Invalid addressing mode for %s: %s (detected: %s)", opcode, operand, mode),
-						"source":   "6510lsp",
-					})
-				}
-			}
-		}
-	}
-
-	// Third pass: check for unused labels
-	if warnUnusedLabelsEnabled {
-		for label, lineNum := range definedLabels {
-			if _, used := usedLabels[label]; !used {
-
-				diagnostics = append(diagnostics, map[string]interface{}{
-					"range":    map[string]interface{}{"start": map[string]interface{}{"line": lineNum, "character": 0}, "end": map[string]interface{}{"line": lineNum, "character": len(lines[lineNum])}},
-					"severity": float64(2), // Warning
-					"message":  fmt.Sprintf("Unused label: %s", label),
-					"source":   "6510lsp",
-				})
-			}
+		diagnostics[i] = map[string]interface{}{
+			"range": map[string]interface{}{
+				"start": map[string]interface{}{"line": err.Line - 1, "character": err.Column - 1},
+				"end":   map[string]interface{}{"line": err.Line - 1, "character": err.Column},
+			},
+			"severity": float64(1), // Error
+			"message":  err.Message,
+			"source":   "6510lsp",
 		}
 	}
 
@@ -897,313 +506,104 @@ func publishDiagnostics(writer *bufio.Writer, uri string, text string) {
 	writeResponse(writer, response)
 }
 
-func loadMnemonics(filePath string) error {
-	file, err := os.ReadFile(filePath)
+func writeResponse(writer *bufio.Writer, response []byte) {
+	log.Logger.Printf("Sending response: %s\n", string(response))
+	fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(response))
+	writer.Write(response)
+	writer.Flush()
+}
+
+func loadMnemonics(path string) error {
+	file, err := os.ReadFile(path)
 	if err != nil {
-		return fmt.Errorf("failed to read mnemonic.json: %w", err)
+		return err
 	}
-
-	if err := json.Unmarshal(file, &mnemonics); err != nil {
-		return fmt.Errorf("failed to unmarshal mnemonic.json: %w", err)
-	}
-
-	log.Info("Successfully loaded mnemonic.json")
-	return nil
+	return json.Unmarshal(file, &mnemonics)
 }
 
-func getWordAtPosition(lineContent string, charNum int) string {
-	if charNum < 0 || charNum >= len(lineContent) {
-		return ""
-	}
-	// Find start of word
-	start := charNum
-	for start > 0 && isWordChar(rune(lineContent[start-1])) {
-		start--
-	}
-
-	// Find end of word
-	end := charNum
-	for end < len(lineContent) && isWordChar(rune(lineContent[end])) {
-		end++
-	}
-
-	if start >= end {
-		return ""
-	}
-
-	return lineContent[start:end]
-}
-
-func isWordChar(r rune) bool {
-	return (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '.'
-}
-
-// normalizeLabel removes a leading '!' and any trailing ':' or '+'-' characters from a label
-// and converts it to upper case for case-insensitive comparison.
-func normalizeLabel(label string) string {
-	label = strings.TrimSpace(label)
-	label = strings.TrimPrefix(label, "!")
-	label = strings.TrimSuffix(label, ":")
-	label = strings.TrimRight(label, "+-")
-	label = strings.ToUpper(label) // Case-insensitive!
-	return label
-}
-
-func getOpcodeDescription(opcode string) string {
+func getOpcodeDescription(mnemonic string) string {
 	for _, m := range mnemonics {
-		if strings.ToUpper(m.Mnemonic) == opcode {
-			var sb strings.Builder
-			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", m.Mnemonic, m.Description))
-
-			if len(m.AddressingModes) > 0 {
-				// Calculate maximum widths for each column
-				maxAddrModeLen := len("Addressing mode")
-				maxAsmFormatLen := len("Assembler format")
-				maxOpcodeLen := len("Opcode")
-				maxLengthLen := len("Length")
-				maxCyclesLen := len("Cycles")
-
-				for _, am := range m.AddressingModes {
-					if len(am.AddressingMode) > maxAddrModeLen {
-						maxAddrModeLen = len(am.AddressingMode)
-					}
-					if len(am.AssemblerFormat) > maxAsmFormatLen {
-						maxAsmFormatLen = len(am.AssemblerFormat)
-					}
-					if len(am.Opcode) > maxOpcodeLen {
-						maxOpcodeLen = len(am.Opcode)
-					}
-					// Length is int, convert to string for length calculation
-					if len(fmt.Sprintf("%d", am.Length)) > maxLengthLen {
-						maxLengthLen = len(fmt.Sprintf("%d", am.Length))
-					}
-					if len(fmt.Sprintf("%v", am.Cycles)) > maxCyclesLen {
-						maxCyclesLen = len(fmt.Sprintf("%v", am.Cycles))
-					}
-				}
-
-				// Format header
-				sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s | %-*s | %-*s |\n",
-					maxAddrModeLen, "Addressing mode",
-					maxAsmFormatLen, "Assembler format",
-					maxOpcodeLen, "Opcode",
-					maxLengthLen, "Length",
-					maxCyclesLen, "Cycles"))
-
-				// Format separator
-				sb.WriteString(fmt.Sprintf("| %s | %s | %s | %s | %s |\n",
-					strings.Repeat("-", maxAddrModeLen),
-					strings.Repeat("-", maxAsmFormatLen),
-					strings.Repeat("-", maxOpcodeLen),
-					strings.Repeat("-", maxLengthLen),
-					strings.Repeat("-", maxCyclesLen)))
-
-				// Format data rows
-				for _, am := range m.AddressingModes {
-					sb.WriteString(fmt.Sprintf("| %-*s | %-*s | %-*s | %-*d | %-*v |\n",
-						maxAddrModeLen, am.AddressingMode,
-						maxAsmFormatLen, am.AssemblerFormat,
-						maxOpcodeLen, am.Opcode,
-						maxLengthLen, am.Length,
-						maxCyclesLen, am.Cycles)) // Use %v for interface{} type
-				}
+		if m.Mnemonic == mnemonic {
+			var builder strings.Builder
+			builder.WriteString(fmt.Sprintf("**%s** - %s\n\n", m.Mnemonic, m.Description))
+			builder.WriteString("| Opcode | Addressing Mode | Assembler Format | Length | Cycles |\n")
+			builder.WriteString("|:------:|:----------------|:-----------------|:------:|:------:|\n")
+			for _, am := range m.AddressingModes {
+				builder.WriteString(fmt.Sprintf("| $%s | %s | `%s` | %d | %s |\n", am.Opcode, am.AddressingMode, am.AssemblerFormat, am.Length, am.Cycles))
 			}
-
-			if len(m.CPUFlags) > 0 {
-				sb.WriteString("\n**CPU Flags:**\n")
-				for _, flag := range m.CPUFlags {
-					sb.WriteString(fmt.Sprintf("- %s\n", flag))
-				}
-			}
-			return sb.String()
-		}
-	}
-	return "" // No description found
-}
-
-func getDirectiveDescription(directive string) string {
-	for _, d := range kickassDirectives {
-		if strings.EqualFold(d.Directive, directive) {
-			var sb strings.Builder
-			if d.Signature != "" {
-				sb.WriteString(fmt.Sprintf("```kickass\n%s\n```\n", d.Signature))
-			}
-			sb.WriteString(fmt.Sprintf("**%s**\n\n%s\n\n", strings.ToLower(d.Directive), d.Description))
-
-			if len(d.Examples) > 0 {
-				sb.WriteString("**Examples:**\n")
-				sb.WriteString("```asm\n")
-				for _, example := range d.Examples {
-					sb.WriteString(example)
-					sb.WriteString("\n")
-				}
-				sb.WriteString("```\n")
-			}
-			return sb.String()
+			builder.WriteString("\n**CPU Flags Affected:** " + strings.Join(m.CPUFlags, ", "))
+			return builder.String()
 		}
 	}
 	return ""
 }
 
-func toCompletionItemKind(kind SymbolKind) float64 {
-	switch kind {
-	case Constant:
-		return 21 // Constant
-	case Variable:
-		return 6 // Variable
-	case Label:
-		return 10 // Property
-	case Function:
-		return 3 // Function
-	case Macro:
-		return 15 // Snippet
-	case Namespace:
-		return 19 // Module
-	default:
-		return 1 // Text
-	}
-}
-
-// getCompletionContext determines if we are completing an operand or a mnemonic
-// and returns the word being completed.
-func getCompletionContext(line string, char int) (isOperand bool, word string) {
-	log.Debug("getCompletionContext line: '%s', char: %d", line, char)
-	// Trim whitespace from the beginning of the line
-	trimmedLine := strings.TrimSpace(line)
-	if len(trimmedLine) == 0 || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
-		log.Debug("Line is empty or a comment, returning mnemonic context.")
-		return false, ""
-	}
-
-	// Extract the part of the line before the cursor
-	if char < 0 || char > len(line) {
-		char = len(line)
-	}
-	context := line[:char]
-	log.Debug("Context: '%s'", context)
-
-	// Tokenize the line up to the cursor
-	parts := strings.Fields(context)
-	log.Debug("Parts: %v", parts)
-
-	if len(parts) == 0 {
-		// This can happen if the line has leading spaces and the cursor is among them.
-		// Or if the line is empty.
-		log.Debug("No parts found, assuming mnemonic context.")
-		return false, ""
-	}
-
-	// Check if the cursor is at the end of a word or in the middle of it.
-	lastPart := parts[len(parts)-1]
-	if !strings.HasSuffix(context, lastPart) {
-		// Cursor is likely in whitespace after the last word.
-		// Example: "lda #$12 |" (cursor at |)
-		// We need to check if the last word was an opcode.
-		log.Debug("Cursor is in whitespace after the last word.")
-		for _, m := range mnemonics {
-			if strings.EqualFold(m.Mnemonic, lastPart) {
-				log.Debug("Last word was an opcode, so we are in operand context.")
-				return true, "" // We are starting a new operand
+func getDirectiveDescription(directive string) string {
+	for _, d := range kickassDirectives {
+		if d.Directive == directive {
+			var builder strings.Builder
+			builder.WriteString(fmt.Sprintf("```kickassembler\n%s\n```\n", d.Signature))
+			builder.WriteString(d.Description + "\n\n")
+			if len(d.Examples) > 0 {
+				builder.WriteString("**Example:**\n")
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(strings.Join(d.Examples, "\n"))
+				builder.WriteString("\n```")
 			}
-		}
-		log.Debug("Last word was not an opcode, assuming mnemonic context.")
-		return false, "" // Not after an opcode, so it's a new mnemonic/label
-	}
-
-	// Cursor is part of the last word.
-	// Example: "lda #MAX_SPRI|"
-	log.Debug("Cursor is part of the last word: '%s'", lastPart)
-
-	if len(parts) == 1 {
-		// Only one word on the line up to the cursor.
-		// It could be a label, a mnemonic, or a directive.
-		if strings.HasPrefix(lastPart, ".") {
-			log.Debug("Single word starts with a dot, assuming directive context.")
-			return false, lastPart
-		}
-		// If it contains operand-like characters, treat as operand.
-		if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") {
-			log.Debug("Single word contains operand characters, treating as operand.")
-			return true, lastPart
-		}
-		// Otherwise, it's a mnemonic or a label definition.
-		log.Debug("Single word, assuming mnemonic/label context.")
-		return false, lastPart
-	}
-
-	// More than one part.
-	// The word before the current one is a good indicator.
-	prevPart := parts[len(parts)-2]
-	log.Debug("Previous part: '%s'", prevPart)
-
-	// Is the previous part an opcode?
-	for _, m := range mnemonics {
-		if strings.EqualFold(m.Mnemonic, prevPart) {
-			log.Debug("Previous part was an opcode, so current is an operand.")
-			return true, lastPart
+			return builder.String()
 		}
 	}
-
-	// If we are here, the context is more complex.
-	// e.g., "lda #$12,x" or "jmp namespace.label"
-	// A simple check for operand characters in the current word is a good heuristic.
-	if strings.HasPrefix(lastPart, ".") {
-		log.Debug("Current part starts with a dot, could be a local label or a directive.")
-		// if it's the second word, it's likely a directive
-		if len(parts) == 2 && !strings.HasSuffix(parts[0], ":") {
-			return false, lastPart
-		}
-		return true, lastPart
-	}
-	if strings.Contains(lastPart, "#") {
-		log.Debug("Current part contains operand characters, treating as operand.")
-		return true, lastPart
-	}
-
-	// Default case: assume it's a mnemonic if we haven't found an operand context.
-	// This could be a new instruction on a line after a label, e.g. "start: lda"
-	log.Debug("Defaulting to mnemonic context.")
-	return false, lastPart
+	return ""
 }
 
-func applyCase(original, suggestion string) string {
-	if original == "" {
-		return strings.ToLower(suggestion) // Default to lowercase if user typed nothing
+func getWordAtPosition(line string, char int) string {
+	if char < 0 || char >= len(line) {
+		return ""
 	}
 
-	isLower := true
-	isUpper := true
-	isCapitalized := false
-	if len(original) > 0 {
-		isCapitalized = unicode.IsUpper(rune(original[0]))
+	start := char
+	for start > 0 && isWordChar(line[start-1]) {
+		start--
 	}
 
-	for i, r := range original {
-		if !unicode.IsLetter(r) {
-			continue
-		}
-		if unicode.IsLower(r) {
-			isUpper = false
-		}
-		if unicode.IsUpper(r) {
-			isLower = false
-		}
-		if i > 0 && unicode.IsUpper(r) {
-			isCapitalized = false
-		}
+	end := char
+	for end < len(line)-1 && isWordChar(line[end+1]) {
+		end++
 	}
 
-	if isUpper {
-		return strings.ToUpper(suggestion)
-	}
-	if isLower {
-		return strings.ToLower(suggestion)
-	}
-	if isCapitalized {
-		// Capitalize first letter, rest lowercase
-		return strings.ToUpper(string(suggestion[0])) + strings.ToLower(suggestion[1:])
+	return line[start : end+1]
+}
+
+func isWordChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.'
+}
+
+func normalizeLabel(label string) string {
+	return strings.TrimSuffix(label, ":")
+}
+
+func generateCompletions(symbolTree *Scope, lineNum int) []map[string]interface{} {
+	items := []map[string]interface{}{}
+
+	// Add opcodes
+	for _, m := range mnemonics {
+		items = append(items, map[string]interface{}{
+			"label":         m.Mnemonic,
+			"kind":          float64(14), // Keyword
+			"detail":        "6502/6510 Opcode",
+			"documentation": m.Description,
+		})
 	}
 
-	// Default case if mixed case (e.g. lDa) -> return lowercase
-	return strings.ToLower(suggestion)
+	// Add visible symbols
+	visibleSymbols := symbolTree.FindAllVisibleSymbols(lineNum)
+	for _, s := range visibleSymbols {
+		items = append(items, map[string]interface{}{
+			"label":  s.Name,
+			"kind":   toDocumentSymbolKind(s.Kind),
+			"detail": s.Kind.String(),
+		})
+	}
+
+	return items
 }

@@ -4,18 +4,17 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	log "c64.nvim/internal/log"
 	lsp "c64.nvim/internal/lsp"
 )
 
 func main() {
-	// Truncate log file
 	if f, err := os.OpenFile("6510lsp.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
 		f.Close()
 	}
 
-	// Custom error handling for unknown flags
 	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(os.Stderr)
 	debug := flag.Bool("debug", false, "Enable debug logging")
@@ -23,7 +22,6 @@ func main() {
 
 	err := flag.CommandLine.Parse(os.Args[1:])
 	if err != nil {
-		// Log warning, but continue startup
 		log.Warn("Invalid command line argument: %v. Valid flags are: --debug, --warn-unused-labels", err)
 	}
 
@@ -42,5 +40,15 @@ func main() {
 
 	log.Info("6510 Language Server started.")
 
-	lsp.Start()
+	exePath, err := os.Executable()
+	if err != nil {
+		log.Error("Failed to get executable path: %v", err)
+		os.Exit(1)
+	}
+	exeDir := filepath.Dir(exePath)
+
+	mnemonicPath := filepath.Join(exeDir, "mnemonic.json")
+	kickassDir := exeDir
+
+	lsp.Start(mnemonicPath, kickassDir)
 }

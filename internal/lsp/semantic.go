@@ -1,43 +1,43 @@
 package lsp
 
 import (
-	"c64.nvim/internal/log"
-	"regexp"
 	"sort"
 	"strings"
+
+	"c64.nvim/internal/log"
 )
 
 var (
 	tokenTypes = map[string]uint32{
-		"keyword":   0,
-		"variable":  1,
-		"function":  2,
-		"macro":     3,
-		"number":    4,
-		"comment":   5,
-		"string":    6,
-		"operator":  7,
+		"keyword":  0,
+		"variable": 1,
+		"function": 2,
+		"macro":    3,
+		"number":   4,
+		"comment":  5,
+		"string":   6,
+		"operator": 7,
 	}
 	tokenModifiers = map[string]uint32{
 		"declaration": 1 << 0,
 		"readonly":    1 << 1,
 	}
 	KickAssemblerDirectives = map[string]bool{
-		".const":        true,
-		".var":          true,
-		".word":         true,
-		".byte":         true,
-		".namespace":    true,
-		".function":     true,
-		".macro":        true,
-		".label":        true,
+		".const":         true,
+		".var":           true,
+		".word":          true,
+		".byte":          true,
+		".namespace":     true,
+		".function":      true,
+		".macro":         true,
+		".label":         true,
 		".pseudocommand": true,
-		".if":           true,
-		".for":          true,
-		".while":        true,
-		".return":       true,
-		"#import":       true,
-		"#include":      true,
+		".if":            true,
+		".for":           true,
+		".while":         true,
+		".return":        true,
+		"#import":        true,
+		"#include":       true,
 	}
 	allOpcodes = make(map[string]bool)
 )
@@ -50,88 +50,6 @@ type semanticToken struct {
 	tokenMods uint32
 }
 
-func parseLineForTokens(line string, lineNum uint32, symbolTree *Scope) []semanticToken {
-	var tokens []semanticToken
-	log.Debug("Parsing line %d: '%s'", lineNum, line)
-
-	// 1. Comments
-	commentIdx := strings.Index(line, ";")
-	if commentIdx == -1 {
-		commentIdx = strings.Index(line, "//")
-	}
-
-	codePart := line
-	if commentIdx != -1 {
-		commentText := line[commentIdx:]
-		tokens = append(tokens, semanticToken{lineNum, uint32(commentIdx), uint32(len(commentText)), tokenTypes["comment"], 0})
-		codePart = line[:commentIdx]
-	}
-
-	// 2. String Literals
-	re := regexp.MustCompile(`"([^"\\]|\\.)*"`)
-	stringLiterals := re.FindAllStringIndex(codePart, -1)
-
-	nonStringCodePart := []rune(codePart)
-
-	for _, match := range stringLiterals {
-		start, end := match[0], match[1]
-		log.Debug("Found String: '%s'", codePart[start:end])
-		tokens = append(tokens, semanticToken{lineNum, uint32(start), uint32(end - start), tokenTypes["string"], 0})
-		for i := start; i < end; i++ {
-			nonStringCodePart[i] = ' '
-		}
-	}
-
-	codePart = string(nonStringCodePart)
-
-	parts := strings.Fields(codePart)
-
-	for _, part := range parts {
-		startChar := strings.Index(codePart, part)
-		if startChar == -1 {
-			continue
-		}
-
-		lowerPart := strings.ToLower(part)
-		upperPart := strings.ToUpper(part)
-
-		if _, isDirective := KickAssemblerDirectives[lowerPart]; isDirective {
-			log.Debug("Found Directive: '%s'", part)
-			tokens = append(tokens, semanticToken{lineNum, uint32(startChar), uint32(len(part)), tokenTypes["macro"], 0})
-		} else if _, isOpcode := allOpcodes[upperPart]; isOpcode {
-			log.Debug("Found Opcode: '%s'", part)
-			tokens = append(tokens, semanticToken{lineNum, uint32(startChar), uint32(len(part)), tokenTypes["keyword"], 0})
-		} else if strings.HasPrefix(part, "#") || strings.HasPrefix(part, "$") || strings.HasPrefix(part, "%") || (part[0] >= '0' && part[0] <= '9') {
-			log.Debug("Found Number: '%s'", part)
-			tokens = append(tokens, semanticToken{lineNum, uint32(startChar), uint32(len(part)), tokenTypes["number"], 0})
-		} else if symbol, found := symbolTree.FindSymbol(normalizeLabel(part)); found {
-			log.Debug("Found Symbol: '%s' (Kind: %s)", part, symbol.Kind)
-			var mod uint32 = 0
-			if symbol.Kind == Constant {
-				mod = tokenModifiers["readonly"]
-			}
-
-			tokenType := tokenTypes["variable"]
-			if symbol.Kind == Function {
-				tokenType = tokenTypes["function"]
-			} else if symbol.Kind == Macro {
-				tokenType = tokenTypes["macro"]
-			} else if strings.HasSuffix(part, ":") {
-				mod |= tokenModifiers["declaration"]
-			}
-
-			tokens = append(tokens, semanticToken{lineNum, uint32(startChar), uint32(len(part)), tokenType, mod})
-		} else if len(part) == 1 && strings.ContainsAny(part, ":=+-*/(),<>") {
-			log.Debug("Found Operator: '%s'", part)
-			tokens = append(tokens, semanticToken{lineNum, uint32(startChar), uint32(len(part)), tokenTypes["operator"], 0})
-		} else {
-			log.Debug("Symbol not found: '%s'", part)
-		}
-	}
-
-	return tokens
-}
-
 func generateSemanticTokens(uri string, text string) []uint32 {
 	log.Debug("Generating semantic tokens for %s", uri)
 
@@ -140,19 +58,14 @@ func generateSemanticTokens(uri string, text string) []uint32 {
 		allOpcodes[strings.ToUpper(m.Mnemonic)] = true
 	}
 
-	// We need the symbol tree to identify symbols
-	symbolTree := ParseDocument(uri, text)
+	// Use the new AST-based parser.
+	l := NewLexer(text)
+	p := NewParser(l)
+	program := p.ParseProgram()
 
-	allTokens := []semanticToken{}
+	allTokens := buildTokensFromAST(program)
 
-	lines := strings.Split(text, "\n")
-
-	for i, line := range lines {
-		lineTokens := parseLineForTokens(line, uint32(i), symbolTree)
-		allTokens = append(allTokens, lineTokens...)
-	}
-
-	// Sort tokens by start character index, as regex can be unordered
+	// Sort tokens by start character index, as regex can be unordered.
 	sort.SliceStable(allTokens, func(i, j int) bool {
 		if allTokens[i].line != allTokens[j].line {
 			return allTokens[i].line < allTokens[j].line
@@ -160,9 +73,9 @@ func generateSemanticTokens(uri string, text string) []uint32 {
 		return allTokens[i].startChar < allTokens[j].startChar
 	})
 
-	// Build the response
+	// Build the response.
 
-data := make([]uint32, 0, len(allTokens)*5)
+	data := make([]uint32, 0, len(allTokens)*5)
 
 	var prevLine, prevChar uint32
 	for _, token := range allTokens {
@@ -179,4 +92,76 @@ data := make([]uint32, 0, len(allTokens)*5)
 	}
 
 	return data
+}
+
+func buildTokensFromAST(node Node) []semanticToken {
+	tokens := []semanticToken{}
+
+	// Add a nil check to prevent panics on incomplete AST nodes from the parser.
+	if node == nil {
+		return tokens
+	}
+
+	switch n := node.(type) {
+	case *Program:
+		for _, stmt := range n.Statements {
+			// Defensive check: Ensure statement from the program is not nil before processing.
+			if stmt == nil {
+				continue
+			}
+			tokens = append(tokens, buildTokensFromAST(stmt)...)
+		}
+	case *InstructionStatement:
+		tok := n.Token
+		tokens = append(tokens, semanticToken{
+			line:      uint32(tok.Line - 1),
+			startChar: uint32(tok.Column - 1),
+			length:    uint32(len(tok.Literal)),
+			tokenType: tokenTypes["keyword"],
+		})
+		if n.Operand != nil {
+			tokens = append(tokens, buildTokensFromAST(n.Operand)...)
+		}
+	case *LabelStatement:
+		tok := n.Token
+		tokens = append(tokens, semanticToken{
+			line:      uint32(tok.Line - 1),
+			startChar: uint32(tok.Column - 1),
+			length:    uint32(len(tok.Literal)),
+			tokenType: tokenTypes["function"], // Use a distinct color for labels
+			tokenMods: tokenModifiers["declaration"],
+		})
+	case *DirectiveStatement:
+		tok := n.Token
+		tokens = append(tokens, semanticToken{
+			line:      uint32(tok.Line - 1),
+			startChar: uint32(tok.Column - 1),
+			length:    uint32(len(tok.Literal)),
+			tokenType: tokenTypes["macro"],
+		})
+		if n.Name != nil {
+			tokens = append(tokens, buildTokensFromAST(n.Name)...)
+		}
+		if n.Value != nil {
+			tokens = append(tokens, buildTokensFromAST(n.Value)...)
+		}
+	case *Identifier:
+		tok := n.Token
+		tokens = append(tokens, semanticToken{
+			line:      uint32(tok.Line - 1),
+			startChar: uint32(tok.Column - 1),
+			length:    uint32(len(tok.Literal)),
+			tokenType: tokenTypes["variable"],
+		})
+	case *IntegerLiteral:
+		tok := n.Token
+		tokens = append(tokens, semanticToken{
+			line:      uint32(tok.Line - 1),
+			startChar: uint32(tok.Column - 1),
+			length:    uint32(len(tok.Literal)),
+			tokenType: tokenTypes["number"],
+		})
+	}
+
+	return tokens
 }

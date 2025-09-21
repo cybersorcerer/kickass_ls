@@ -1,25 +1,26 @@
 package lsp
 
 import (
-	"c64.nvim/internal/log"
 	"fmt"
 	"strings"
+
+	"c64.nvim/internal/log"
 )
 
-// SymbolKind definiert die Art eines Symbols (Konstante, Variable, etc.).
+// SymbolKind defines the type of a symbol (constant, variable, etc.).
 type SymbolKind int
 
 const (
 	UnknownSymbol SymbolKind = iota
 	Constant
-	Variable
+	Variable // Note: In Kick Assembler, .var can be reassigned.
 	Label
 	Function
 	Macro
 	Namespace
 )
 
-// String gibt eine lesbare Repräsentation des SymbolKind zurück.
+// String returns a human-readable representation of the SymbolKind.
 func (sk SymbolKind) String() string {
 	switch sk {
 	case Constant:
@@ -39,39 +40,40 @@ func (sk SymbolKind) String() string {
 	}
 }
 
-// Position repräsentiert eine Stelle im Code (Zeile und Spalte).
+// Position represents a location in the code (line and character).
 type Position struct {
 	Line      int `json:"line"`
 	Character int `json:"character"`
 }
 
-// Symbol repräsentiert ein einzelnes Symbol im Code.
+// Symbol represents a single symbol in the code.
 type Symbol struct {
-	Name     string
-	Kind     SymbolKind
-	Value    string   // z.B. der Wert einer Konstante
-	Position Position // Die Position der Definition
-	Scope    *Scope   // Der Geltungsbereich, in dem das Symbol definiert ist
+	Name      string
+	Kind      SymbolKind
+	Value     string   // e.g., the value of a constant
+	Position  Position // The position of the definition
+	Scope     *Scope   // The scope in which the symbol is defined
+	Params    []string // For functions and macros
+	Signature string   // For functions and macros
 }
 
-// Scope repräsentiert einen Geltungsbereich (z.B. eine Datei, ein Namespace oder eine Funktion).
+// Scope represents a scope (e.g., a file, a namespace, or a function).
 type Scope struct {
-	Name        string
-	Parent      *Scope
-	Children    []*Scope
-	Symbols     map[string]*Symbol
-	Range       Range // Der Bereich, den dieser Scope im Dokument abdeckt
-	Uri         string
+	Name     string
+	Parent   *Scope
+	Children []*Scope
+	Symbols  map[string]*Symbol
+	Range    Range // The range this scope covers in the document
+	Uri      string
 }
 
-// Range repräsentiert einen Bereich im Code (Anfang und Ende).
+// Range represents a range in the code (start and end).
 type Range struct {
 	Start Position `json:"start"`
 	End   Position `json:"end"`
 }
 
-
-// NewRootScope erstellt einen neuen Wurzel-Scope für ein Dokument.
+// NewRootScope creates a new root scope for a document.
 func NewRootScope(uri string) *Scope {
 	return &Scope{
 		Name:     "root",
@@ -81,7 +83,7 @@ func NewRootScope(uri string) *Scope {
 	}
 }
 
-// AddSymbol fügt ein Symbol zum Scope hinzu.
+// AddSymbol adds a symbol to the scope.
 func (s *Scope) AddSymbol(symbol *Symbol) error {
 	if _, exists := s.Symbols[symbol.Name]; exists {
 		return fmt.Errorf("symbol '%s' already defined in this scope", symbol.Name)
@@ -91,31 +93,31 @@ func (s *Scope) AddSymbol(symbol *Symbol) error {
 	return nil
 }
 
-// AddChildScope fügt einen untergeordneten Scope hinzu.
+// AddChildScope adds a child scope.
 func (s *Scope) AddChildScope(child *Scope) {
 	child.Parent = s
 	s.Children = append(s.Children, child)
 }
 
-// FindSymbol sucht nach einem Symbol, beginnend im aktuellen Scope und dann rekursiv in den Eltern-Scopes.
-// Behandelt auch qualifizierte Namen (z.B. namespace.symbol).
+// FindSymbol searches for a symbol, starting in the current scope and then recursively in parent scopes.
+// It also handles qualified names (e.g., namespace.symbol).
 func (s *Scope) FindSymbol(name string) (*Symbol, bool) {
 	parts := strings.Split(name, ".")
 
 	if len(parts) > 1 {
-		// Qualifizierter Name
+		// Qualified name
 		namespaceName := parts[0]
 		symbolName := parts[1]
 
-		// Finde den Namespace-Scope
+		// Find the namespace scope
 		if nsScope := s.FindNamespace(normalizeLabel(namespaceName)); nsScope != nil {
-			// Suche das Symbol innerhalb des Namespace-Scopes
+			// Search for the symbol within the namespace scope
 			if symbol, ok := nsScope.Symbols[normalizeLabel(symbolName)]; ok {
 				return symbol, true
 			}
 		}
 	} else {
-		// Nicht qualifizierter Name
+		// Unqualified name
 		if symbol, ok := s.Symbols[normalizeLabel(name)]; ok {
 			return symbol, true
 		}
@@ -127,8 +129,7 @@ func (s *Scope) FindSymbol(name string) (*Symbol, bool) {
 	return nil, false
 }
 
-
-// FindNamespace sucht nach einem Namespace-Scope mit dem gegebenen Namen.
+// FindNamespace searches for a namespace scope with the given name.
 func (s *Scope) FindNamespace(name string) *Scope {
 	for _, child := range s.Children {
 		if child.Name == name {
@@ -138,14 +139,14 @@ func (s *Scope) FindNamespace(name string) *Scope {
 	return nil
 }
 
-// FindAllVisibleSymbols sammelt alle Symbole, die von einem bestimmten Punkt im Code aus sichtbar sind.
+// FindAllVisibleSymbols collects all symbols that are visible from a specific point in the code.
 func (s *Scope) FindAllVisibleSymbols(lineNumber int) []*Symbol {
 	var visibleSymbols []*Symbol
 
-	// Finde den innersten Scope, der die aktuelle Zeilennummer umschließt
+	// Find the innermost scope that encloses the current line number
 	currentScope := s.findInnermostScope(lineNumber)
 
-	// Sammle Symbole vom aktuellen Scope nach oben bis zum Root
+	// Collect symbols from the current scope up to the root
 	for scope := currentScope; scope != nil; scope = scope.Parent {
 		for _, symbol := range scope.Symbols {
 			visibleSymbols = append(visibleSymbols, symbol)
@@ -155,12 +156,17 @@ func (s *Scope) FindAllVisibleSymbols(lineNumber int) []*Symbol {
 	return visibleSymbols
 }
 
-// findInnermostScope findet den spezifischsten Scope für eine gegebene Zeilennummer.
+// findInnermostScope finds the most specific scope for a given line number.
 func (s *Scope) findInnermostScope(lineNumber int) *Scope {
 	for _, child := range s.Children {
+		// Defensive check: Ensure the child scope has a valid range before checking containment.
+		// A zero-value End.Line indicates an incompletely parsed scope.
+		if child.Range.End.Line == 0 && child.Range.Start.Line == 0 {
+			continue
+		}
 		if lineNumber >= child.Range.Start.Line && lineNumber <= child.Range.End.Line {
-			return child.findInnermostScope(lineNumber) // Rekursiv im passenden Kind-Scope suchen
+			return child.findInnermostScope(lineNumber) // Recurse into the matching child scope
 		}
 	}
-	return s // Kein passenderer Kind-Scope gefunden, also ist dies der innerste
+	return s // No more specific child scope found, so this is the innermost one
 }
