@@ -167,7 +167,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.7.1", // Version updated
+						"version": "0.7.2", // Version updated
 					},
 				},
 			}
@@ -426,11 +426,85 @@ func Start(mnemonicPath string, kickassPath string) {
 
 		case "textDocument/references":
 			log.Debug("Handling textDocument/references request.")
-			// Placeholder implementation
+			var responseResult interface{} = nil
+
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
+					if uri, ok := textDocument["uri"].(string); ok {
+						if position, ok := params["position"].(map[string]interface{}); ok {
+							if lineNum, ok := position["line"].(float64); ok {
+								if charNum, ok := position["character"].(float64); ok {
+									// Get the context parameter for includeDeclaration
+									includeDeclaration := true
+									if context, ok := params["context"].(map[string]interface{}); ok {
+										if incDec, ok := context["includeDeclaration"].(bool); ok {
+											includeDeclaration = incDec
+										}
+									}
+
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
+
+									symbolStore.RLock()
+									symbolTree, treeFound := symbolStore.trees[uri]
+									symbolStore.RUnlock()
+
+									if docFound && treeFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+											word := getWordAtPosition(lineContent, int(charNum))
+
+											if word != "" {
+												normalizedWord := normalizeLabel(word)
+
+												// First check if the symbol exists
+												if symbol, found := symbolTree.FindSymbol(normalizedWord); found {
+													// Find all references to this symbol
+													references := symbolTree.FindAllReferences(normalizedWord, text, uri)
+
+													// If includeDeclaration is false, filter out the declaration
+													if !includeDeclaration && len(references) > 0 {
+														filteredReferences := []map[string]interface{}{}
+														for _, ref := range references {
+															if refRange, ok := ref["range"].(map[string]interface{}); ok {
+																if start, ok := refRange["start"].(map[string]interface{}); ok {
+																	if refLine, ok := start["line"].(float64); ok {
+																		if refChar, ok := start["character"].(float64); ok {
+																			// Skip if this is the declaration position
+																			if int(refLine) != symbol.Position.Line ||
+																				int(refChar) != symbol.Position.Character {
+																				filteredReferences = append(filteredReferences, ref)
+																			}
+																		}
+																	}
+																}
+															}
+														}
+														responseResult = filteredReferences
+													} else {
+														responseResult = references
+													}
+
+													log.Debug("Found %d references for symbol '%s'", len(references), word)
+												} else {
+													log.Debug("Symbol '%s' not found for references", word)
+												}
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
 			finalResponse := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      message["id"],
-				"result":  nil,
+				"result":  responseResult,
 			}
 			responseBytes, _ := json.Marshal(finalResponse)
 			writeResponse(writer, responseBytes)
@@ -528,8 +602,8 @@ func getOpcodeDescription(mnemonic string) string {
 			builder.WriteString(fmt.Sprintf("**%s** - %s\n\n", m.Mnemonic, m.Description))
 
 			// Properly formatted Markdown table
-			builder.WriteString("| Opcode | Addressing Mode | Assembler Format | Length | Cycles |\n")
-			builder.WriteString("| :------ | :---------------- | :----------------- | :------ | :------ |\n")
+			builder.WriteString("| Opcode | Addressing Mode  | Assembler Format  | Length | Cycles |\n")
+			builder.WriteString("|:------ |:---------------- |:----------------- |:------ |:------ |\n")
 
 			for _, am := range m.AddressingModes {
 				// Escape backticks in assembler format for proper code display
@@ -602,14 +676,6 @@ func getWordAtPosition(line string, char int) string {
 	}
 
 	return line[start : end+1]
-}
-
-func isWordChar(c byte) bool {
-	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.'
-}
-
-func normalizeLabel(label string) string {
-	return strings.TrimSuffix(label, ":")
 }
 
 func generateCompletions(symbolTree *Scope, lineNum int) []map[string]interface{} {

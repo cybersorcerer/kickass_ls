@@ -170,3 +170,158 @@ func (s *Scope) findInnermostScope(lineNumber int) *Scope {
 	}
 	return s // No more specific child scope found, so this is the innermost one
 }
+
+// Reference represents a reference to a symbol in the code
+type Reference struct {
+	Position Position `json:"position"`
+	Uri      string   `json:"uri"`
+}
+
+// FindAllReferences finds all references to a symbol in the document
+func (s *Scope) FindAllReferences(symbolName, documentText, uri string) []map[string]interface{} {
+	references := []map[string]interface{}{}
+	
+	// Normalize the symbol name
+	normalizedName := normalizeLabel(symbolName)
+	
+	// Split document into lines for searching
+	lines := strings.Split(documentText, "\n")
+	
+	// Search through all lines
+	for lineNum, line := range lines {
+		// Find all occurrences of the symbol in this line
+		references = append(references, findReferencesInLine(line, lineNum, normalizedName, uri)...)
+	}
+	
+	return references
+}
+
+// findReferencesInLine finds all references to a symbol in a single line
+func findReferencesInLine(line string, lineNum int, symbolName, uri string) []map[string]interface{} {
+	references := []map[string]interface{}{}
+	
+	// Convert line to lowercase for case-insensitive search, but preserve original positions
+	lowerLine := strings.ToLower(line)
+	lowerSymbol := strings.ToLower(symbolName)
+	
+	// Find comment positions to exclude them from search
+	commentStart := findCommentStart(line)
+	
+	// Find all occurrences
+	searchIndex := 0
+	for {
+		index := strings.Index(lowerLine[searchIndex:], lowerSymbol)
+		if index == -1 {
+			break
+		}
+		
+		actualIndex := searchIndex + index
+		
+		// Skip if this occurrence is in a comment
+		if commentStart != -1 && actualIndex >= commentStart {
+			searchIndex = actualIndex + 1
+			continue
+		}
+		
+		// Check if this is a complete word (not part of another identifier)
+		if isCompleteWord(line, actualIndex, len(symbolName)) {
+			reference := map[string]interface{}{
+				"uri": uri,
+				"range": map[string]interface{}{
+					"start": map[string]interface{}{
+						"line":      lineNum,
+						"character": actualIndex,
+					},
+					"end": map[string]interface{}{
+						"line":      lineNum,
+						"character": actualIndex + len(symbolName),
+					},
+				},
+			}
+			references = append(references, reference)
+		}
+		
+		searchIndex = actualIndex + 1
+	}
+	
+	return references
+}
+
+// isCompleteWord checks if the found text is a complete word and not part of another identifier
+func isCompleteWord(line string, startPos, length int) bool {
+	endPos := startPos + length
+	
+	// Check character before (if exists)
+	if startPos > 0 {
+		charBefore := line[startPos-1]
+		if isWordChar(charBefore) {
+			return false
+		}
+	}
+	
+	// Check character after (if exists)
+	if endPos < len(line) {
+		charAfter := line[endPos]
+		if isWordChar(charAfter) {
+			return false
+		}
+	}
+	
+	return true
+}
+
+// isWordChar checks if a character is part of a word (identifier)
+func isWordChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.'
+}
+
+// normalizeLabel removes trailing colon from labels
+func normalizeLabel(label string) string {
+	return strings.TrimSuffix(label, ":")
+}
+
+// findCommentStart finds the position where a comment starts in a line
+// Returns -1 if no comment is found
+// This function handles strings properly to avoid false positives
+func findCommentStart(line string) int {
+	inString := false
+	stringChar := byte(0)
+	
+	for i := 0; i < len(line); i++ {
+		c := line[i]
+		
+		// Handle string literals
+		if !inString {
+			if c == '"' || c == '\'' {
+				inString = true
+				stringChar = c
+				continue
+			}
+		} else {
+			// We're in a string, check for end of string
+			if c == stringChar {
+				// Check if it's escaped (simple check)
+				if i > 0 && line[i-1] != '\\' {
+					inString = false
+					stringChar = 0
+				}
+			}
+			continue
+		}
+		
+		// If not in string, check for comments
+		if !inString {
+			// Check for C-style comments (//)
+			if c == '/' && i+1 < len(line) && line[i+1] == '/' {
+				return i
+			}
+			
+			// Check for assembly-style comments (;)
+			if c == ';' {
+				return i
+			}
+		}
+	}
+	
+	return -1
+}
