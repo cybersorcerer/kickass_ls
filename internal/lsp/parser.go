@@ -55,6 +55,9 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 
 		switch stmt := statement.(type) {
 		case *InstructionStatement:
+			if stmt == nil {
+				continue
+			}
 			sb.validateInstruction(stmt)
 		case *LabelStatement:
 			if stmt.Name == nil {
@@ -486,6 +489,11 @@ func (p *Parser) parseInstructionStatement() *InstructionStatement {
 	if !p.peekTokenIs(TOKEN_EOF) && p.peekToken.Type != TOKEN_COMMENT && p.curToken.Line == p.peekToken.Line {
 		p.nextToken()
 		stmt.Operand = p.parseExpression(LOWEST)
+		// If the operand parsing failed, an error has already been logged.
+		// Return nil to prevent cascading, incorrect diagnostics.
+		if stmt.Operand == nil {
+			return nil
+		}
 	} else {
 		stmt.Operand = nil
 	}
@@ -525,25 +533,38 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 		stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
 
 		if p.peekTokenIs(TOKEN_EQUAL) {
-			p.nextToken()
-			p.nextToken()
-			stmt.Value = p.parseExpression(LOWEST)
-			if stmt.Value == nil {
+			p.nextToken() // advance to EQUAL
+			equalToken := p.curToken
+
+			// Check if the expression is on a new line, which is an error
+			if p.peekToken.Line != equalToken.Line {
 				p.diagnostics = append(p.diagnostics, Diagnostic{
 					Message: "missing expression after '='",
 					Range: Range{
-						Start: Position{
-							Line:      p.curToken.Line - 1,
-							Character: p.curToken.Column - 1,
-						},
-						End: Position{
-							Line:      p.curToken.Line - 1,
-							Character: p.curToken.Column,
-						},
+						Start: Position{Line: equalToken.Line - 1, Character: equalToken.Column},
+						End:   Position{Line: equalToken.Line - 1, Character: equalToken.Column + 1},
 					},
 					Severity: SeverityError,
 					Source:   "parser",
 				})
+				return stmt // Return the broken statement, but don't try to parse expression
+			}
+
+			p.nextToken() // advance to expression
+			stmt.Value = p.parseExpression(LOWEST)
+			if stmt.Value == nil {
+				// A more specific error was already logged by parseExpression, but we add a generic one if not.
+				// This can happen if the line ends right after '='.
+				p.diagnostics = append(p.diagnostics, Diagnostic{
+					Message: "missing expression after '='",
+					Range: Range{
+						Start: Position{Line: equalToken.Line - 1, Character: equalToken.Column},
+						End:   Position{Line: equalToken.Line - 1, Character: equalToken.Column + 1},
+					},
+					Severity: SeverityError,
+					Source:   "parser",
+				})
+				return nil
 			}
 		} else if p.peekTokenIs(TOKEN_LPAREN) {
 			p.nextToken()

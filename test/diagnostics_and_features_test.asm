@@ -6,6 +6,7 @@
 
 .const MAX_SPRITES = 8
 .const SCREEN_MEM = $0400
+.CONST test = 
 
 .var sprite_x_pos = 0
 

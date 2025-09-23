@@ -9,8 +9,40 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"unicode"
 
 	log "c64.nvim/internal/log"
+)
+
+// CompletionItemKind defines the type of a completion item.
+type CompletionItemKind float64
+
+const (
+	TextCompletion          CompletionItemKind = 1
+	MethodCompletion        CompletionItemKind = 2
+	FunctionCompletion      CompletionItemKind = 3
+	ConstructorCompletion   CompletionItemKind = 4
+	FieldCompletion         CompletionItemKind = 5
+	VariableCompletion      CompletionItemKind = 6
+	ClassCompletion         CompletionItemKind = 7
+	InterfaceCompletion     CompletionItemKind = 8
+	ModuleCompletion        CompletionItemKind = 9
+	PropertyCompletion      CompletionItemKind = 10
+	UnitCompletion          CompletionItemKind = 11
+	ValueCompletion         CompletionItemKind = 12
+	EnumCompletion          CompletionItemKind = 13
+	KeywordCompletion       CompletionItemKind = 14
+	SnippetCompletion       CompletionItemKind = 15
+	ColorCompletion         CompletionItemKind = 16
+	FileCompletion          CompletionItemKind = 17
+	ReferenceCompletion     CompletionItemKind = 18
+	FolderCompletion        CompletionItemKind = 19
+	EnumMemberCompletion    CompletionItemKind = 20
+	ConstantCompletion      CompletionItemKind = 21
+	StructCompletion        CompletionItemKind = 22
+	EventCompletion         CompletionItemKind = 23
+	OperatorCompletion      CompletionItemKind = 24
+	TypeParameterCompletion CompletionItemKind = 25
 )
 
 // Mnemonic represents the structure of a single mnemonic entry in mnemonic.json
@@ -78,7 +110,9 @@ func Start(mnemonicPath string, kickassPath string) {
 	// Load kickass directives
 	kickassDirectives, err = LoadKickassDirectives(kickassPath)
 	if err != nil {
-		log.Logger.Printf("Error loading kickass directives: %v\n", err)
+		log.Error("Failed to load kickass directives: %v", err)
+	} else {
+		log.Info("Successfully loaded %d kickass directives.", len(kickassDirectives))
 	}
 
 	reader := bufio.NewReader(os.Stdin)
@@ -167,7 +201,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.7.2", // Version updated
+						"version": "0.7.3", // Version updated
 					},
 				},
 			}
@@ -339,26 +373,31 @@ func Start(mnemonicPath string, kickassPath string) {
 			writeResponse(writer, responseBytes)
 		case "textDocument/completion":
 			log.Debug("Handling textDocument/completion request.")
-			var responseResult interface{} = nil
+			completionItems := make([]map[string]interface{}, 0)
+			id := message["id"]
 
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if textDocument, ok := params["textDocument"].(map[string]interface{}); ok {
 					if uri, ok := textDocument["uri"].(string); ok {
 						if position, ok := params["position"].(map[string]interface{}); ok {
 							if lineNum, ok := position["line"].(float64); ok {
-								documentStore.RLock()
-								text, docFound := documentStore.documents[uri]
-								documentStore.RUnlock()
+								if charNum, ok := position["character"].(float64); ok {
+									documentStore.RLock()
+									text, docFound := documentStore.documents[uri]
+									documentStore.RUnlock()
 
-								symbolStore.RLock()
-								symbolTree, treeFound := symbolStore.trees[uri]
-								symbolStore.RUnlock()
+									symbolStore.RLock()
+									symbolTree, treeFound := symbolStore.trees[uri]
+									symbolStore.RUnlock()
 
-								if docFound && treeFound {
-									lines := strings.Split(text, "\n")
-									if int(lineNum) < len(lines) {
-										completions := generateCompletions(symbolTree, int(lineNum))
-										responseResult = completions
+									if docFound && treeFound {
+										lines := strings.Split(text, "\n")
+										if int(lineNum) < len(lines) {
+											lineContent := lines[int(lineNum)]
+											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
+											log.Debug("Completion context: isOperand=%v, wordToComplete='%s'", isOperand, wordToComplete)
+											completionItems = generateCompletions(symbolTree, int(lineNum), isOperand, wordToComplete)
+										}
 									}
 								}
 							}
@@ -367,13 +406,22 @@ func Start(mnemonicPath string, kickassPath string) {
 				}
 			}
 
-			finalResponse := map[string]interface{}{
-				"jsonrpc": "2.0",
-				"id":      message["id"],
-				"result":  responseResult,
+			completionList := map[string]interface{}{
+				"isIncomplete": false,
+				"items":        completionItems,
 			}
-			responseBytes, _ := json.Marshal(finalResponse)
-			writeResponse(writer, responseBytes)
+			result := map[string]interface{}{
+				"jsonrpc": "2.0",
+				"id":      id,
+				"result":  completionList,
+			}
+			response, err := json.Marshal(result)
+			if err != nil {
+				log.Error("Failed to marshal completion response: %v", err)
+				return
+			}
+			log.Debug("Sending completion response: %s", string(response))
+			writeResponse(writer, response)
 
 		case "textDocument/definition":
 			log.Debug("Handling textDocument/definition request.")
@@ -684,28 +732,225 @@ func getWordAtPosition(line string, char int) string {
 	return line[start : end+1]
 }
 
-func generateCompletions(symbolTree *Scope, lineNum int) []map[string]interface{} {
+func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
 	items := []map[string]interface{}{}
 
-	// Add opcodes
-	for _, m := range mnemonics {
-		items = append(items, map[string]interface{}{
-			"label":         m.Mnemonic,
-			"kind":          float64(14), // Keyword
-			"detail":        "6502/6510 Opcode",
-			"documentation": m.Description,
-		})
-	}
+	if isOperand {
+		wordToComplete = strings.TrimPrefix(wordToComplete, "#")
+		if strings.Contains(wordToComplete, ".") {
+			parts := strings.Split(wordToComplete, ".")
+			namespaceName := parts[0]
+			partialSymbol := ""
+			if len(parts) > 1 {
+				partialSymbol = parts[1]
+			}
+			namespaceScope := symbolTree.FindNamespace(namespaceName)
+			if namespaceScope != nil {
+				for _, symbol := range namespaceScope.Symbols {
+					if strings.HasPrefix(symbol.Name, partialSymbol) {
+						item := map[string]interface{}{
+							"label":  symbol.Name,
+							"kind":   toCompletionItemKind(symbol.Kind),
+							"detail": symbol.Value,
+						}
+						if symbol.Kind == Function {
+							item["insertText"] = symbol.Name
+						}
+						items = append(items, item)
+					}
+				}
+			}
+		} else {
+			symbols := symbolTree.FindAllVisibleSymbols(lineNum)
+			for _, symbol := range symbols {
+				if strings.HasPrefix(symbol.Name, wordToComplete) {
+					item := map[string]interface{}{
+						"label":  symbol.Name,
+						"kind":   toCompletionItemKind(symbol.Kind),
+						"detail": symbol.Value,
+					}
+					if symbol.Kind == Function {
+						item["insertText"] = symbol.Name
+					}
+					items = append(items, item)
+				}
+			}
+		}
+	} else {
+		// Offer directives
+		for _, d := range kickassDirectives {
+			if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+				items = append(items, map[string]interface{}{
+					"label":         applyCase(wordToComplete, d.Directive),
+					"kind":          float64(14), // Keyword
+					"detail":        "Kick Assembler Directive",
+					"documentation": d.Description,
+				})
+			}
+		}
 
-	// Add visible symbols
-	visibleSymbols := symbolTree.FindAllVisibleSymbols(lineNum)
-	for _, s := range visibleSymbols {
-		items = append(items, map[string]interface{}{
-			"label":  s.Name,
-			"kind":   toDocumentSymbolKind(s.Kind),
-			"detail": s.Kind.String(),
-		})
+		// Offer macros
+		if strings.HasPrefix(wordToComplete, "+") {
+			symbols := symbolTree.FindAllVisibleSymbols(lineNum)
+			for _, symbol := range symbols {
+				if symbol.Kind == Macro && strings.HasPrefix(symbol.Name, strings.TrimPrefix(wordToComplete, "+")) {
+					items = append(items, map[string]interface{}{
+						"label":  "+" + symbol.Name,
+						"kind":   toCompletionItemKind(symbol.Kind),
+						"detail": symbol.Value,
+					})
+				}
+			}
+		} else {
+			// Offer mnemonics
+			for _, m := range mnemonics {
+				if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+					items = append(items, map[string]interface{}{
+						"label":         applyCase(wordToComplete, m.Mnemonic),
+						"kind":          float64(14), // Keyword
+						"detail":        "6502/6510 Opcode",
+						"documentation": m.Description,
+					})
+				}
+			}
+		}
 	}
-
 	return items
+}
+
+func getCompletionContext(line string, char int) (isOperand bool, word string) {
+	log.Debug("getCompletionContext line: '%s', char: %d", line, char)
+	trimmedLine := strings.TrimSpace(line)
+	if len(trimmedLine) == 0 || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
+		log.Debug("Line is empty or a comment, returning mnemonic context.")
+		return false, ""
+	}
+
+	if char < 0 || char > len(line) {
+		char = len(line)
+	}
+	context := line[:char]
+	log.Debug("Context: '%s'", context)
+
+	parts := strings.Fields(context)
+	log.Debug("Parts: %v", parts)
+
+	if len(parts) == 0 {
+		log.Debug("No parts found, assuming mnemonic context.")
+		return false, ""
+	}
+
+	lastPart := parts[len(parts)-1]
+	if !strings.HasSuffix(context, lastPart) {
+		log.Debug("Cursor is in whitespace after the last word.")
+		for _, m := range mnemonics {
+			if strings.EqualFold(m.Mnemonic, lastPart) {
+				log.Debug("Last word was an opcode, so we are in operand context.")
+				return true, ""
+			}
+		}
+		log.Debug("Last word was not an opcode, assuming mnemonic context.")
+		return false, ""
+	}
+
+	log.Debug("Cursor is part of the last word: '%s'", lastPart)
+
+	if len(parts) == 1 {
+		if strings.HasPrefix(lastPart, ".") {
+			log.Debug("Single word starts with a dot, assuming directive context.")
+			return false, lastPart
+		}
+		if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") {
+			log.Debug("Single word contains operand characters, treating as operand.")
+			return true, lastPart
+		}
+		log.Debug("Single word, assuming mnemonic/label context.")
+		return false, lastPart
+	}
+
+	prevPart := parts[len(parts)-2]
+	log.Debug("Previous part: '%s'", prevPart)
+
+	for _, m := range mnemonics {
+		if strings.EqualFold(m.Mnemonic, prevPart) {
+			log.Debug("Previous part was an opcode, so current is an operand.")
+			return true, lastPart
+		}
+	}
+
+	if strings.HasPrefix(lastPart, ".") {
+		log.Debug("Current part starts with a dot, could be a local label or a directive.")
+		if len(parts) == 2 && !strings.HasSuffix(parts[0], ":") {
+			return false, lastPart
+		}
+		return true, lastPart
+	}
+	if strings.Contains(lastPart, "#") {
+		log.Debug("Current part contains operand characters, treating as operand.")
+		return true, lastPart
+	}
+
+	log.Debug("Defaulting to mnemonic context.")
+	return false, lastPart
+}
+
+func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
+	switch kind {
+	case Constant:
+		return ConstantCompletion
+	case Variable:
+		return VariableCompletion
+	case Label:
+		return PropertyCompletion
+	case Function:
+		return FunctionCompletion
+	case Macro:
+		return SnippetCompletion
+	case Namespace:
+		return ModuleCompletion
+	default:
+		return TextCompletion
+	}
+}
+
+func applyCase(original, suggestion string) string {
+	if original == "" {
+		return strings.ToLower(suggestion) // Default to lowercase if user typed nothing
+	}
+
+	isLower := true
+	isUpper := true
+	isCapitalized := false
+	if len(original) > 0 {
+		isCapitalized = unicode.IsUpper(rune(original[0]))
+	}
+
+	for i, r := range original {
+		if !unicode.IsLetter(r) {
+			continue
+		}
+		if unicode.IsLower(r) {
+			isUpper = false
+		}
+		if unicode.IsUpper(r) {
+			isLower = false
+		}
+		if i > 0 && unicode.IsUpper(r) {
+			isCapitalized = false
+		}
+	}
+
+	if isUpper {
+		return strings.ToUpper(suggestion)
+	}
+	if isLower {
+		return strings.ToLower(suggestion)
+	}
+	if isCapitalized {
+		// Capitalize first letter, rest lowercase
+		return strings.ToUpper(string(suggestion[0])) + strings.ToLower(suggestion[1:])
+	}
+
+	// Default case if mixed case (e.g. lDa) -> return lowercase
+	return strings.ToLower(suggestion)
 }

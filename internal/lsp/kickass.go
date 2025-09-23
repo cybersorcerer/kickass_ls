@@ -2,7 +2,7 @@ package lsp
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"c64.nvim/internal/log"
@@ -19,7 +19,7 @@ func LoadKickassDirectives(workspaceRoot string) ([]KickassDirective, error) {
 	jsonPath := filepath.Join(workspaceRoot, "kickass.json")
 	log.Debug("Loading kickass directives from %s", jsonPath)
 
-	file, err := ioutil.ReadFile(jsonPath)
+	file, err := os.ReadFile(jsonPath)
 	if err != nil {
 		return nil, err
 	}

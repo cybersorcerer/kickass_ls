@@ -187,5 +187,45 @@
 			":SetColor(1)",
 			"SetColor(2)   // The colon in front of macro calls is optional from version 4.0"
 		]
+	},
+	{
+		"directive": ".align",
+    	"description": "With the .align directive, you can align the program counter to a given interval. This is useful for optimizing your code as crossing a memory page boundary yields a penalty of one cycle for memory referring commands. To avoid this, use the .align command to align your tables",
+		"signature": ".align $address",
+		"examples": [
+			"        *=$10ff       // Bad place for the data",
+			"        .align $100   //Alignment to the nearest page boundary saves a cycle",
+			"data:   .byte 1,2,3,4,5,6,7,8"
+		]
+	},
+	{
+		"directive": ".assert",
+    	"description": "Assert directives are useful for testing. They were made to make it easy to test the assembler itself, but you can use them for testing your own pseudo-commands, macros, functions. When assertions are used, the assembler will automatically count the number of assertions and the number of failed assertions and display these when the assembling has finished. With the assert directive you can test the value of expressions. .assert takes three arguments: a description, an expression, and an expected result.",
+		"signature": ".assert description, expression, expected_result",
+		"examples": [
+			".assert '2+5*10/2', 2+5*10/2, 27",
+			".assert '2+2', 2+2, 5",
+			".assert 'Vector(1,2,3)+Vector(1,1,1)', Vector(1,2,3)+Vector(1,1,1), Vector(2,3,4)"
+		]
+	},
+	{
+		"directive": ".asserterror",
+    	"description": "Asserts that a given expression or codeblock generates an error. Like the assert directive the asserterror directive also has a form that can assert code. o make sure that an expression gives an error when the user gives the wrong parameters to a function, use the .asserterror directive.",
+		"signature": ".asserterror description, expression",
+		"examples": [
+			".asserterror 'Test1' , 20/10",
+			".asserterror  'Test2' , 20/false",
+			".asserterror 'Test 3', List().get(27)"
+		]
+	},
+	{
+		"directive": ".break",
+    	"description": "The .break directive puts a breakpoint on the current memory position. You can add an argument to a breakpoint. The syntax of this argument is dependant on the consumer. For example .break 'if y<5' is written for VICE's conditional expressions. VICE will then break if the y register is below 5",
+		"signature": ".break [condition]",
+		"examples": [
+			"loop:",
+    		"     .break         // This will put a breakpoint on 'inc $d020",
+    		"     inc $d020"
+		]
 	}
 ]
