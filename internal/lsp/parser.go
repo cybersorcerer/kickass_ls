@@ -9,23 +9,18 @@ import (
 )
 
 // ParseDocument is the entry point for parsing a document.
-// It uses the lexer and parser to build an AST, then converts
-// that AST into the Scope/Symbol structure for compatibility.
-func ParseDocument(uri string, text string) *Scope {
+func ParseDocument(uri string, text string) (*Scope, []Diagnostic) {
 	l := NewLexer(text)
 	p := NewParser(l)
 	program := p.ParseProgram()
 
-	// Log parser errors but don't crash
-	if len(p.Errors()) > 0 {
-		for _, err := range p.Errors() {
-			log.Warn("Parser error: %s", err.Message)
-		}
-	}
-
 	// Convert the AST to the Scope/Symbol structure
-	scope := buildScopeFromAST(program, uri)
-	return scope
+	scope, semanticDiagnostics := buildScopeFromAST(program, uri)
+
+	// Combine parser diagnostics (e.g., syntax errors) with semantic diagnostics
+	allDiagnostics := append(p.Errors(), semanticDiagnostics...)
+
+	return scope, allDiagnostics
 }
 
 // scopeBuilder holds the state for the scope construction phase
@@ -34,16 +29,16 @@ type scopeBuilder struct {
 }
 
 // buildScopeFromAST walks the AST and builds the Scope/Symbol tree.
-func buildScopeFromAST(program *Program, uri string) *Scope {
+func buildScopeFromAST(program *Program, uri string) (*Scope, []Diagnostic) {
 	rootScope := NewRootScope(uri)
 	if program == nil {
 		log.Warn("buildScopeFromAST: program is nil")
-		return rootScope
+		return rootScope, []Diagnostic{}
 	}
-	
+
 	builder := &scopeBuilder{diagnostics: []Diagnostic{}}
 	builder.buildScope(program.Statements, rootScope)
-	return rootScope
+	return rootScope, builder.diagnostics
 }
 
 func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) {
@@ -53,7 +48,6 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 	}
 
 	for _, statement := range statements {
-		// Add a nil check to prevent panics on incomplete AST nodes from the parser.
 		if statement == nil {
 			log.Debug("buildScope: Encountered a nil statement, skipping.")
 			continue
@@ -61,14 +55,12 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 
 		switch stmt := statement.(type) {
 		case *InstructionStatement:
-			// TODO: Create symbols from operand expressions if needed.
-			_ = stmt // Placeholder
+			sb.validateInstruction(stmt)
 		case *LabelStatement:
 			if stmt.Name == nil {
 				log.Debug("buildScope: LabelStatement has nil Name, skipping.")
 				continue
 			}
-			// Additional check for Token validity
 			if stmt.Token.Line <= 0 || stmt.Token.Column <= 0 {
 				log.Debug("buildScope: LabelStatement has invalid token position, using defaults")
 				stmt.Token.Line = 1
@@ -78,31 +70,29 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 				Name: stmt.Name.Value,
 				Kind: Label,
 				Position: Position{
-					Line:      stmt.Token.Line - 1, // Convert to 0-based
+					Line:      stmt.Token.Line - 1,
 					Character: stmt.Token.Column - 1,
 				},
 				Scope: currentScope,
 			}
 			if err := currentScope.AddSymbol(symbol); err != nil {
-				log.Debug("buildScope: Error adding label symbol '%s': %v", symbol.Name, err)
+				diagnostic := Diagnostic{
+					Severity: SeverityError,
+					Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
+					Message:  err.Error(),
+					Source:   "parser",
+				}
+				sb.diagnostics = append(sb.diagnostics, diagnostic)
 			}
 		case *DirectiveStatement:
-			// First check: stmt.Name itself
 			if stmt == nil || stmt.Name == nil {
 				log.Debug("buildScope: DirectiveStatement or its Name is nil, skipping.")
 				continue
 			}
-			// Second check: stmt.Name.Token (this is where the crash happens!)
-			if stmt.Name.Token.Type == 0 { // TOKEN_ILLEGAL or uninitialized
+			if stmt.Name.Token.Type == 0 {
 				log.Debug("buildScope: DirectiveStatement has invalid token, creating default")
-				stmt.Name.Token = Token{
-					Type:    TOKEN_IDENTIFIER,
-					Literal: stmt.Name.Value,
-					Line:    1,
-					Column:  1,
-				}
+				stmt.Name.Token = Token{Type: TOKEN_IDENTIFIER, Literal: stmt.Name.Value, Line: 1, Column: 1}
 			}
-			// Third check: Token validity
 			if stmt.Name.Token.Line <= 0 || stmt.Name.Token.Column <= 0 {
 				log.Debug("buildScope: DirectiveStatement has invalid token position, using defaults")
 				stmt.Name.Token.Line = 1
@@ -113,7 +103,6 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 			var params []string
 			var signature string
 
-			// Handle directives that create symbols (.const, .var)
 			if stmt.Value != nil {
 				switch strings.ToLower(stmt.Token.Literal) {
 				case ".const":
@@ -134,7 +123,6 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 				default:
 					kind = UnknownSymbol
 				}
-
 				if kind != UnknownSymbol && stmt.Parameters != nil {
 					for _, p := range stmt.Parameters {
 						if p != nil {
@@ -160,34 +148,34 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					Params:    params,
 					Signature: signature,
 					Position: Position{
-						Line:      stmt.Name.Token.Line - 1, // Convert to 0-based
+						Line:      stmt.Name.Token.Line - 1,
 						Character: stmt.Name.Token.Column - 1,
 					},
 					Scope: currentScope,
 				}
 				if err := currentScope.AddSymbol(symbol); err != nil {
-					log.Debug("buildScope: Error adding directive symbol '%s': %v", symbol.Name, err)
+					diagnostic := Diagnostic{
+						Severity: SeverityError,
+						Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
+						Message:  err.Error(),
+						Source:   "parser",
+					}
+					sb.diagnostics = append(sb.diagnostics, diagnostic)
 				}
 			}
 
-			// Handle directives that create scopes (.namespace, .function)
 			if stmt.Block != nil && stmt.Name != nil && strings.ToLower(stmt.Token.Literal) == ".namespace" {
 				log.Debug("buildScope: Creating new scope for directive '%s' with name '%s'", stmt.Token.Literal, stmt.Name.Value)
-				
-				// Additional null-safety check for Block.Statements
 				if stmt.Block.Statements == nil {
 					log.Debug("buildScope: Block.Statements is nil, initializing empty slice")
 					stmt.Block.Statements = []Statement{}
 				}
-				
 				endLine := stmt.Name.Token.Line - 1
 				endChar := stmt.Name.Token.Column - 1
-				
 				if stmt.Block.EndToken.Type != TOKEN_EOF {
 					endLine = stmt.Block.EndToken.Line - 1
 					endChar = stmt.Block.EndToken.Column
 				}
-
 				newScope := &Scope{
 					Name:     stmt.Name.Value,
 					Parent:   currentScope,
@@ -200,12 +188,76 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					},
 				}
 				currentScope.AddChildScope(newScope)
-				sb.buildScope(stmt.Block.Statements, newScope) // Now safe - Statements is guaranteed non-nil
+				sb.buildScope(stmt.Block.Statements, newScope)
 			}
 		default:
 			log.Debug("buildScope: Encountered unknown statement type: %T", statement)
 		}
 	}
+}
+
+func (sb *scopeBuilder) validateInstruction(stmt *InstructionStatement) {
+	mode, err := determineAddressingModeFromAST(stmt.Operand)
+	if err != nil {
+		diagnostic := Diagnostic{
+			Severity: SeverityError,
+			Range:    Range{Start: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column - 1}, End: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column + len(stmt.Token.Literal)}},
+			Message:  err.Error(),
+			Source:   "parser",
+		}
+		sb.diagnostics = append(sb.diagnostics, diagnostic)
+		return
+	}
+
+	if !isAddressingModeValid(stmt.Token.Literal, mode) {
+		diagnostic := Diagnostic{
+			Severity: SeverityError,
+			Range:    Range{Start: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column - 1}, End: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column + len(stmt.Token.Literal)}},
+			Message:  fmt.Sprintf("Invalid addressing mode '%s' for instruction '%s'", mode, strings.ToUpper(stmt.Token.Literal)),
+			Source:   "parser",
+		}
+		sb.diagnostics = append(sb.diagnostics, diagnostic)
+	}
+}
+
+// determineAddressingModeFromAST determines the addressing mode from an AST expression.
+func determineAddressingModeFromAST(expr Expression) (string, error) {
+	if expr == nil {
+		return "Implied", nil
+	}
+
+	switch e := expr.(type) {
+	case *PrefixExpression:
+		if e.Operator == "#" {
+			return "Immediate", nil
+		}
+	case *Identifier, *IntegerLiteral:
+		// This could be zeropage or absolute. For now, we'll treat them as absolute
+		// as it's a superset for validation purposes.
+		return "Absolute", nil
+	}
+
+	// TODO: Implement more complex modes (indirect, indexed)
+	return "unknown", fmt.Errorf("unrecognized operand structure")
+}
+
+// isAddressingModeValid checks if the given addressing mode is valid for the instruction.
+func isAddressingModeValid(mnemonic string, mode string) bool {
+	for _, m := range mnemonics {
+		if strings.EqualFold(m.Mnemonic, mnemonic) {
+			for _, am := range m.AddressingModes {
+				if am.AddressingMode == mode {
+					return true
+				}
+				// Allow zeropage operands for absolute addressing modes
+				if mode == "Absolute" && (am.AddressingMode == "Zeropage" || am.AddressingMode == "Absolute") {
+					return true
+				}
+			}
+			return false
+		}
+	}
+	return false // Mnemonic not found
 }
 
 // --- Abstract Syntax Tree (AST) --- //
@@ -236,16 +288,16 @@ func (p *Program) TokenLiteral() string {
 }
 
 type BlockStatement struct {
-	Token      Token 
+	Token      Token
 	Statements []Statement
-	EndToken   Token 
+	EndToken   Token
 }
 
 func (bs *BlockStatement) statementNode()       {}
 func (bs *BlockStatement) TokenLiteral() string { return bs.Token.Literal }
 
 type InstructionStatement struct {
-	Token   Token 
+	Token   Token
 	Operand Expression
 }
 
@@ -253,9 +305,9 @@ func (is *InstructionStatement) statementNode()       {}
 func (is *InstructionStatement) TokenLiteral() string { return is.Token.Literal }
 
 type DirectiveStatement struct {
-	Token      Token 
+	Token      Token
 	Name       *Identifier
-	Parameters []*Identifier 
+	Parameters []*Identifier
 	Value      Expression
 	Block      *BlockStatement
 }
@@ -264,7 +316,7 @@ func (ds *DirectiveStatement) statementNode()       {}
 func (ds *DirectiveStatement) TokenLiteral() string { return ds.Token.Literal }
 
 type LabelStatement struct {
-	Token Token 
+	Token Token
 	Name  *Identifier
 }
 
@@ -272,7 +324,7 @@ func (ls *LabelStatement) statementNode()       {}
 func (ls *LabelStatement) TokenLiteral() string { return ls.Token.Literal }
 
 type Identifier struct {
-	Token Token 
+	Token Token
 	Value string
 }
 
@@ -288,7 +340,7 @@ func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 
 type PrefixExpression struct {
-	Token    Token 
+	Token    Token
 	Operator string
 	Right    Expression
 }
@@ -297,7 +349,7 @@ func (pe *PrefixExpression) expressionNode()      {}
 func (pe *PrefixExpression) TokenLiteral() string { return pe.Token.Literal }
 
 type InfixExpression struct {
-	Token    Token 
+	Token    Token
 	Left     Expression
 	Operator string
 	Right    Expression
@@ -336,9 +388,9 @@ type (
 )
 
 type Parser struct {
-	lexer     *Lexer
-	curToken  Token
-	peekToken Token
+	lexer       *Lexer
+	curToken    Token
+	peekToken   Token
 	diagnostics []Diagnostic
 
 	prefixParseFns map[TokenType]prefixParseFn
@@ -362,6 +414,7 @@ func NewParser(l *Lexer) *Parser {
 	p.registerPrefix(TOKEN_LESS, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_GREATER, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_DOT, p.parsePrefixExpression)
+	p.registerPrefix(TOKEN_LPAREN, p.parseGroupedExpression)
 
 	p.infixParseFns = make(map[TokenType]infixParseFn)
 	p.registerInfix(TOKEN_PLUS, p.parseInfixExpression)
@@ -396,20 +449,11 @@ func (p *Parser) nextToken() {
 
 func (p *Parser) peekError(t TokenType) {
 	msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
-	p.diagnostics = append(p.diagnostics, Diagnostic{
-		Message: msg,
-		Range: Range{
-			Start: Position{Line: p.peekToken.Line - 1, Character: p.peekToken.Column - 1},
-			End:   Position{Line: p.peekToken.Line - 1, Character: p.peekToken.Column - 1 + len(p.peekToken.Literal)},
-		},
-		Severity: SeverityError,
-		Source:   "parser",
-	})
+	p.diagnostics = append(p.diagnostics, Diagnostic{Message: msg, Range: Range{Start: Position{Line: p.peekToken.Line - 1, Character: p.peekToken.Column - 1}, End: Position{Line: p.peekToken.Line - 1, Character: p.peekToken.Column - 1 + len(p.peekToken.Literal)}}, Severity: SeverityError, Source: "parser"})
 }
 
 func (p *Parser) ParseProgram() *Program {
 	program := &Program{}
-	// Always initialize Statements slice to prevent nil pointer access
 	program.Statements = make([]Statement, 0)
 
 	for p.curToken.Type != TOKEN_EOF {
@@ -463,30 +507,19 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 		p.nextToken()
 		stmt.Name = &Identifier{Token: p.curToken, Value: strings.TrimSuffix(p.curToken.Literal, ":")}
 	} else if strings.EqualFold(stmt.Token.Literal, ".label") && p.peekTokenIs(TOKEN_DOT) {
-		// Handle .label .local_label: case
-		p.nextToken() // consume DOT
+		p.nextToken()
 		if !p.expectPeek(TOKEN_IDENTIFIER) {
-			// Create a fallback identifier to prevent nil access
-			stmt.Name = &Identifier{
-				Token: Token{Type: TOKEN_IDENTIFIER, Literal: "unknown", Line: 1, Column: 1},
-				Value: "unknown",
-			}
+			stmt.Name = &Identifier{Token: Token{Type: TOKEN_IDENTIFIER, Literal: "unknown", Line: 1, Column: 1}, Value: "unknown"}
 			return stmt
 		}
-		// Create label name with dot prefix
 		labelName := "." + p.curToken.Literal
 		stmt.Name = &Identifier{Token: p.curToken, Value: labelName}
-		// Consume optional colon
 		if p.peekTokenIs(TOKEN_COLON) {
 			p.nextToken()
 		}
 	} else {
 		if !p.expectPeek(TOKEN_IDENTIFIER) {
-			// Create a fallback identifier to prevent nil access
-			stmt.Name = &Identifier{
-				Token: Token{Type: TOKEN_IDENTIFIER, Literal: "unknown", Line: 1, Column: 1},
-				Value: "unknown",
-			}
+			stmt.Name = &Identifier{Token: Token{Type: TOKEN_IDENTIFIER, Literal: "unknown", Line: 1, Column: 1}, Value: "unknown"}
 			return stmt
 		}
 		stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
@@ -499,8 +532,14 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 				p.diagnostics = append(p.diagnostics, Diagnostic{
 					Message: "missing expression after '='",
 					Range: Range{
-						Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1},
-						End:   Position{Line: p.curToken.Line - 1, Character: p.curToken.Column},
+						Start: Position{
+							Line:      p.curToken.Line - 1,
+							Character: p.curToken.Column - 1,
+						},
+						End: Position{
+							Line:      p.curToken.Line - 1,
+							Character: p.curToken.Column,
+						},
 					},
 					Severity: SeverityError,
 					Source:   "parser",
@@ -526,7 +565,7 @@ func (p *Parser) parseIdentifierList() []*Identifier {
 	identifiers := []*Identifier{}
 
 	if p.peekTokenIs(TOKEN_RPAREN) {
-		p.nextToken() // consume ')'
+		p.nextToken()
 		return identifiers
 	}
 
@@ -549,10 +588,9 @@ func (p *Parser) parseIdentifierList() []*Identifier {
 
 func (p *Parser) parseBlockStatement() *BlockStatement {
 	block := &BlockStatement{Token: p.curToken}
-	// Always initialize Statements slice to prevent nil pointer access
 	block.Statements = make([]Statement, 0)
 
-	p.nextToken() // consume {
+	p.nextToken()
 
 	for p.curToken.Type != TOKEN_RBRACE && p.curToken.Type != TOKEN_EOF {
 		stmt := p.parseStatement()
@@ -562,7 +600,7 @@ func (p *Parser) parseBlockStatement() *BlockStatement {
 		p.nextToken()
 	}
 
-	block.EndToken = p.curToken // Store the closing RBRACE token
+	block.EndToken = p.curToken
 
 	return block
 }
@@ -595,13 +633,22 @@ func (p *Parser) curPrecedence() int {
 }
 
 func (p *Parser) parseExpression(precedence int) Expression {
+	if p.curToken.Type == TOKEN_COMMENT {
+		return nil
+	}
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
 		p.diagnostics = append(p.diagnostics, Diagnostic{
 			Message: fmt.Sprintf("no prefix parse function for %s found", p.curToken.Type),
 			Range: Range{
-				Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1},
-				End:   Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1 + len(p.curToken.Literal)},
+				Start: Position{
+					Line:      p.curToken.Line - 1,
+					Character: p.curToken.Column - 1,
+				},
+				End: Position{
+					Line:      p.curToken.Line - 1,
+					Character: p.curToken.Column - 1 + len(p.curToken.Literal),
+				},
 			},
 			Severity: SeverityError,
 			Source:   "parser",
@@ -649,11 +696,18 @@ func (p *Parser) parseIntegerLiteral() Expression {
 	}
 
 	if err != nil {
+		//p.diagnostics = append(p.diagnostics, Diagnostic{Message: fmt.Sprintf("could not parse %q as integer", p.curToken.Literal), Range: Range{Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1}, End: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1 + len(p.curToken.Literal), Severity: SeverityError, Source: "parser"}})
 		p.diagnostics = append(p.diagnostics, Diagnostic{
 			Message: fmt.Sprintf("could not parse %q as integer", p.curToken.Literal),
 			Range: Range{
-				Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1},
-				End:   Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1 + len(p.curToken.Literal)},
+				Start: Position{
+					Line:      p.curToken.Line - 1,
+					Character: p.curToken.Column - 1,
+				},
+				End: Position{
+					Line:      p.curToken.Line - 1,
+					Character: p.curToken.Column - 1 + len(p.curToken.Literal),
+				},
 			},
 			Severity: SeverityError,
 			Source:   "parser",
@@ -685,4 +739,13 @@ func (p *Parser) parseInfixExpression(left Expression) Expression {
 	p.nextToken()
 	expression.Right = p.parseExpression(precedence)
 	return expression
+}
+
+func (p *Parser) parseGroupedExpression() Expression {
+	p.nextToken() // Consume '('
+	exp := p.parseExpression(LOWEST)
+	if !p.expectPeek(TOKEN_RPAREN) {
+		return nil
+	}
+	return exp
 }

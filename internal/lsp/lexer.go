@@ -125,7 +125,7 @@ type tokenDefinition struct {
 // The order of these definitions is important for correct matching.
 var tokenDefs = []tokenDefinition{
 	{TOKEN_COMMENT, regexp.MustCompile(`^(//.*|;.*|/\*.*?\*/)`)}, // Corrected escaping for /* */
-	{TOKEN_NUMBER_HEX, regexp.MustCompile(`^#?\$[0-9a-fA-F]+`)},  // Corrected escaping for $
+	{TOKEN_NUMBER_HEX, regexp.MustCompile(`^#?\$[0-9a-zA-Z]+`)},  // Corrected escaping for $
 	{TOKEN_NUMBER_BIN, regexp.MustCompile(`^#?%[0-1]+`)},         // Corrected escaping for %
 	{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+`)},
 	{TOKEN_NUMBER_OCT, regexp.MustCompile(`^#?&[0-7]+`)}, // Corrected escaping for &

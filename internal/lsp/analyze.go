@@ -5,7 +5,6 @@ package lsp
 func AnalyzeDocument(uri string, tree *Scope) []Diagnostic {
 	diagnostics := []Diagnostic{}
 
-	// TODO: Implement duplicate symbol check (Phase 2)
 	// TODO: Implement undefined symbol check (Phase 2)
 	// TODO: Implement addressing mode validation (Phase 3)
 	// TODO: Implement unused symbol check (Phase 4)

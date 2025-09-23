@@ -198,15 +198,15 @@ func Start(mnemonicPath string, kickassPath string) {
 							documentStore.Unlock()
 							log.Info("Stored document %s", uri)
 
-							symbolTree := ParseDocument(uri, text)
+							// Parse document, build symbol tree, and get diagnostics in one go
+							symbolTree, diagnostics := ParseDocument(uri, text)
 							symbolStore.Lock()
 							symbolStore.trees[uri] = symbolTree
 							symbolStore.Unlock()
 							log.Info("Parsed document and updated symbol store for %s", uri)
 
-							// Analyze document for semantic diagnostics
-							semanticDiagnostics := AnalyzeDocument(uri, symbolTree)
-							publishDiagnostics(writer, uri, semanticDiagnostics)
+							// Publish diagnostics found during parsing
+							publishDiagnostics(writer, uri, diagnostics)
 						}
 					}
 				}
@@ -224,15 +224,15 @@ func Start(mnemonicPath string, kickassPath string) {
 									documentStore.Unlock()
 									log.Info("Updated document %s", uri)
 
-									symbolTree := ParseDocument(uri, newText)
+									// Parse document, build symbol tree, and get diagnostics in one go
+									symbolTree, diagnostics := ParseDocument(uri, newText)
 									symbolStore.Lock()
 									symbolStore.trees[uri] = symbolTree
 									symbolStore.Unlock()
 									log.Info("Reparsed document and updated symbol store for %s", uri)
 
-									// Analyze document for semantic diagnostics
-									semanticDiagnostics := AnalyzeDocument(uri, symbolTree)
-									publishDiagnostics(writer, uri, semanticDiagnostics)
+									// Publish diagnostics found during parsing
+									publishDiagnostics(writer, uri, diagnostics)
 								}
 							}
 						}
@@ -599,24 +599,30 @@ func getOpcodeDescription(mnemonic string) string {
 	for _, m := range mnemonics {
 		if m.Mnemonic == mnemonic {
 			var builder strings.Builder
-			builder.WriteString(fmt.Sprintf("**%s** - %s\n\n", m.Mnemonic, m.Description))
 
-			// Properly formatted Markdown table
-			builder.WriteString("| Opcode | Addressing Mode  | Assembler Format  | Length | Cycles |\n")
+			// Header with mnemonic name and description
+			builder.WriteString(fmt.Sprintf("**%s**\n\n", m.Mnemonic))
+			builder.WriteString(fmt.Sprintf("%s\n\n", m.Description))
+
+			// Properly formatted Markdown table with correct newlines
+			builder.WriteString("| Opcode | Addressing Mode | Assembler Format | Length | Cycles |\n")
 			builder.WriteString("|:------ |:---------------- |:----------------- |:------ |:------ |\n")
 
 			for _, am := range m.AddressingModes {
-				// Escape backticks in assembler format for proper code display
-				assemblerFormat := strings.ReplaceAll(am.AssemblerFormat, "`", "\\`")
+				// Clean assembler format - remove any backticks that might interfere
+				assemblerFormat := strings.ReplaceAll(am.AssemblerFormat, "`", "")
 				builder.WriteString(fmt.Sprintf("| `$%s` | %s | `%s` | %d | %s |\n",
 					am.Opcode, am.AddressingMode, assemblerFormat, am.Length, am.Cycles))
 			}
 
-			builder.WriteString("\n**CPU Flags Affected:** ")
+			// CPU Flags section with proper formatting
+			builder.WriteString("\n**CPU Flags Affected:**\n\n")
 			if len(m.CPUFlags) > 0 {
-				builder.WriteString(strings.Join(m.CPUFlags, ", "))
+				for _, flag := range m.CPUFlags {
+					builder.WriteString(fmt.Sprintf("%s\n", flag))
+				}
 			} else {
-				builder.WriteString("None")
+				builder.WriteString("None\n")
 			}
 
 			return builder.String()
