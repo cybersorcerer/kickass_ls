@@ -6,7 +6,9 @@
 
 .const MAX_SPRITES = 8
 .const SCREEN_MEM = $0400
-.CONST test = 
+
+.CONST test = $100
+.CONST huhu = $100
 
 .var sprite_x_pos = 0
 

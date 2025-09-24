@@ -238,6 +238,17 @@ func determineAddressingModeFromAST(expr Expression) (string, error) {
 		// This could be zeropage or absolute. For now, we'll treat them as absolute
 		// as it's a superset for validation purposes.
 		return "Absolute", nil
+	case *InfixExpression:
+		if strings.EqualFold(e.Operator, ",") {
+			if ident, ok := e.Right.(*Identifier); ok {
+				if strings.EqualFold(ident.Value, "x") {
+					return "Absolute,X", nil
+				}
+				if strings.EqualFold(ident.Value, "y") {
+					return "Absolute,Y", nil
+				}
+			}
+		}
 	}
 
 	// TODO: Implement more complex modes (indirect, indexed)

@@ -201,7 +201,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.7.4", // Version updated
+						"version": "0.7.5", // Version updated
 					},
 				},
 			}
@@ -818,21 +818,51 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 	return items
 }
 
+func isMnemonic(word string) bool {
+	for _, m := range mnemonics {
+		if strings.EqualFold(m.Mnemonic, word) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDirective(word string) bool {
+	for _, d := range kickassDirectives {
+		if strings.EqualFold(d.Directive, word) {
+			return true
+		}
+	}
+	return false
+}
+
+// getCompletionContext determines if we are completing an operand or a mnemonic
+// and returns the word being completed.
 func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	log.Debug("getCompletionContext line: '%s', char: %d", line, char)
-	trimmedLine := strings.TrimSpace(line)
-	if len(trimmedLine) == 0 || strings.HasPrefix(trimmedLine, ";") || strings.HasPrefix(trimmedLine, "*") {
-		log.Debug("Line is empty or a comment, returning mnemonic context.")
-		return false, ""
-	}
 
+	// Extract the part of the line before the cursor
 	if char < 0 || char > len(line) {
 		char = len(line)
 	}
 	context := line[:char]
 	log.Debug("Context: '%s'", context)
 
-	parts := strings.Fields(context)
+	// Ignore comments
+	if idx := strings.Index(context, ";"); idx != -1 {
+		context = context[:idx]
+	}
+	if idx := strings.Index(context, "//"); idx != -1 {
+		context = context[:idx]
+	}
+
+	trimmedContext := strings.TrimSpace(context)
+	if trimmedContext == "" {
+		log.Debug("Context is empty or only whitespace, assuming mnemonic context.")
+		return false, ""
+	}
+
+	parts := strings.Fields(trimmedContext)
 	log.Debug("Parts: %v", parts)
 
 	if len(parts) == 0 {
@@ -840,58 +870,61 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 		return false, ""
 	}
 
-	lastPart := parts[len(parts)-1]
-	if !strings.HasSuffix(context, lastPart) {
-		log.Debug("Cursor is in whitespace after the last word.")
-		for _, m := range mnemonics {
-			if strings.EqualFold(m.Mnemonic, lastPart) {
-				log.Debug("Last word was an opcode, so we are in operand context.")
-				return true, ""
+	// Determine which part the cursor is on.
+	// If the context ends with whitespace, the cursor is for a new word.
+	if unicode.IsSpace(rune(context[len(context)-1])) {
+		verb := parts[0]
+		if strings.HasSuffix(verb, ":") { // It's a label
+			if len(parts) > 1 {
+				verb = parts[1]
+			} else {
+				// After "label: ", starting a new word (mnemonic)
+				log.Debug("Cursor after a label, assuming mnemonic context.")
+				return false, ""
 			}
 		}
-		log.Debug("Last word was not an opcode, assuming mnemonic context.")
+		if isMnemonic(verb) || isDirective(verb) {
+			log.Debug("Cursor after a mnemonic/directive, assuming operand context.")
+			return true, ""
+		}
+		// e.g. after a constant definition "MAX_SPRITES = 8 |"
+		log.Debug("Cursor in whitespace, but not after a known mnemonic/directive. Assuming mnemonic context for a new line.")
 		return false, ""
 	}
 
-	log.Debug("Cursor is part of the last word: '%s'", lastPart)
+	// Cursor is in the middle of a word.
+	wordToComplete := parts[len(parts)-1]
+	log.Debug("Word to complete: '%s'", wordToComplete)
 
-	if len(parts) == 1 {
-		if strings.HasPrefix(lastPart, ".") {
-			log.Debug("Single word starts with a dot, assuming directive context.")
-			return false, lastPart
-		}
-		if strings.Contains(lastPart, "#") || strings.Contains(lastPart, "$") {
-			log.Debug("Single word contains operand characters, treating as operand.")
-			return true, lastPart
-		}
-		log.Debug("Single word, assuming mnemonic/label context.")
-		return false, lastPart
+	// Is this word the "verb" (mnemonic/directive) or an operand?
+	verbIndex := 0
+	if len(parts) > 0 && strings.HasSuffix(parts[0], ":") {
+		verbIndex = 1
 	}
 
-	prevPart := parts[len(parts)-2]
-	log.Debug("Previous part: '%s'", prevPart)
-
-	for _, m := range mnemonics {
-		if strings.EqualFold(m.Mnemonic, prevPart) {
-			log.Debug("Previous part was an opcode, so current is an operand.")
-			return true, lastPart
-		}
+	// If we are completing a word at or before the verb index, it's a mnemonic/directive context.
+	if len(parts)-1 <= verbIndex {
+		log.Debug("Completing the verb part of the line.")
+		return false, wordToComplete
 	}
 
-	if strings.HasPrefix(lastPart, ".") {
-		log.Debug("Current part starts with a dot, could be a local label or a directive.")
-		if len(parts) == 2 && !strings.HasSuffix(parts[0], ":") {
-			return false, lastPart
-		}
-		return true, lastPart
-	}
-	if strings.Contains(lastPart, "#") {
-		log.Debug("Current part contains operand characters, treating as operand.")
-		return true, lastPart
+	// We are completing a word after the verb. This is an operand.
+	verb := parts[verbIndex]
+	if isMnemonic(verb) || isDirective(verb) {
+		log.Debug("Completing after a known verb ('%s'), this is an operand.", verb)
+		return true, wordToComplete
 	}
 
+	// Fallback: if the "verb" is not a known mnemonic/directive (e.g. a macro call),
+	// we can assume what follows is an operand.
+	if verbIndex < len(parts)-1 {
+		log.Debug("Completing after an unknown verb ('%s'), assuming operand.", verb)
+		return true, wordToComplete
+	}
+
+	// Default fallback
 	log.Debug("Defaulting to mnemonic context.")
-	return false, lastPart
+	return false, wordToComplete
 }
 
 func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
@@ -914,43 +947,46 @@ func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
 }
 
 func applyCase(original, suggestion string) string {
-	if original == "" {
-		return strings.ToLower(suggestion) // Default to lowercase if user typed nothing
-	}
-
-	isLower := true
-	isUpper := true
-	isCapitalized := false
-	if len(original) > 0 {
-		isCapitalized = unicode.IsUpper(rune(original[0]))
-	}
-
-	for i, r := range original {
-		if !unicode.IsLetter(r) {
-			continue
-		}
+	// Count lower and upper case letters
+	lowerCount := 0
+	upperCount := 0
+	for _, r := range original {
 		if unicode.IsLower(r) {
-			isUpper = false
-		}
-		if unicode.IsUpper(r) {
-			isLower = false
-		}
-		if i > 0 && unicode.IsUpper(r) {
-			isCapitalized = false
+			lowerCount++
+		} else if unicode.IsUpper(r) {
+			upperCount++
 		}
 	}
 
-	if isUpper {
-		return strings.ToUpper(suggestion)
-	}
-	if isLower {
+	// No letters typed (e.g., just "." or "#"), default to lower
+	if lowerCount == 0 && upperCount == 0 {
 		return strings.ToLower(suggestion)
 	}
-	if isCapitalized {
-		// Capitalize first letter, rest lowercase
-		return strings.ToUpper(string(suggestion[0])) + strings.ToLower(suggestion[1:])
+
+	// All letters are upper, return upper
+	if lowerCount == 0 && upperCount > 0 {
+		return strings.ToUpper(suggestion)
 	}
 
-	// Default case if mixed case (e.g. lDa) -> return lowercase
+	// All letters are lower, return lower
+	if upperCount == 0 && lowerCount > 0 {
+		return strings.ToLower(suggestion)
+	}
+
+	// First letter is upper, rest are lower (or non-letters), return capitalized
+	if unicode.IsUpper(rune(original[0])) {
+		isCapitalized := true
+		for i, r := range original {
+			if i > 0 && unicode.IsUpper(r) {
+				isCapitalized = false
+				break
+			}
+		}
+		if isCapitalized {
+			return strings.ToUpper(string(suggestion[0])) + strings.ToLower(suggestion[1:])
+		}
+	}
+
+	// Mixed case (e.g. lDa) or other weirdness, default to lower
 	return strings.ToLower(suggestion)
 }

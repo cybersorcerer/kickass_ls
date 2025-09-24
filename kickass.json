@@ -227,5 +227,16 @@
     		"     .break         // This will put a breakpoint on 'inc $d020",
     		"     inc $d020"
 		]
+	},
+	{
+		"directive": ".cpu",
+    	"description": "Kick Assembler supports different sets of opcodes. The default set includes the standard 6502 mnemonics plus the illegal opcodes. To switch between instruction sets of different cpu's use the .cpu directive.",
+		"signature": ".cpu _6502NoIllegals | _6502 | dtv | _65c02",
+		"examples": [
+			".cpu _65c02            // The 65c02 instruction set.",
+			".cpu _6502NoIllegals.  // The standard 6502 instructions",
+			".cpu _6502             // The standard 6502 instruction + the illegal opcodes. This is the default setting for KickAssembler.",
+			".cpu dtv               // The standard 6502 instruction set + the DTV commands"
+		]
 	}
 ]

@@ -1,7 +1,11 @@
 {
-  "preferredEditor": "vscode",
-  "showMemoryUsage": true,
-  "showLineNumbers": true,
+  "ui": {
+    "showMemoryUsage": true,
+    "showLineNumbers": true
+  },
+  "general": {
+    "preferredEditor": "vscode"
+  },
   "tools": {
     "useRipgrep": true
   }
