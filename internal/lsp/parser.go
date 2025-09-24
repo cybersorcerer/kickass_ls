@@ -13,12 +13,18 @@ func ParseDocument(uri string, text string) (*Scope, []Diagnostic) {
 	l := NewLexer(text)
 	p := NewParser(l)
 	program := p.ParseProgram()
+	parserDiagnostics := p.Errors()
 
-	// Convert the AST to the Scope/Symbol structure
-	scope, semanticDiagnostics := buildScopeFromAST(program, uri)
+	// Pass 1: Build the symbol table from the AST
+	scope, definitionDiagnostics := buildScopeFromAST(program, uri)
 
-	// Combine parser diagnostics (e.g., syntax errors) with semantic diagnostics
-	allDiagnostics := append(p.Errors(), semanticDiagnostics...)
+	// Pass 2: Perform semantic analysis (e.g., find symbol usages)
+	analyzer := NewSemanticAnalyzer(scope, text)
+	semanticDiagnostics := analyzer.Analyze(program)
+
+	// Combine all diagnostics
+	allDiagnostics := append(parserDiagnostics, definitionDiagnostics...)
+	allDiagnostics = append(allDiagnostics, semanticDiagnostics...)
 
 	return scope, allDiagnostics
 }
@@ -372,6 +378,14 @@ type InfixExpression struct {
 func (ie *InfixExpression) expressionNode()      {}
 func (ie *InfixExpression) TokenLiteral() string { return ie.Token.Literal }
 
+type GroupedExpression struct {
+	Token      Token // The '(' token
+	Expression Expression
+}
+
+func (ge *GroupedExpression) expressionNode()      {}
+func (ge *GroupedExpression) TokenLiteral() string { return ge.Token.Literal }
+
 // --- Parser --- //
 
 const (
@@ -471,6 +485,10 @@ func (p *Parser) ParseProgram() *Program {
 	program.Statements = make([]Statement, 0)
 
 	for p.curToken.Type != TOKEN_EOF {
+		if p.curToken.Type == TOKEN_COMMENT {
+			p.nextToken()
+			continue
+		}
 		stmt := p.parseStatement()
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
@@ -528,8 +546,7 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 	} else if strings.EqualFold(stmt.Token.Literal, ".label") && p.peekTokenIs(TOKEN_DOT) {
 		p.nextToken()
 		if !p.expectPeek(TOKEN_IDENTIFIER) {
-			stmt.Name = &Identifier{Token: Token{Type: TOKEN_IDENTIFIER, Literal: "unknown", Line: 1, Column: 1}, Value: "unknown"}
-			return stmt
+			return nil // Error logged by expectPeek
 		}
 		labelName := "." + p.curToken.Literal
 		stmt.Name = &Identifier{Token: p.curToken, Value: labelName}
@@ -538,8 +555,7 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 		}
 	} else {
 		if !p.expectPeek(TOKEN_IDENTIFIER) {
-			stmt.Name = &Identifier{Token: Token{Type: TOKEN_IDENTIFIER, Literal: "unknown", Line: 1, Column: 1}, Value: "unknown"}
-			return stmt
+			return nil // Error logged by expectPeek
 		}
 		stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
 

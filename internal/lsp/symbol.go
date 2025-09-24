@@ -48,13 +48,14 @@ type Position struct {
 
 // Symbol represents a single symbol in the code.
 type Symbol struct {
-	Name      string
-	Kind      SymbolKind
-	Value     string   // e.g., the value of a constant
-	Position  Position // The position of the definition
-	Scope     *Scope   // The scope in which the symbol is defined
-	Params    []string // For functions and macros
-	Signature string   // For functions and macros
+	Name       string
+	Kind       SymbolKind
+	Value      string   // e.g., the value of a constant
+	Position   Position // The position of the definition
+	Scope      *Scope   // The scope in which the symbol is defined
+	Params     []string // For functions and macros
+	Signature  string   // For functions and macros
+	UsageCount int      // To track references
 }
 
 // Scope represents a scope (e.g., a file, a namespace, or a function).

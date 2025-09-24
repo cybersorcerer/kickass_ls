@@ -201,7 +201,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.7.5", // Version updated
+						"version": "0.7.6", // Version updated
 					},
 				},
 			}
