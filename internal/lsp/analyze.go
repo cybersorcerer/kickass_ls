@@ -3,6 +3,8 @@ package lsp
 import (
 	"fmt"
 	"strings"
+
+	"c64.nvim/internal/log"
 )
 
 // SemanticAnalyzer performs semantic analysis on the AST, after the initial scope has been built.
@@ -51,6 +53,11 @@ func (a *SemanticAnalyzer) walkStatement(stmt Statement, currentScope *Scope) {
 	case *InstructionStatement:
 		if node != nil && node.Operand != nil {
 			a.walkExpression(node.Operand, currentScope)
+		}
+	case *ExpressionStatement:
+		log.Debug("Walking ExpressionStatement")
+		if node != nil {
+			a.walkExpression(node.Expression, currentScope)
 		}
 	case *DirectiveStatement:
 		if node != nil {
@@ -105,6 +112,42 @@ func (a *SemanticAnalyzer) walkExpression(expr Expression, currentScope *Scope) 
 	case *GroupedExpression:
 		if node.Expression != nil {
 			a.walkExpression(node.Expression, currentScope)
+		}
+	case *CallExpression:
+		// First, walk the function identifier itself to mark it as used
+		a.walkExpression(node.Function, currentScope)
+
+		// Then, check the arguments
+		var symbolName string
+		if prefixExpr, ok := node.Function.(*PrefixExpression); ok {
+			if ident, ok := prefixExpr.Right.(*Identifier); ok {
+				symbolName = ident.Value
+			}
+		} else if ident, ok := node.Function.(*Identifier); ok {
+			symbolName = ident.Value
+		}
+
+		if symbolName != "" {
+			if symbol, found := currentScope.FindSymbol(symbolName); found {
+				if symbol.Kind == Macro || symbol.Kind == Function {
+					numArgs := len(node.Arguments)
+					numParams := len(symbol.Params)
+					if numArgs != numParams {
+						diagnostic := Diagnostic{
+							Severity: SeverityWarning,
+							Range:    Range{Start: Position{Line: node.Token.Line - 1, Character: node.Token.Column - 1}, End: Position{Line: node.Token.Line - 1, Character: node.Token.Column}},
+							Message:  fmt.Sprintf("Incorrect number of arguments for %s '%s'. Expected %d, got %d", symbol.Kind.String(), symbol.Name, numParams, numArgs),
+							Source:   "analyzer",
+						}
+						a.diagnostics = append(a.diagnostics, diagnostic)
+					}
+				}
+			}
+		}
+
+		// Walk each argument expression
+		for _, arg := range node.Arguments {
+			a.walkExpression(arg, currentScope)
 		}
 	}
 }

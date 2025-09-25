@@ -3,7 +3,9 @@
 
 // --- SECTION 1: Valid Symbol Definitions ---
 // This section should parse without any errors.
-
+.macro one_arg_macro(arg) {
+  lda arg
+}
 .const MAX_SPRITES = 8
 .const SCREEN_MEM = $0400
 
@@ -11,6 +13,8 @@
 .CONST huhu = $100
 
 .var sprite_x_pos = 0
+
++one_arg_macro(1,2)
 
 // Namespace for graphics routines
 .namespace gfx {

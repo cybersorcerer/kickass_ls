@@ -324,6 +324,14 @@ type InstructionStatement struct {
 func (is *InstructionStatement) statementNode()       {}
 func (is *InstructionStatement) TokenLiteral() string { return is.Token.Literal }
 
+type ExpressionStatement struct {
+	Token      Token // the first token of the expression
+	Expression Expression
+}
+
+func (es *ExpressionStatement) statementNode()       {}
+func (es *ExpressionStatement) TokenLiteral() string { return es.Token.Literal }
+
 type DirectiveStatement struct {
 	Token      Token
 	Name       *Identifier
@@ -386,6 +394,15 @@ type GroupedExpression struct {
 func (ge *GroupedExpression) expressionNode()      {}
 func (ge *GroupedExpression) TokenLiteral() string { return ge.Token.Literal }
 
+type CallExpression struct {
+	Token     Token // The '(' token
+	Function  Expression
+	Arguments []Expression
+}
+
+func (ce *CallExpression) expressionNode()      {}
+func (ce *CallExpression) TokenLiteral() string { return ce.Token.Literal }
+
 // --- Parser --- //
 
 const (
@@ -396,6 +413,7 @@ const (
 	SUM         // +
 	PRODUCT     // *
 	PREFIX      // -X or <X
+	CALL        // myFunction(X)
 	MEMBER      // object.member
 )
 
@@ -407,6 +425,7 @@ var precedences = map[TokenType]int{
 	TOKEN_ASTERISK: PRODUCT,
 	TOKEN_LESS:     PREFIX,
 	TOKEN_GREATER:  PREFIX,
+	TOKEN_LPAREN:   CALL,
 	TOKEN_DOT:      MEMBER,
 }
 
@@ -439,6 +458,7 @@ func NewParser(l *Lexer) *Parser {
 	p.registerPrefix(TOKEN_NUMBER_OCT, p.parseIntegerLiteral)
 	p.registerPrefix(TOKEN_HASH, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_MINUS, p.parsePrefixExpression)
+	p.registerPrefix(TOKEN_PLUS, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_LESS, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_GREATER, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_DOT, p.parsePrefixExpression)
@@ -451,6 +471,7 @@ func NewParser(l *Lexer) *Parser {
 	p.registerInfix(TOKEN_ASTERISK, p.parseInfixExpression)
 	p.registerInfix(TOKEN_EQUAL, p.parseInfixExpression)
 	p.registerInfix(TOKEN_DOT, p.parseInfixExpression)
+	p.registerInfix(TOKEN_LPAREN, p.parseCallExpression)
 
 	p.nextToken()
 	p.nextToken()
@@ -505,11 +526,19 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseInstructionStatement()
 	case TOKEN_LABEL:
 		return p.parseLabelStatement()
-	case TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_PRE, TOKEN_DIRECTIVE_KICK_FLOW, TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
+	case TOKEN_DOT, TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_PRE, TOKEN_DIRECTIVE_KICK_FLOW, TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
 		return p.parseDirectiveStatement()
+	case TOKEN_PLUS:
+		return p.parseExpressionStatement()
 	default:
 		return nil
 	}
+}
+
+func (p *Parser) parseExpressionStatement() *ExpressionStatement {
+	stmt := &ExpressionStatement{Token: p.curToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+	return stmt
 }
 
 func (p *Parser) parseInstructionStatement() *InstructionStatement {
@@ -538,7 +567,18 @@ func (p *Parser) parseLabelStatement() *LabelStatement {
 }
 
 func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
-	stmt := &DirectiveStatement{Token: p.curToken}
+	stmt := &DirectiveStatement{}
+	if p.curToken.Type == TOKEN_DOT {
+		dotToken := p.curToken
+		if !p.expectPeek(TOKEN_IDENTIFIER) {
+			return nil
+		}
+		// Now curToken is the identifier. Combine them to form the directive token.
+		stmt.Token = p.curToken
+		stmt.Token.Literal = dotToken.Literal + p.curToken.Literal
+	} else {
+		stmt.Token = p.curToken
+	}
 
 	if strings.EqualFold(stmt.Token.Literal, ".label") && p.peekTokenIs(TOKEN_LABEL) {
 		p.nextToken()
@@ -796,4 +836,34 @@ func (p *Parser) parseGroupedExpression() Expression {
 		return nil
 	}
 	return exp
+}
+
+func (p *Parser) parseCallExpression(function Expression) Expression {
+	callExp := &CallExpression{Token: p.curToken, Function: function}
+	callExp.Arguments = p.parseExpressionList(TOKEN_RPAREN)
+	return callExp
+}
+
+func (p *Parser) parseExpressionList(end TokenType) []Expression {
+	list := []Expression{}
+
+	if p.peekTokenIs(end) {
+		p.nextToken()
+		return list
+	}
+
+	p.nextToken()
+	list = append(list, p.parseExpression(LOWEST))
+
+	for p.peekTokenIs(TOKEN_COMMA) {
+		p.nextToken()
+		p.nextToken()
+		list = append(list, p.parseExpression(LOWEST))
+	}
+
+	if !p.expectPeek(end) {
+		return nil
+	}
+
+	return list
 }
