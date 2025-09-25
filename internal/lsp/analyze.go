@@ -3,8 +3,6 @@ package lsp
 import (
 	"fmt"
 	"strings"
-
-	"c64.nvim/internal/log"
 )
 
 // SemanticAnalyzer performs semantic analysis on the AST, after the initial scope has been built.
@@ -55,7 +53,6 @@ func (a *SemanticAnalyzer) walkStatement(stmt Statement, currentScope *Scope) {
 			a.walkExpression(node.Operand, currentScope)
 		}
 	case *ExpressionStatement:
-		log.Debug("Walking ExpressionStatement")
 		if node != nil {
 			a.walkExpression(node.Expression, currentScope)
 		}
@@ -129,7 +126,7 @@ func (a *SemanticAnalyzer) walkExpression(expr Expression, currentScope *Scope) 
 
 		if symbolName != "" {
 			if symbol, found := currentScope.FindSymbol(symbolName); found {
-				if symbol.Kind == Macro || symbol.Kind == Function {
+				if symbol.Kind == Macro || symbol.Kind == Function || symbol.Kind == PseudoCommand {
 					numArgs := len(node.Arguments)
 					numParams := len(symbol.Params)
 					if numArgs != numParams {

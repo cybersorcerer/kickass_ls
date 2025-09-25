@@ -17,6 +17,7 @@ const (
 	Label
 	Function
 	Macro
+	PseudoCommand
 	Namespace
 )
 
@@ -33,6 +34,8 @@ func (sk SymbolKind) String() string {
 		return "function"
 	case Macro:
 		return "macro"
+	case PseudoCommand:
+		return "pseudocommand"
 	case Namespace:
 		return "namespace"
 	default:

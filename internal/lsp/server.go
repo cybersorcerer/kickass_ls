@@ -201,7 +201,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.7.7", // Version updated
+						"version": "0.7.8", // Version updated
 					},
 				},
 			}
@@ -789,29 +789,34 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 			}
 		}
 
-		// Offer macros
-		if strings.HasPrefix(wordToComplete, "+") {
-			symbols := symbolTree.FindAllVisibleSymbols(lineNum)
-			for _, symbol := range symbols {
-				if symbol.Kind == Macro && strings.HasPrefix(symbol.Name, strings.TrimPrefix(wordToComplete, "+")) {
-					items = append(items, map[string]interface{}{
-						"label":  "+" + symbol.Name,
-						"kind":   toCompletionItemKind(symbol.Kind),
-						"detail": symbol.Value,
-					})
+		// Offer macros, functions, and pseudocommands
+		symbols := symbolTree.FindAllVisibleSymbols(lineNum)
+		for _, symbol := range symbols {
+			if (symbol.Kind == Macro && strings.HasPrefix(symbol.Name, strings.TrimPrefix(wordToComplete, "+"))) ||
+				(symbol.Kind == Function && strings.HasPrefix(symbol.Name, wordToComplete)) ||
+				(symbol.Kind == PseudoCommand && strings.HasPrefix(symbol.Name, wordToComplete)) {
+				label := symbol.Name
+				if symbol.Kind == Macro {
+					label = "+" + symbol.Name
 				}
+				item := map[string]interface{}{
+					"label":  label,
+					"kind":   toCompletionItemKind(symbol.Kind),
+					"detail": symbol.Signature,
+				}
+				items = append(items, item)
 			}
-		} else {
-			// Offer mnemonics
-			for _, m := range mnemonics {
-				if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
-					items = append(items, map[string]interface{}{
-						"label":         applyCase(wordToComplete, m.Mnemonic),
-						"kind":          float64(14), // Keyword
-						"detail":        "6502/6510 Opcode",
-						"documentation": m.Description,
-					})
-				}
+		}
+
+		// Offer mnemonics
+		for _, m := range mnemonics {
+			if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+				items = append(items, map[string]interface{}{
+					"label":         applyCase(wordToComplete, m.Mnemonic),
+					"kind":          float64(14), // Keyword
+					"detail":        "6502/6510 Opcode",
+					"documentation": m.Description,
+				})
 			}
 		}
 	}
@@ -883,6 +888,10 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 				return false, ""
 			}
 		}
+		if strings.HasPrefix(verb, ":") { // It's a macro/pseudocommand call with ':' prefix
+			log.Debug("Cursor after a ':' prefixed macro/pseudocommand, assuming operand context.")
+			return true, ""
+		}
 		if isMnemonic(verb) || isDirective(verb) {
 			log.Debug("Cursor after a mnemonic/directive, assuming operand context.")
 			return true, ""
@@ -926,7 +935,6 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	log.Debug("Defaulting to mnemonic context.")
 	return false, wordToComplete
 }
-
 func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
 	switch kind {
 	case Constant:
@@ -938,6 +946,8 @@ func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
 	case Function:
 		return FunctionCompletion
 	case Macro:
+		return SnippetCompletion
+	case PseudoCommand:
 		return SnippetCompletion
 	case Namespace:
 		return ModuleCompletion

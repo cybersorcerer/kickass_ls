@@ -18,6 +18,8 @@ func toDocumentSymbolKind(kind SymbolKind) float64 {
 		return 12 // Function
 	case Macro:
 		return 12 // Function (closest match for macros)
+	case PseudoCommand:
+		return 12 // Function (closest match for pseudocommands)
 	case Namespace:
 		return 3  // Namespace
 	default:

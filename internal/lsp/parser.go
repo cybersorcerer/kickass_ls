@@ -125,8 +125,10 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 				switch strings.ToLower(stmt.Token.Literal) {
 				case ".function":
 					kind = Function
-				case ".macro", ".pseudocommand":
+				case ".macro":
 					kind = Macro
+				case ".pseudocommand":
+					kind = PseudoCommand
 				case ".namespace":
 					kind = Namespace
 				default:
@@ -599,7 +601,13 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 		}
 		stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
 
-		if p.peekTokenIs(TOKEN_EQUAL) {
+		if strings.EqualFold(stmt.Token.Literal, ".pseudocommand") {
+			stmt.Parameters = p.parseColonSeparatedIdentifierList()
+			if !p.expectPeek(TOKEN_LBRACE) {
+				return nil
+			}
+			stmt.Block = p.parseBlockStatement()
+		} else if p.peekTokenIs(TOKEN_EQUAL) {
 			p.nextToken() // advance to EQUAL
 			equalToken := p.curToken
 
@@ -647,6 +655,27 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 	}
 
 	return stmt
+}
+
+func (p *Parser) parseColonSeparatedIdentifierList() []*Identifier {
+	identifiers := []*Identifier{}
+
+	if p.peekTokenIs(TOKEN_LBRACE) {
+		return identifiers
+	}
+
+	p.nextToken()
+	ident := &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+	identifiers = append(identifiers, ident)
+
+	for p.peekTokenIs(TOKEN_COLON) {
+		p.nextToken()
+		p.nextToken()
+		ident := &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		identifiers = append(identifiers, ident)
+	}
+
+	return identifiers
 }
 
 func (p *Parser) parseIdentifierList() []*Identifier {

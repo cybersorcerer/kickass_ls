@@ -109,6 +109,7 @@ const (
 	SemanticTokenVariable
 	SemanticTokenFunction
 	SemanticTokenMacro
+	SemanticTokenPseudoCommand
 	SemanticTokenNumber
 	SemanticTokenComment
 	SemanticTokenString
@@ -139,6 +140,8 @@ func getTokenTypeForSymbol(kind SymbolKind) int {
 		return SemanticTokenFunction
 	case Macro:
 		return SemanticTokenMacro
+	case PseudoCommand:
+		return SemanticTokenPseudoCommand
 	default:
 		return SemanticTokenKeyword
 	}

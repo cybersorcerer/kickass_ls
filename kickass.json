@@ -238,5 +238,24 @@
 			".cpu _6502             // The standard 6502 instruction + the illegal opcodes. This is the default setting for KickAssembler.",
 			".cpu dtv               // The standard 6502 instruction set + the DTV commands"
 		]
+	},
+	{
+		"directive": ".if",
+    	"description": "If-directives work like in standard programming languages. With an .if directive you have the proceeding directive executed only if a given boolean expression is evaluated to true. You can group several statements together in a block with {…} and have them executed together. By adding an else statement you can have an expression executed if the boolean expression is false.",
+		"signature": ".if(x>10) {...} else {...}",
+		"examples": [
+			"// Add the x'th entry of a table if x is positive or",
+			"// subtract it if x is negative",
+			".if (x>=0) adc zpXtable+x else sbc zpXtable+abs(x)",
+            "",
+			"// Init an offset table or display a warning if the table length is exceeded",
+			".if (i<tableLength) {",
+   			"    lda #0",
+			"    sta offset1+i",
+   			"    sta offset2+i",
+			"} else {",
+			"    .error 'Error!! I is too high!'",
+			"}"
+		]
 	}
 ]

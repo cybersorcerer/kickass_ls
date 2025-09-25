@@ -6,6 +6,14 @@
 .macro one_arg_macro(arg) {
   lda arg
 }
+
+// Returns a string telling if a number is odd or even
+.function test (num) {
+    return num
+}
+
+.var x = test(1)
+
 .const MAX_SPRITES = 8
 .const SCREEN_MEM = $0400
 
@@ -15,6 +23,7 @@
 .var sprite_x_pos = 0
 
 +one_arg_macro(1,2)
+
 
 // Namespace for graphics routines
 .namespace gfx {
