@@ -59,6 +59,10 @@ type Symbol struct {
 	Params     []string // For functions and macros
 	Signature  string   // For functions and macros
 	UsageCount int      // To track references
+	// Enhanced semantic analysis fields
+	Address    int64      // Memory address of symbol (for labels, constants)
+	Size       int64      // Size in bytes (for data symbols)
+	CrossRefs  []Position // All usage positions for cross-references
 }
 
 // Scope represents a scope (e.g., a file, a namespace, or a function).

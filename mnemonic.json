@@ -448,7 +448,8 @@
   {
     "mnemonic": "ALR",
     "description": "ALR (**A**nd then **L**ogical shift **R**ight) is a mnemonic for an **illegal** opcode machine language instruction. This illegal opcode is a combination of two operations using immediate addressing mode: AND, followed by LSR Function: A = (A \u0026 #{imm}) / 2",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "4B",
         "addressing_mode": "Immediate",
@@ -466,7 +467,8 @@
   {
     "mnemonic": "ANC",
     "description": "ANC (Logic **AN**d altering **C**arry) is an **illegal** opcode that works the same as AND, except that the Carry Flag is set to the same state that the Negative Flag is set to.",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "0B",
         "addressing_mode": "Immediate",
@@ -491,7 +493,8 @@
   {
     "mnemonic": "ARR",
     "description": "ARR is the mnemonic for the **illegal** opcode machine language instruction which ANDs the content of accumulator register with an immediate value and then RORs the result. This **illegal** opcode is a combination of two operations with the same addressing mode: AND, ROR",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "6B",
         "addressing_mode": "Immediate",
@@ -741,7 +744,8 @@
   {
     "mnemonic": "DCP",
     "description": "DCP (short for \"Decrease then ComPare\") is a mnemonic for an **illegal** opcode machine language instruction. This **illegal** opcode is a combination of two operations with the same addressing mode: DEC, followed by CMP. DCP can be used to effectively implement the indexed-indirect and indirect-indexed addressing modes that DEC lacks.",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "C3",
         "addressing_mode": "Indexed-indirect",
@@ -1018,7 +1022,8 @@
   {
     "mnemonic": "ISC",
     "description": "ISC (short for \"Increase then Subtract with Carry\") is a mnemonic for an **illegal** opcode machine language instruction. This **illegal** opcode is a combination of two operations with the same addressing mode: INC, followed by SBC Function: {addr} = {addr} + 1; then A = A - {addr}",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "EF",
         "addressing_mode": "Absolute",
@@ -1185,7 +1190,8 @@
   {
     "mnemonic": "LAX",
     "description": "LAX (Load Accumulator and indeX) is an **illegal** opcode machine language instruction for the C64. It retrieves data from a specified RAM or I/O address and stores it in both the accumulator and the X index register.",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "A3",
         "addressing_mode": "Indexed-indirect",
@@ -1707,7 +1713,8 @@
   {
     "mnemonic": "SAX",
     "description": "SAX (short for \"Store Accumulator AND X\") is an **illegal** opcode machine language instruction that stores the bitwise AND of the accumulator and the X index register at the specified RAM or I/O address. The contents of both the accumulator and the X index register remain unchanged. This **illegal** opcode combines two operations with the same addressing mode: STA and STX. Function: {addr} = A \u0026 X",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "8F",
         "addressing_mode": "Absolute",
@@ -1742,7 +1749,8 @@
   {
     "mnemonic": "SBX",
     "description": "SBX (short for \"SuBtract and store in X\") is an **illegal** opcode that ANDs the contents of the A and X registers (leaving the contents of A intact), subtracts an immediate value, and then stores the result into X. This **illegal** opcode is a combination of an immediate and an implied command: CMP, DEX. The subtraction is performed in the CPU based on the CMP function, meaning it is not affected by the state of the Carry Flag, doesn't change the state of the Overflow Flag, and doesn't respect the decimal mode. Function: X = A \u0026 X - #{imm}",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "CB",
         "addressing_mode": "Immediate",
@@ -1760,7 +1768,8 @@
   {
     "mnemonic": "SRE",
     "description": "SRE (Shift Right then EOR) is an illegal opcode machine language instruction for the Commodore 64. It combines two operations: Logical Shift Right (LSR) followed by Exclusive OR (EOR).",
-    "addressing_modes": [
+    "type": "Illegal",
+	"addressing_modes": [
       {
         "opcode": "4F",
         "addressing_mode": "Absolute",
@@ -1819,7 +1828,7 @@
   },
   {
     "mnemonic": "STA",
-    "description": "STA (short for \"STore Accumulator\") is a machine language instruction that stores a copy of the byte held in the accumulator at the specified RAM or I/O address. The accumulator's contents remain unchanged after the operation.",
+    "description": "STA (short for **ST**ore **A**ccumulator) is a machine language instruction that stores a copy of the byte held in the accumulator at the specified RAM or I/O address. The accumulator's contents remain unchanged after the operation.",
 	"type" : "Transfer",
 	"addressing_modes": [
       {

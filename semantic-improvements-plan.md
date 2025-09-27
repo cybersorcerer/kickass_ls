@@ -3,12 +3,14 @@
 ## 📊 **Aktuelle Schwächen der bestehenden Analyse**
 
 ### **Limitierte Feature-Set:**
+
 - ✅ **Vorhanden**: Symbol-Nutzung, Unused-Warnings, Basic Macro-Validierung
 - ❌ **Fehlt**: Address-Calculation, Branch-Distance, Memory-Layout-Awareness
 - ❌ **Fehlt**: 6502-spezifische Optimierungen, Dead-Code-Detection
 - ❌ **Fehlt**: Cross-Reference-Analysis, Dependency-Tracking
 
 ### **Oberflächliche 6502-Expertise:**
+
 - ❌ **Keine PC-Tracking** - Program Counter wird nicht verfolgt
 - ❌ **Keine Address-Resolution** - Labels haben keine Adressen
 - ❌ **Keine Memory-Map-Awareness** - ROM/RAM/I/O-Bereiche unbekannt
@@ -18,7 +20,7 @@
 
 ### **🎯 Kernkonzept: 6-Pass Semantic Analysis**
 
-```
+```text
 Pass 1: Symbol Collection & Address Calculation
 ├── PC-Tracking durch alle Statements
 ├── Label-Adressen berechnen  
@@ -59,6 +61,7 @@ Pass 6: Traditional Checks (Enhanced)
 ### **1. Address-Aware Analysis** ⭐⭐⭐⭐⭐
 
 #### **Problem:**
+
 ```assembly
 .pc = $1000
 start:
@@ -69,6 +72,7 @@ loop:
 ```
 
 #### **Lösung:**
+
 ```go
 type AnalysisContext struct {
     CurrentPC        int64              // Track program counter
@@ -91,12 +95,14 @@ func (a *Analyzer) processInstruction(node *InstructionStatement) {
 ### **2. 6502-Specific Optimizations** ⭐⭐⭐⭐⭐
 
 #### **Zero-Page Optimization:**
+
 ```assembly
 lda $0080    ; Could be: lda $80 (saves 1 byte, 1 cycle!)
 sta $00FF    ; Zero-page - good!
 ```
 
 #### **Implementation:**
+
 ```go
 func (a *Analyzer) analyzeZeroPageAccess(mnemonic string, operand Expression) {
     if addr, err := a.evaluateExpression(operand); err == nil {
@@ -110,13 +116,15 @@ func (a *Analyzer) analyzeZeroPageAccess(mnemonic string, operand Expression) {
 ### **3. Branch Distance Validation** ⭐⭐⭐⭐⭐
 
 #### **Critical für 6502:**
+
 ```assembly
 start:
     ; ... 200 bytes of code ...
     bne start   ; ERROR: Distance > 127 bytes!
 ```
 
-#### **Implementation:**
+#### **Implementation**
+
 ```go
 func (a *Analyzer) validateBranchDistance(operand Expression, token Token) {
     if label, ok := operand.(*Identifier); ok {
@@ -133,6 +141,7 @@ func (a *Analyzer) validateBranchDistance(operand Expression, token Token) {
 ### **4. Memory-Layout Awareness** ⭐⭐⭐⭐⭐
 
 #### **C64-Specific Memory Analysis:**
+
 ```go
 type MemoryMap struct {
     ZeroPage    Range64 // $0000-$00FF - Fast access
@@ -307,6 +316,7 @@ func (a *Analyzer) analyzeCodeStyle(symbol *Symbol, token Token) {
 ## 🔄 **Implementation Strategy**
 
 ### **Phase 1: Foundation (Week 1-2)**
+
 ```go
 // 1. Erweiterte Context-Struktur
 type AnalysisContext struct {
@@ -331,6 +341,7 @@ type Symbol struct {
 ```
 
 ### **Phase 2: Address Calculation (Week 3)**
+
 ```go
 // Multi-Pass Analysis Implementation
 func (a *EnhancedAnalyzer) Analyze(program *Program) []Diagnostic {
@@ -345,6 +356,7 @@ func (a *EnhancedAnalyzer) Analyze(program *Program) []Diagnostic {
 ```
 
 ### **Phase 3: 6502 Specialization (Week 4)**
+
 ```go
 // 6502-specific analysis modules
 func (a *EnhancedAnalyzer) perform6502Analysis() {
@@ -358,12 +370,14 @@ func (a *EnhancedAnalyzer) perform6502Analysis() {
 ## 📊 **Expected Benefits**
 
 ### **Immediate Impact:**
+
 - ✅ **Branch-Distance-Errors** - Verhindert Runtime-Crashes
 - ✅ **Zero-Page-Optimizations** - 10-15% Code-Size-Reduction möglich
 - ✅ **Hardware-Bug-Detection** - Verhindert subtile 6502-Bugs
 - ✅ **Dead-Code-Elimination** - Cleaner, smaller binaries
 
 ### **Long-term Benefits:**
+
 - ✅ **Professional Development Experience** - IDE-quality tooling
 - ✅ **Learning Tool** - Teaches 6502 best practices
 - ✅ **Code Quality** - Enforces assembly best practices
@@ -372,7 +386,8 @@ func (a *EnhancedAnalyzer) perform6502Analysis() {
 ## 🎯 **Competitive Advantage**
 
 ### **Comparison mit anderen Assembly-LSPs:**
-```
+
+```text
 Feature                     | c64.nvim | ACME-LSP | CA65-LSP
 ----------------------------|----------|----------|----------
 Address Calculation         |    ✅    |    ❌    |    ❌    
@@ -389,16 +404,19 @@ Cross-Reference Analysis    |    ✅    |    ❌    |    ❌
 ## 🚀 **Implementation Roadmap**
 
 ### **Quick Wins (1-2 days):**
+
 1. **Branch Distance Validation** - High impact, moderate effort
 2. **Illegal Opcode Detection** - Low effort, good user value  
 3. **Basic Style Hints** - Easy to implement, improves UX
 
 ### **Medium-term (1-2 weeks):**
+
 1. **Address Calculation System** - Foundation for advanced features
 2. **Zero-Page Optimization** - Significant performance benefit
 3. **Memory Layout Awareness** - C64-specific value
 
 ### **Advanced Features (3-4 weeks):**
+
 1. **Dead Code Detection** - Complex but valuable
 2. **CPU Flag Dependency** - Advanced analysis
 3. **Cross-Reference System** - Professional IDE feature

@@ -208,7 +208,7 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 }
 
 func (sb *scopeBuilder) validateInstruction(stmt *InstructionStatement) {
-	mode, err := determineAddressingModeFromAST(stmt.Operand)
+	mode, err := determineAddressingModeFromAST(stmt.Token.Literal, stmt.Operand)
 	if err != nil {
 		diagnostic := Diagnostic{
 			Severity: SeverityError,
@@ -232,7 +232,7 @@ func (sb *scopeBuilder) validateInstruction(stmt *InstructionStatement) {
 }
 
 // determineAddressingModeFromAST determines the addressing mode from an AST expression.
-func determineAddressingModeFromAST(expr Expression) (string, error) {
+func determineAddressingModeFromAST(mnemonic string, expr Expression) (string, error) {
 	if expr == nil {
 		return "Implied", nil
 	}
@@ -243,6 +243,10 @@ func determineAddressingModeFromAST(expr Expression) (string, error) {
 			return "Immediate", nil
 		}
 	case *Identifier, *IntegerLiteral:
+		// Check if this is a branch instruction - they use relative addressing
+		if isBranchInstruction(mnemonic) {
+			return "Relative", nil
+		}
 		// This could be zeropage or absolute. For now, we'll treat them as absolute
 		// as it's a superset for validation purposes.
 		return "Absolute", nil
@@ -280,6 +284,21 @@ func isAddressingModeValid(mnemonic string, mode string) bool {
 		}
 	}
 	return false // Mnemonic not found
+}
+
+// isBranchInstruction checks if the given mnemonic is a branch instruction
+func isBranchInstruction(mnemonic string) bool {
+	branchInstructions := []string{
+		"BCC", "BCS", "BEQ", "BMI", "BNE", "BPL", "BVC", "BVS",
+	}
+
+	upperMnemonic := strings.ToUpper(mnemonic)
+	for _, branch := range branchInstructions {
+		if branch == upperMnemonic {
+			return true
+		}
+	}
+	return false
 }
 
 // --- Abstract Syntax Tree (AST) --- //
