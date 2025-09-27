@@ -2,6 +2,8 @@ package lsp
 
 import (
 	"bufio"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -9,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 
 	log "c64.nvim/internal/log"
@@ -77,6 +80,227 @@ var mnemonics []Mnemonic
 var kickassDirectives []KickassDirective
 var warnUnusedLabelsEnabled bool
 
+// LSPConfiguration holds all configurable LSP settings
+type LSPConfiguration struct {
+	// General Analysis Settings
+	WarnUnusedLabels bool `json:"warnUnusedLabels"`
+
+	// 6502-Specific Features
+	ZeroPageOptimization struct {
+		Enabled   bool `json:"enabled"`
+		ShowHints bool `json:"showHints"`
+	} `json:"zeroPageOptimization"`
+
+	BranchDistanceValidation struct {
+		Enabled      bool `json:"enabled"`
+		ShowWarnings bool `json:"showWarnings"`
+	} `json:"branchDistanceValidation"`
+
+	IllegalOpcodeDetection struct {
+		Enabled      bool `json:"enabled"`
+		ShowWarnings bool `json:"showWarnings"`
+	} `json:"illegalOpcodeDetection"`
+
+	HardwareBugDetection struct {
+		Enabled        bool `json:"enabled"`
+		ShowWarnings   bool `json:"showWarnings"`
+		JMPIndirectBug bool `json:"jmpIndirectBug"`
+	} `json:"hardwareBugDetection"`
+
+	MemoryLayoutAnalysis struct {
+		Enabled              bool `json:"enabled"`
+		ShowIOAccess         bool `json:"showIOAccess"`
+		ShowStackWarnings    bool `json:"showStackWarnings"`
+		ShowROMWriteWarnings bool `json:"showROMWriteWarnings"`
+	} `json:"memoryLayoutAnalysis"`
+
+	MagicNumberDetection struct {
+		Enabled      bool `json:"enabled"`
+		ShowHints    bool `json:"showHints"`
+		C64Addresses bool `json:"c64Addresses"`
+	} `json:"magicNumberDetection"`
+
+	DeadCodeDetection struct {
+		Enabled      bool `json:"enabled"`
+		ShowWarnings bool `json:"showWarnings"`
+	} `json:"deadCodeDetection"`
+
+	StyleGuideEnforcement struct {
+		Enabled            bool `json:"enabled"`
+		ShowHints          bool `json:"showHints"`
+		UpperCaseConstants bool `json:"upperCaseConstants"`
+		DescriptiveLabels  bool `json:"descriptiveLabels"`
+	} `json:"styleGuideEnforcement"`
+}
+
+// lspConfig holds the current LSP configuration
+var lspConfig = &LSPConfiguration{
+	WarnUnusedLabels: true,
+	ZeroPageOptimization: struct {
+		Enabled   bool `json:"enabled"`
+		ShowHints bool `json:"showHints"`
+	}{
+		Enabled:   true,
+		ShowHints: true,
+	},
+	BranchDistanceValidation: struct {
+		Enabled      bool `json:"enabled"`
+		ShowWarnings bool `json:"showWarnings"`
+	}{
+		Enabled:      true,
+		ShowWarnings: true,
+	},
+	IllegalOpcodeDetection: struct {
+		Enabled      bool `json:"enabled"`
+		ShowWarnings bool `json:"showWarnings"`
+	}{
+		Enabled:      true,
+		ShowWarnings: true,
+	},
+	HardwareBugDetection: struct {
+		Enabled        bool `json:"enabled"`
+		ShowWarnings   bool `json:"showWarnings"`
+		JMPIndirectBug bool `json:"jmpIndirectBug"`
+	}{
+		Enabled:        true,
+		ShowWarnings:   true,
+		JMPIndirectBug: true,
+	},
+	MemoryLayoutAnalysis: struct {
+		Enabled              bool `json:"enabled"`
+		ShowIOAccess         bool `json:"showIOAccess"`
+		ShowStackWarnings    bool `json:"showStackWarnings"`
+		ShowROMWriteWarnings bool `json:"showROMWriteWarnings"`
+	}{
+		Enabled:              true,
+		ShowIOAccess:         true,
+		ShowStackWarnings:    true,
+		ShowROMWriteWarnings: true,
+	},
+	MagicNumberDetection: struct {
+		Enabled      bool `json:"enabled"`
+		ShowHints    bool `json:"showHints"`
+		C64Addresses bool `json:"c64Addresses"`
+	}{
+		Enabled:      true,
+		ShowHints:    true,
+		C64Addresses: true,
+	},
+	DeadCodeDetection: struct {
+		Enabled      bool `json:"enabled"`
+		ShowWarnings bool `json:"showWarnings"`
+	}{
+		Enabled:      true,
+		ShowWarnings: true,
+	},
+	StyleGuideEnforcement: struct {
+		Enabled            bool `json:"enabled"`
+		ShowHints          bool `json:"showHints"`
+		UpperCaseConstants bool `json:"upperCaseConstants"`
+		DescriptiveLabels  bool `json:"descriptiveLabels"`
+	}{
+		Enabled:            true,
+		ShowHints:          true,
+		UpperCaseConstants: true,
+		DescriptiveLabels:  true,
+	},
+}
+
+// configMutex protects access to lspConfig
+var configMutex sync.RWMutex
+
+// GetLSPConfig returns a copy of the current configuration
+func GetLSPConfig() LSPConfiguration {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return *lspConfig
+}
+
+// UpdateLSPConfig updates the configuration from a map
+func UpdateLSPConfig(settings map[string]interface{}) {
+	configMutex.Lock()
+	defer configMutex.Unlock()
+
+	// Helper function to safely get bool from map
+	getBool := func(m map[string]interface{}, key string, defaultValue bool) bool {
+		if val, ok := m[key]; ok {
+			if b, ok := val.(bool); ok {
+				return b
+			}
+		}
+		return defaultValue
+	}
+
+	// Helper function to safely get nested object
+	getObject := func(m map[string]interface{}, key string) map[string]interface{} {
+		if val, ok := m[key]; ok {
+			if obj, ok := val.(map[string]interface{}); ok {
+				return obj
+			}
+		}
+		return make(map[string]interface{})
+	}
+
+	// Update general settings
+	lspConfig.WarnUnusedLabels = getBool(settings, "warnUnusedLabels", lspConfig.WarnUnusedLabels)
+
+	// Update zero page optimization
+	if zpo := getObject(settings, "zeroPageOptimization"); len(zpo) > 0 {
+		lspConfig.ZeroPageOptimization.Enabled = getBool(zpo, "enabled", lspConfig.ZeroPageOptimization.Enabled)
+		lspConfig.ZeroPageOptimization.ShowHints = getBool(zpo, "showHints", lspConfig.ZeroPageOptimization.ShowHints)
+	}
+
+	// Update branch distance validation
+	if bdv := getObject(settings, "branchDistanceValidation"); len(bdv) > 0 {
+		lspConfig.BranchDistanceValidation.Enabled = getBool(bdv, "enabled", lspConfig.BranchDistanceValidation.Enabled)
+		lspConfig.BranchDistanceValidation.ShowWarnings = getBool(bdv, "showWarnings", lspConfig.BranchDistanceValidation.ShowWarnings)
+	}
+
+	// Update illegal opcode detection
+	if iod := getObject(settings, "illegalOpcodeDetection"); len(iod) > 0 {
+		lspConfig.IllegalOpcodeDetection.Enabled = getBool(iod, "enabled", lspConfig.IllegalOpcodeDetection.Enabled)
+		lspConfig.IllegalOpcodeDetection.ShowWarnings = getBool(iod, "showWarnings", lspConfig.IllegalOpcodeDetection.ShowWarnings)
+	}
+
+	// Update hardware bug detection
+	if hbd := getObject(settings, "hardwareBugDetection"); len(hbd) > 0 {
+		lspConfig.HardwareBugDetection.Enabled = getBool(hbd, "enabled", lspConfig.HardwareBugDetection.Enabled)
+		lspConfig.HardwareBugDetection.ShowWarnings = getBool(hbd, "showWarnings", lspConfig.HardwareBugDetection.ShowWarnings)
+		lspConfig.HardwareBugDetection.JMPIndirectBug = getBool(hbd, "jmpIndirectBug", lspConfig.HardwareBugDetection.JMPIndirectBug)
+	}
+
+	// Update memory layout analysis
+	if mla := getObject(settings, "memoryLayoutAnalysis"); len(mla) > 0 {
+		lspConfig.MemoryLayoutAnalysis.Enabled = getBool(mla, "enabled", lspConfig.MemoryLayoutAnalysis.Enabled)
+		lspConfig.MemoryLayoutAnalysis.ShowIOAccess = getBool(mla, "showIOAccess", lspConfig.MemoryLayoutAnalysis.ShowIOAccess)
+		lspConfig.MemoryLayoutAnalysis.ShowStackWarnings = getBool(mla, "showStackWarnings", lspConfig.MemoryLayoutAnalysis.ShowStackWarnings)
+		lspConfig.MemoryLayoutAnalysis.ShowROMWriteWarnings = getBool(mla, "showROMWriteWarnings", lspConfig.MemoryLayoutAnalysis.ShowROMWriteWarnings)
+	}
+
+	// Update magic number detection
+	if mnd := getObject(settings, "magicNumberDetection"); len(mnd) > 0 {
+		lspConfig.MagicNumberDetection.Enabled = getBool(mnd, "enabled", lspConfig.MagicNumberDetection.Enabled)
+		lspConfig.MagicNumberDetection.ShowHints = getBool(mnd, "showHints", lspConfig.MagicNumberDetection.ShowHints)
+		lspConfig.MagicNumberDetection.C64Addresses = getBool(mnd, "c64Addresses", lspConfig.MagicNumberDetection.C64Addresses)
+	}
+
+	// Update dead code detection
+	if dcd := getObject(settings, "deadCodeDetection"); len(dcd) > 0 {
+		lspConfig.DeadCodeDetection.Enabled = getBool(dcd, "enabled", lspConfig.DeadCodeDetection.Enabled)
+		lspConfig.DeadCodeDetection.ShowWarnings = getBool(dcd, "showWarnings", lspConfig.DeadCodeDetection.ShowWarnings)
+	}
+
+	// Update style guide enforcement
+	if sge := getObject(settings, "styleGuideEnforcement"); len(sge) > 0 {
+		lspConfig.StyleGuideEnforcement.Enabled = getBool(sge, "enabled", lspConfig.StyleGuideEnforcement.Enabled)
+		lspConfig.StyleGuideEnforcement.ShowHints = getBool(sge, "showHints", lspConfig.StyleGuideEnforcement.ShowHints)
+		lspConfig.StyleGuideEnforcement.UpperCaseConstants = getBool(sge, "upperCaseConstants", lspConfig.StyleGuideEnforcement.UpperCaseConstants)
+		lspConfig.StyleGuideEnforcement.DescriptiveLabels = getBool(sge, "descriptiveLabels", lspConfig.StyleGuideEnforcement.DescriptiveLabels)
+	}
+
+	log.Debug("LSP Configuration updated")
+}
+
 // documentStore holds the content of opened text documents.
 var documentStore = struct {
 	sync.RWMutex
@@ -93,6 +317,181 @@ var symbolStore = struct {
 	trees: make(map[string]*Scope),
 }
 
+// DocumentCache represents cached parsing results for a document
+type DocumentCache struct {
+	Content      string
+	ContentHash  string
+	Scope        *Scope
+	Diagnostics  []Diagnostic
+	LastModified time.Time
+}
+
+// parseCache holds cached parsing results to avoid re-parsing unchanged documents
+var parseCache = struct {
+	sync.RWMutex
+	cache map[string]*DocumentCache
+}{
+	cache: make(map[string]*DocumentCache),
+}
+
+// calculateContentHash creates a SHA256 hash of the document content
+func calculateContentHash(content string) string {
+	hash := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(hash[:])
+}
+
+// ParseDocumentCached parses a document with caching for unchanged content
+func ParseDocumentCached(uri string, text string) (*Scope, []Diagnostic) {
+	contentHash := calculateContentHash(text)
+
+	// Check cache first
+	parseCache.RLock()
+	if cached, exists := parseCache.cache[uri]; exists {
+		if cached.ContentHash == contentHash {
+			// Cache hit - return cached results
+			parseCache.RUnlock()
+			log.Debug("Cache hit for document %s", uri)
+			return cached.Scope, cached.Diagnostics
+		}
+	}
+	parseCache.RUnlock()
+
+	// Cache miss - parse document
+	log.Debug("Cache miss for document %s - parsing", uri)
+	scope, diagnostics := ParseDocument(uri, text)
+
+	// Update cache
+	parseCache.Lock()
+	parseCache.cache[uri] = &DocumentCache{
+		Content:      text,
+		ContentHash:  contentHash,
+		Scope:        scope,
+		Diagnostics:  diagnostics,
+		LastModified: time.Now(),
+	}
+	parseCache.Unlock()
+
+	return scope, diagnostics
+}
+
+// ClearParseCache removes a document from the parse cache
+func ClearParseCache(uri string) {
+	parseCache.Lock()
+	delete(parseCache.cache, uri)
+	parseCache.Unlock()
+	log.Debug("Cleared parse cache for document %s", uri)
+}
+
+// AnalysisJob represents a parsing/analysis job
+type AnalysisJob struct {
+	URI     string
+	Content string
+	Writer  *bufio.Writer
+	IsOpen  bool // true for didOpen, false for didChange
+}
+
+// analysisQueue processes parsing jobs asynchronously
+var analysisQueue = make(chan AnalysisJob, 10)
+var analysisWorkerStarted = false
+
+// startAnalysisWorker starts the background worker for processing analysis jobs
+func startAnalysisWorker() {
+	if analysisWorkerStarted {
+		return
+	}
+	analysisWorkerStarted = true
+
+	go func() {
+		log.Debug("Analysis worker started")
+		for job := range analysisQueue {
+			processAnalysisJob(job)
+		}
+	}()
+}
+
+// processAnalysisJob processes a single analysis job
+func processAnalysisJob(job AnalysisJob) {
+	// Parse document with caching
+	symbolTree, diagnostics := ParseDocumentCached(job.URI, job.Content)
+
+	// Update symbol store
+	symbolStore.Lock()
+	symbolStore.trees[job.URI] = symbolTree
+	symbolStore.Unlock()
+
+	if job.IsOpen {
+		log.Info("Parsed document and updated symbol store for %s", job.URI)
+	} else {
+		log.Info("Reparsed document and updated symbol store for %s", job.URI)
+	}
+
+	// Publish diagnostics
+	publishDiagnostics(job.Writer, job.URI, diagnostics)
+
+	// Note: We don't return diagnostics to the pool here because they may be
+	// referenced in the cache. The pool is mainly for temporary diagnostic slices
+	// during analysis. The cache will eventually be evicted and GC will clean up.
+}
+
+// submitAnalysisJob submits a job to the analysis queue (non-blocking)
+func submitAnalysisJob(uri, content string, writer *bufio.Writer, isOpen bool) {
+	job := AnalysisJob{
+		URI:     uri,
+		Content: content,
+		Writer:  writer,
+		IsOpen:  isOpen,
+	}
+
+	select {
+	case analysisQueue <- job:
+		// Job queued successfully
+		log.Debug("Queued analysis job for %s", uri)
+	default:
+		// Queue is full - process synchronously as fallback
+		log.Debug("Analysis queue full, processing %s synchronously", uri)
+		processAnalysisJob(job)
+	}
+}
+
+// DiagnosticPool manages a pool of diagnostic slices to reduce allocations
+type DiagnosticPool struct {
+	pool sync.Pool
+}
+
+// diagnosticPool is the global pool for diagnostic slices
+var diagnosticPool = &DiagnosticPool{
+	pool: sync.Pool{
+		New: func() interface{} {
+			// Pre-allocate slice with reasonable capacity
+			return make([]Diagnostic, 0, 32)
+		},
+	},
+}
+
+// Get retrieves a diagnostic slice from the pool
+func (dp *DiagnosticPool) Get() []Diagnostic {
+	return dp.pool.Get().([]Diagnostic)
+}
+
+// Put returns a diagnostic slice to the pool
+func (dp *DiagnosticPool) Put(diagnostics []Diagnostic) {
+	// Reset slice but keep underlying array if capacity is reasonable
+	if cap(diagnostics) < 128 { // Don't pool overly large slices
+		diagnostics = diagnostics[:0] // Reset length to 0
+		dp.pool.Put(diagnostics)
+	}
+}
+
+// GetPooledDiagnostics gets a diagnostic slice from the pool
+func GetPooledDiagnostics() []Diagnostic {
+	return diagnosticPool.Get()
+}
+
+// ReturnPooledDiagnostics returns a diagnostic slice to the pool
+func ReturnPooledDiagnostics(diagnostics []Diagnostic) {
+	diagnosticPool.Put(diagnostics)
+}
+
 func SetWarnUnusedLabels(enabled bool) {
 	warnUnusedLabelsEnabled = enabled
 }
@@ -100,6 +499,9 @@ func SetWarnUnusedLabels(enabled bool) {
 // Start initializes and runs the LSP server.
 func Start(mnemonicPath string, kickassPath string) {
 	log.Info("LSP server starting...")
+
+	// Start the analysis worker
+	startAnalysisWorker()
 
 	// Load mnemonic data
 	err := loadMnemonics(mnemonicPath)
@@ -198,10 +600,15 @@ func Start(mnemonicPath string, kickassPath string) {
 							},
 							"full": true,
 						},
+						"workspace": map[string]interface{}{
+							"workspaceFolders": map[string]interface{}{
+								"supported": true,
+							},
+						},
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.7.9", // Version updated
+						"version": "0.8.0", // Version updated
 					},
 				},
 			}
@@ -221,6 +628,36 @@ func Start(mnemonicPath string, kickassPath string) {
 		case "exit":
 			log.Debug("Handling exit notification.")
 			os.Exit(0)
+		case "workspace/didChangeConfiguration":
+			log.Debug("Handling workspace/didChangeConfiguration notification.")
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if settings, ok := params["settings"].(map[string]interface{}); ok {
+					// Look for our specific LSP settings
+					if lspSettings, ok := settings["6510lsp"].(map[string]interface{}); ok {
+						log.Debug("Updating LSP configuration")
+						UpdateLSPConfig(lspSettings)
+
+						// Invalidate all parse caches to trigger re-analysis with new settings
+						parseCache.Lock()
+						for uri := range parseCache.cache {
+							delete(parseCache.cache, uri)
+							log.Debug("Invalidated parse cache for %s due to config change", uri)
+						}
+						parseCache.Unlock()
+
+						// Re-analyze all open documents with new configuration
+						documentStore.RLock()
+						for uri, content := range documentStore.documents {
+							submitAnalysisJob(uri, content, writer, false)
+						}
+						documentStore.RUnlock()
+
+						log.Info("Configuration updated and documents re-analyzed")
+					} else {
+						log.Debug("No 6510lsp settings found in configuration update")
+					}
+				}
+			}
 		case "textDocument/didOpen":
 			log.Debug("Handling textDocument/didOpen notification.")
 			if params, ok := message["params"].(map[string]interface{}); ok {
@@ -232,15 +669,8 @@ func Start(mnemonicPath string, kickassPath string) {
 							documentStore.Unlock()
 							log.Info("Stored document %s", uri)
 
-							// Parse document, build symbol tree, and get diagnostics in one go
-							symbolTree, diagnostics := ParseDocument(uri, text)
-							symbolStore.Lock()
-							symbolStore.trees[uri] = symbolTree
-							symbolStore.Unlock()
-							log.Info("Parsed document and updated symbol store for %s", uri)
-
-							// Publish diagnostics found during parsing
-							publishDiagnostics(writer, uri, diagnostics)
+							// Submit analysis job asynchronously
+							submitAnalysisJob(uri, text, writer, true)
 						}
 					}
 				}
@@ -258,15 +688,8 @@ func Start(mnemonicPath string, kickassPath string) {
 									documentStore.Unlock()
 									log.Info("Updated document %s", uri)
 
-									// Parse document, build symbol tree, and get diagnostics in one go
-									symbolTree, diagnostics := ParseDocument(uri, newText)
-									symbolStore.Lock()
-									symbolStore.trees[uri] = symbolTree
-									symbolStore.Unlock()
-									log.Info("Reparsed document and updated symbol store for %s", uri)
-
-									// Publish diagnostics found during parsing
-									publishDiagnostics(writer, uri, diagnostics)
+									// Submit analysis job asynchronously
+									submitAnalysisJob(uri, newText, writer, false)
 								}
 							}
 						}
@@ -285,6 +708,9 @@ func Start(mnemonicPath string, kickassPath string) {
 						symbolStore.Lock()
 						delete(symbolStore.trees, uri)
 						symbolStore.Unlock()
+
+						// Clear parse cache for closed document
+						ClearParseCache(uri)
 
 						log.Info("Removed document %s from stores.", uri)
 

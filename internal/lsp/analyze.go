@@ -108,7 +108,7 @@ type SemanticAnalyzer struct {
 func NewSemanticAnalyzer(scope *Scope, text string) *SemanticAnalyzer {
 	return &SemanticAnalyzer{
 		scope:         scope,
-		diagnostics:   []Diagnostic{},
+		diagnostics:   GetPooledDiagnostics(), // Use pooled diagnostics slice
 		documentLines: strings.Split(text, "\n"),
 		context:       NewAnalysisContext(),
 	}
@@ -133,7 +133,8 @@ func (a *SemanticAnalyzer) Analyze(program *Program) []Diagnostic {
 	a.pass4DeadCodeDetection(program.Statements)
 
 	// After walking the whole tree, check for unused symbols.
-	if warnUnusedLabelsEnabled {
+	config := GetLSPConfig()
+	if config.WarnUnusedLabels {
 		a.diagnostics = append(a.diagnostics, a.checkForUnusedSymbols(a.scope)...)
 	}
 
@@ -491,6 +492,13 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 
 // validateBranchDistance checks if branch distance is within 6502 limits
 func (a *SemanticAnalyzer) validateBranchDistance(operand Expression, token Token) {
+	config := GetLSPConfig()
+
+	// Check if branch distance validation is enabled
+	if !config.BranchDistanceValidation.Enabled || !config.BranchDistanceValidation.ShowWarnings {
+		return
+	}
+
 	if operand == nil || a.context == nil {
 		return
 	}
@@ -838,6 +846,13 @@ func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
 
 // checkIllegalOpcode warns about illegal 6502 opcodes
 func (a *SemanticAnalyzer) checkIllegalOpcode(mnemonic string, token Token) {
+	config := GetLSPConfig()
+
+	// Check if illegal opcode detection is enabled
+	if !config.IllegalOpcodeDetection.Enabled || !config.IllegalOpcodeDetection.ShowWarnings {
+		return
+	}
+
 	illegalOpcodes := map[string]string{
 		"SLO": "Shift Left then OR - undocumented opcode",
 		"RLA": "Rotate Left then AND - undocumented opcode",
@@ -857,6 +872,13 @@ func (a *SemanticAnalyzer) checkIllegalOpcode(mnemonic string, token Token) {
 
 // checkZeroPageOptimization suggests zero page addressing optimizations
 func (a *SemanticAnalyzer) checkZeroPageOptimization(mnemonic string, operand Expression, token Token) {
+	config := GetLSPConfig()
+
+	// Check if zero page optimization is enabled
+	if !config.ZeroPageOptimization.Enabled || !config.ZeroPageOptimization.ShowHints {
+		return
+	}
+
 	// FIRST: Check if operand is nil
 	if operand == nil {
 		return
@@ -923,21 +945,33 @@ func (a *SemanticAnalyzer) checkZeroPageOptimization(mnemonic string, operand Ex
 
 // checkStyleViolations checks for assembly style guide violations
 func (a *SemanticAnalyzer) checkStyleViolations(symbol *Symbol, token Token) {
+	config := GetLSPConfig()
+
+	// Check if style guide enforcement is enabled
+	if !config.StyleGuideEnforcement.Enabled || !config.StyleGuideEnforcement.ShowHints {
+		return
+	}
 	// Check constant naming (should be UPPER_CASE)
-	if symbol.Kind == Constant {
+	if symbol.Kind == Constant && config.StyleGuideEnforcement.UpperCaseConstants {
 		if !isUpperCase(symbol.Name) {
 			a.addHint(token, "Consider UPPER_CASE naming for constant '%s'", symbol.Name)
 		}
 	}
 
 	// Check label naming (should be descriptive)
-	if symbol.Kind == Label && len(symbol.Name) < 3 {
+	if symbol.Kind == Label && config.StyleGuideEnforcement.DescriptiveLabels && len(symbol.Name) < 3 {
 		a.addHint(token, "Consider more descriptive name for label '%s'", symbol.Name)
 	}
 }
 
 // checkMagicNumbers identifies potential magic numbers
 func (a *SemanticAnalyzer) checkMagicNumbers(expr Expression, token Token) {
+	config := GetLSPConfig()
+
+	// Check if magic number detection is enabled
+	if !config.MagicNumberDetection.Enabled || !config.MagicNumberDetection.ShowHints {
+		return
+	}
 	if literal, ok := expr.(*IntegerLiteral); ok {
 		// Common C64/6502 addresses and values that might be magic numbers
 		magicNumbers := map[int64]string{
@@ -978,6 +1012,12 @@ func isUpperCase(s string) bool {
 
 // check6502HardwareBugs detects famous 6502 hardware bugs
 func (a *SemanticAnalyzer) check6502HardwareBugs(mnemonic string, operand Expression, token Token) {
+	config := GetLSPConfig()
+
+	// Check if hardware bug detection is enabled
+	if !config.HardwareBugDetection.Enabled || !config.HardwareBugDetection.ShowWarnings {
+		return
+	}
 	switch mnemonic {
 	case "JMP":
 		// Check for JMP ($xxFF) page boundary bug
@@ -1023,6 +1063,12 @@ func (a *SemanticAnalyzer) checkBRKBug(token Token) {
 
 // checkMemoryAccess analyzes memory access patterns for instructions
 func (a *SemanticAnalyzer) checkMemoryAccess(mnemonic string, operand Expression, token Token) {
+	config := GetLSPConfig()
+
+	// Check if memory layout analysis is enabled
+	if !config.MemoryLayoutAnalysis.Enabled {
+		return
+	}
 	// Skip immediate addressing (already checked in checkZeroPageOptimization)
 	if intLit, ok := operand.(*IntegerLiteral); ok {
 		if strings.HasPrefix(intLit.Token.Literal, "#") {
@@ -1061,16 +1107,18 @@ func (a *SemanticAnalyzer) isWriteInstruction(mnemonic string) bool {
 
 // Memory access pattern analysis
 func (a *SemanticAnalyzer) analyzeMemoryAccess(addr int64, isWrite bool, token Token) {
-	if isWrite && a.context.MemoryMap.IsROMArea(addr) {
+	config := GetLSPConfig()
+
+	if isWrite && a.context.MemoryMap.IsROMArea(addr) && config.MemoryLayoutAnalysis.ShowROMWriteWarnings {
 		a.addWarning(token, "Writing to ROM area $%04X - this will have no effect", addr)
 	}
 
-	if a.context.MemoryMap.IsIOArea(addr) {
+	if a.context.MemoryMap.IsIOArea(addr) && config.MemoryLayoutAnalysis.ShowIOAccess {
 		a.addInfo(token, "I/O register access: $%04X - ensure correct timing", addr)
 	}
 
 	// Check for stack area usage
-	if addr >= 0x0100 && addr <= 0x01FF {
+	if addr >= 0x0100 && addr <= 0x01FF && config.MemoryLayoutAnalysis.ShowStackWarnings {
 		if isWrite {
 			a.addWarning(token, "Writing to stack area $%04X - may corrupt stack", addr)
 		} else {
@@ -1091,6 +1139,12 @@ func formatAddress(addr int64) string {
 
 // pass4DeadCodeDetection analyzes control flow to find unreachable code
 func (a *SemanticAnalyzer) pass4DeadCodeDetection(statements []Statement) {
+	config := GetLSPConfig()
+
+	// Check if dead code detection is enabled
+	if !config.DeadCodeDetection.Enabled || !config.DeadCodeDetection.ShowWarnings {
+		return
+	}
 	// Use a map to track visited statements to avoid duplicates
 	visited := make(map[Statement]bool)
 	a.analyzeControlFlowWithVisited(statements, visited)

@@ -42,7 +42,7 @@ func buildScopeFromAST(program *Program, uri string) (*Scope, []Diagnostic) {
 		return rootScope, []Diagnostic{}
 	}
 
-	builder := &scopeBuilder{diagnostics: []Diagnostic{}}
+	builder := &scopeBuilder{diagnostics: GetPooledDiagnostics()}
 	builder.buildScope(program.Statements, rootScope)
 	return rootScope, builder.diagnostics
 }
