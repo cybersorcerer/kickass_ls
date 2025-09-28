@@ -7,3 +7,6 @@ lsp.log
 plan_phase_2.md
 SemanticToken.md
 .DS_Store
+*-plan.md
+grammar-comparison.md
+kickassembler.tmLanguage

@@ -52,6 +52,7 @@ const (
 type Mnemonic struct {
 	Mnemonic        string           `json:"mnemonic"`
 	Description     string           `json:"description"`
+	Type            string           `json:"type"`
 	AddressingModes []AddressingMode `json:"addressing_modes"`
 	CPUFlags        []string         `json:"cpu_flags"`
 }
@@ -1078,25 +1079,44 @@ func getOpcodeDescription(mnemonic string) string {
 			builder.WriteString(fmt.Sprintf("**%s**\n\n", m.Mnemonic))
 			builder.WriteString(fmt.Sprintf("%s\n\n", m.Description))
 
-			// Properly formatted Markdown table with correct newlines
-			builder.WriteString("| Opcode | Addressing Mode | Assembler Format | Length | Cycles |\n")
-			builder.WriteString("|:------ |:---------------- |:----------------- |:------ |:------ |\n")
-
-			for _, am := range m.AddressingModes {
-				// Clean assembler format - remove any backticks that might interfere
-				assemblerFormat := strings.ReplaceAll(am.AssemblerFormat, "`", "")
-				builder.WriteString(fmt.Sprintf("| `$%s` | %s | `%s` | %d | %s |\n",
-					am.Opcode, am.AddressingMode, assemblerFormat, am.Length, am.Cycles))
+			// Check if this is an illegal opcode and add warning
+			if m.Type == "Illegal" {
+				builder.WriteString("⚠️ **ILLEGAL OPCODE** - Undocumented instruction, behavior may vary between processors\n\n")
 			}
 
-			// CPU Flags section with proper formatting
-			builder.WriteString("\n**CPU Flags Affected:**\n\n")
+			// Use code block format instead of markdown table for better Neovim compatibility
+			builder.WriteString("**Addressing Modes:**\n")
+			builder.WriteString("```\n")
+			builder.WriteString("Opcode   Mode              Format          Bytes   Cycles\n")
+			builder.WriteString("------   ----              ------          -----   ------\n")
+
+			for _, am := range m.AddressingModes {
+				// Format as fixed-width columns for better alignment
+				opcode := fmt.Sprintf("$%s", am.Opcode)
+				mode := am.AddressingMode
+				format := am.AssemblerFormat
+				bytes := fmt.Sprintf("%d", am.Length)
+				cycles := am.Cycles
+
+				// Pad columns for precise alignment - increased Format column width
+				builder.WriteString(fmt.Sprintf("%-8s %-17s %-15s %-7s %s\n",
+					opcode, mode, format, bytes, cycles))
+			}
+			builder.WriteString("```\n")
+
+			// CPU Flags section with enhanced formatting
+			builder.WriteString("\n**CPU Flags Affected:**\n")
 			if len(m.CPUFlags) > 0 {
 				for _, flag := range m.CPUFlags {
-					builder.WriteString(fmt.Sprintf("%s\n", flag))
+					// Remove leading/trailing whitespace and ensure proper formatting
+					cleanFlag := strings.TrimSpace(flag)
+					if cleanFlag != "" {
+						builder.WriteString(fmt.Sprintf("\n• %s", cleanFlag))
+					}
 				}
+				builder.WriteString("\n")
 			} else {
-				builder.WriteString("None\n")
+				builder.WriteString("\n• None\n")
 			}
 
 			return builder.String()

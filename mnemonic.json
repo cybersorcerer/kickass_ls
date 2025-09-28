@@ -2114,5 +2114,1029 @@
       }
     ],
     "cpu_flags": []
+  },
+  {
+    "mnemonic": "AAC",
+    "description": "AAC (unofficial mnemonic, same as ANC) is an **illegal** opcode that performs AND operation with accumulator and immediate value, then copies bit 7 to carry flag.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "0B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "AAC #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set to bit 7 of result."
+    ]
+  },
+  {
+    "mnemonic": "AAX",
+    "description": "AAX (unofficial mnemonic, same as SAX) is an **illegal** opcode that stores accumulator AND X register into memory.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "87",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "AAX nn",
+        "length": 2,
+        "cycles": "3"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "ANE",
+    "description": "ANE (A AND (X AND immediate)) is an **illegal** opcode with unstable behavior. Result depends on temperature and individual chip characteristics.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "8B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ANE #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "ASO",
+    "description": "ASO (unofficial mnemonic, same as SLO) is an **illegal** opcode that shifts left one bit in memory, then ORs result with accumulator.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "0F",
+        "addressing_mode": "Absolute",
+        "assembler_format": "ASO nnnn",
+        "length": 3,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set to bit 7 of original memory value."
+    ]
+  },
+  {
+    "mnemonic": "ASR",
+    "description": "ASR (unofficial mnemonic, same as ALR) is an **illegal** opcode that ANDs accumulator with immediate, then LSRs the result.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "4B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ASR #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Always cleared.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set to bit 0 of result before shift."
+    ]
+  },
+  {
+    "mnemonic": "ATX",
+    "description": "ATX (unofficial mnemonic, same as LXA) is an **illegal** opcode that ANDs accumulator with immediate, then transfers to both A and X. Unstable on some machines.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "AB",
+        "addressing_mode": "Immediate",
+        "assembler_format": "ATX #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "AXA",
+    "description": "AXA (unofficial mnemonic, same as SHA) is an **illegal** opcode that stores accumulator AND X AND high byte of target address + 1.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9F",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "AXA nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "AXS",
+    "description": "AXS (unofficial mnemonic, same as SBX) is an **illegal** opcode that ANDs A and X, then subtracts immediate (without borrow).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "CB",
+        "addressing_mode": "Immediate",
+        "assembler_format": "AXS #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set if no borrow occurred."
+    ]
+  },
+  {
+    "mnemonic": "DCM",
+    "description": "DCM (unofficial mnemonic, same as DCP) is an **illegal** opcode that decrements memory, then compares with accumulator.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "C7",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "DCM nn",
+        "length": 2,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if accumulator equals memory after decrement.",
+      "**C** - Set if accumulator >= memory after decrement."
+    ]
+  },
+  {
+    "mnemonic": "DOP",
+    "description": "DOP (Double No-Operation) is an **illegal** opcode that reads the next byte but does nothing with it. Takes 2 bytes, acts like NOP.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "04",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "DOP nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "14",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DOP nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "34",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DOP nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "44",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "DOP nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "54",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DOP nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "64",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "DOP nn",
+        "length": 2,
+        "cycles": "3"
+      },
+      {
+        "opcode": "74",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DOP nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "80",
+        "addressing_mode": "Immediate",
+        "assembler_format": "DOP #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "82",
+        "addressing_mode": "Immediate",
+        "assembler_format": "DOP #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "89",
+        "addressing_mode": "Immediate",
+        "assembler_format": "DOP #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "C2",
+        "addressing_mode": "Immediate",
+        "assembler_format": "DOP #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "D4",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DOP nn,X",
+        "length": 2,
+        "cycles": "4"
+      },
+      {
+        "opcode": "E2",
+        "addressing_mode": "Immediate",
+        "assembler_format": "DOP #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "F4",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "DOP nn,X",
+        "length": 2,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "HLT",
+    "description": "HLT (Halt/Jam) is an **illegal** opcode that halts the CPU. Same as JAM. Only reset can restart execution.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "02",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "12",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "22",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "32",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "42",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "52",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "62",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "72",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "92",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "B2",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "D2",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      },
+      {
+        "opcode": "F2",
+        "addressing_mode": "Implied",
+        "assembler_format": "HLT",
+        "length": 1,
+        "cycles": ""
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "INS",
+    "description": "INS (unofficial mnemonic, same as ISC) is an **illegal** opcode that increments memory, then subtracts from accumulator with carry.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "E7",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "INS nn",
+        "length": 2,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**V** - Set if signed overflow occurred.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set if unsigned underflow occurred."
+    ]
+  },
+  {
+    "mnemonic": "ISB",
+    "description": "ISB (unofficial mnemonic, same as ISC) is an **illegal** opcode that increments memory, then subtracts from accumulator with carry.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "FF",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "ISB nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**V** - Set if signed overflow occurred.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set if unsigned underflow occurred."
+    ]
+  },
+  {
+    "mnemonic": "KIL",
+    "description": "KIL (Kill/Jam) is an **illegal** opcode that halts the CPU. Same as JAM/HLT. Only reset can restart execution.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "02",
+        "addressing_mode": "Implied",
+        "assembler_format": "KIL",
+        "length": 1,
+        "cycles": ""
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "LAE",
+    "description": "LAE (unofficial mnemonic, same as LAS) is an **illegal** opcode that ANDs memory with stack pointer, then transfers result to A, X and S.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "BB",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "LAE nnnn,Y",
+        "length": 3,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "LAR",
+    "description": "LAR (unofficial mnemonic, same as LAE/LAS) is an **illegal** opcode that ANDs memory with stack pointer, then transfers result to A, X and S.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "BB",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "LAR nnnn,Y",
+        "length": 3,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "LAS",
+    "description": "LAS (Load A, X and S) is an **illegal** opcode that ANDs memory with stack pointer, then stores result in A, X and S.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "BB",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "LAS nnnn,Y",
+        "length": 3,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "LSE",
+    "description": "LSE (unofficial mnemonic, same as SRE) is an **illegal** opcode that shifts right one bit in memory, then EORs result with accumulator.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "47",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "LSE nn",
+        "length": 2,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set to bit 0 of original memory value."
+    ]
+  },
+  {
+    "mnemonic": "LXA",
+    "description": "LXA (Load X and A) is an **illegal** opcode that loads immediate value into both A and X. Behavior may be unstable.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "AB",
+        "addressing_mode": "Immediate",
+        "assembler_format": "LXA #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "OAL",
+    "description": "OAL (unofficial mnemonic, same as LXA) is an **illegal** opcode with unstable behavior. Loads immediate into A and X.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "AB",
+        "addressing_mode": "Immediate",
+        "assembler_format": "OAL #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "RLA",
+    "description": "RLA (Rotate Left then AND) is an **illegal** opcode that rotates memory left one bit, then ANDs result with accumulator.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "27",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "RLA nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "37",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "RLA nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "2F",
+        "addressing_mode": "Absolute",
+        "assembler_format": "RLA nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "3F",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "RLA nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "3B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "RLA nnnn,Y",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "23",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "RLA (nn,X)",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "33",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "RLA (nn),Y",
+        "length": 2,
+        "cycles": "8"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set to bit 7 of original memory value."
+    ]
+  },
+  {
+    "mnemonic": "RRA",
+    "description": "RRA (Rotate Right then Add) is an **illegal** opcode that rotates memory right one bit, then adds result to accumulator with carry.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "67",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "RRA nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "77",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "RRA nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "6F",
+        "addressing_mode": "Absolute",
+        "assembler_format": "RRA nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "7F",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "RRA nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "7B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "RRA nnnn,Y",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "63",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "RRA (nn,X)",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "73",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "RRA (nn),Y",
+        "length": 2,
+        "cycles": "8"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**V** - Set if signed overflow occurred.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set if unsigned overflow occurred."
+    ]
+  },
+  {
+    "mnemonic": "SKB",
+    "description": "SKB (Skip Byte) is an **illegal** opcode that skips the next byte. Same as DOP with immediate addressing.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "80",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SKB #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "82",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SKB #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "89",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SKB #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "C2",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SKB #nn",
+        "length": 2,
+        "cycles": "2"
+      },
+      {
+        "opcode": "E2",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SKB #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SHA",
+    "description": "SHA (Store Hibyte AND) is an **illegal** opcode that stores accumulator AND X AND (high byte of target address + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9F",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "SHA nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      },
+      {
+        "opcode": "93",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "SHA (nn),Y",
+        "length": 2,
+        "cycles": "6"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SHS",
+    "description": "SHS (Store Hibyte and S) is an **illegal** opcode that stores accumulator AND X into stack pointer, then stores stack pointer AND (high byte + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "SHS nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SAY",
+    "description": "SAY (unofficial mnemonic, same as SHY) is an **illegal** opcode that stores Y AND (high byte of target address + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SAY nnnn,X",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SHX",
+    "description": "SHX (Store Hibyte X) is an **illegal** opcode that stores X AND (high byte of target address + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9E",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "SHX nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SHY",
+    "description": "SHY (Store Hibyte Y) is an **illegal** opcode that stores Y AND (high byte of target address + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SHY nnnn,X",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SLO",
+    "description": "SLO (Shift Left then OR) is an **illegal** opcode that shifts memory left one bit, then ORs result with accumulator.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "07",
+        "addressing_mode": "Zeropage",
+        "assembler_format": "SLO nn",
+        "length": 2,
+        "cycles": "5"
+      },
+      {
+        "opcode": "17",
+        "addressing_mode": "Zeropage,X",
+        "assembler_format": "SLO nn,X",
+        "length": 2,
+        "cycles": "6"
+      },
+      {
+        "opcode": "0F",
+        "addressing_mode": "Absolute",
+        "assembler_format": "SLO nnnn",
+        "length": 3,
+        "cycles": "6"
+      },
+      {
+        "opcode": "1F",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SLO nnnn,X",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "1B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "SLO nnnn,Y",
+        "length": 3,
+        "cycles": "7"
+      },
+      {
+        "opcode": "03",
+        "addressing_mode": "Indexed-indirect",
+        "assembler_format": "SLO (nn,X)",
+        "length": 2,
+        "cycles": "8"
+      },
+      {
+        "opcode": "13",
+        "addressing_mode": "Indirect-indexed",
+        "assembler_format": "SLO (nn),Y",
+        "length": 2,
+        "cycles": "8"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero.",
+      "**C** - Set to bit 7 of original memory value."
+    ]
+  },
+  {
+    "mnemonic": "SKW",
+    "description": "SKW (Skip Word) is an **illegal** opcode that skips the next word (2 bytes). Same as TOP.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "0C",
+        "addressing_mode": "Absolute",
+        "assembler_format": "SKW nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "1C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SKW nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "3C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SKW nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "5C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SKW nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "7C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SKW nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "DC",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SKW nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "FC",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SKW nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SXA",
+    "description": "SXA (unofficial mnemonic, same as SHX) is an **illegal** opcode that stores X AND (high byte of target address + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9E",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "SXA nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "SYA",
+    "description": "SYA (unofficial mnemonic, same as SHY) is an **illegal** opcode that stores Y AND (high byte of target address + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "SYA nnnn,X",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "TAS",
+    "description": "TAS (Transfer A and X to S) is an **illegal** opcode that transfers accumulator AND X to stack pointer, then stores S AND (high byte + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "TAS nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "TOP",
+    "description": "TOP (Triple No-Operation) is an **illegal** opcode that reads the next word but does nothing with it. Takes 3 bytes, acts like NOP.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "0C",
+        "addressing_mode": "Absolute",
+        "assembler_format": "TOP nnnn",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "1C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "TOP nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "3C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "TOP nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "5C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "TOP nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "7C",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "TOP nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "DC",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "TOP nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      },
+      {
+        "opcode": "FC",
+        "addressing_mode": "Absolute,X",
+        "assembler_format": "TOP nnnn,X",
+        "length": 3,
+        "cycles": "4"
+      }
+    ],
+    "cpu_flags": []
+  },
+  {
+    "mnemonic": "XAA",
+    "description": "XAA (Transfer X to A AND immediate) is an **illegal** opcode with highly unstable behavior. Function varies between individual CPUs.",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "8B",
+        "addressing_mode": "Immediate",
+        "assembler_format": "XAA #nn",
+        "length": 2,
+        "cycles": "2"
+      }
+    ],
+    "cpu_flags": [
+      "**N** - Set if bit 7 of result is set.",
+      "**Z** - Set if result is zero."
+    ]
+  },
+  {
+    "mnemonic": "XAS",
+    "description": "XAS (unofficial mnemonic, same as SHS/TAS) is an **illegal** opcode that transfers A AND X to stack pointer, then stores S AND (high byte + 1).",
+    "type": "Illegal",
+    "addressing_modes": [
+      {
+        "opcode": "9B",
+        "addressing_mode": "Absolute,Y",
+        "assembler_format": "XAS nnnn,Y",
+        "length": 3,
+        "cycles": "5"
+      }
+    ],
+    "cpu_flags": []
   }
 ]
