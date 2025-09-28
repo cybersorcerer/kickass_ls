@@ -114,9 +114,9 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 
 			if stmt.Value != nil {
 				switch strings.ToLower(stmt.Token.Literal) {
-				case ".const":
+				case ".const", "const":
 					kind = Constant
-				case ".var":
+				case ".var", "var":
 					kind = Variable
 				default:
 					kind = UnknownSymbol
@@ -260,6 +260,9 @@ func determineAddressingModeFromAST(mnemonic string, expr Expression) (string, e
 					return "Absolute,Y", nil
 				}
 			}
+		} else if strings.EqualFold(e.Operator, ".") {
+			// Handle namespace.label syntax (e.g., gfx.loop)
+			return "Absolute", nil
 		}
 	}
 

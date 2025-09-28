@@ -1,7 +1,10 @@
 package lsp
 
 import (
+	"encoding/json"
+	"os"
 	"regexp"
+	"strings"
 
 	log "c64.nvim/internal/log"
 )
@@ -116,6 +119,70 @@ func (t TokenType) String() string {
 	return "UNKNOWN"
 }
 
+// MnemonicInfo represents a mnemonic from mnemonic.json for lexer use
+type MnemonicInfo struct {
+	Mnemonic string `json:"mnemonic"`
+	Type     string `json:"type"`
+}
+
+// loadMnemonicsFromJSON loads mnemonics from mnemonic.json and creates regex patterns
+func loadMnemonicsFromJSON() map[TokenType]*regexp.Regexp {
+	file, err := os.Open("mnemonic.json")
+	if err != nil {
+		log.Error("Failed to open mnemonic.json: %v", err)
+		return createFallbackMnemonicRegexes()
+	}
+	defer file.Close()
+
+	var mnemonics []MnemonicInfo
+	if err := json.NewDecoder(file).Decode(&mnemonics); err != nil {
+		log.Error("Failed to parse mnemonic.json: %v", err)
+		return createFallbackMnemonicRegexes()
+	}
+
+	// Group mnemonics by type
+	stdOpcodes := []string{}
+	ctrlOpcodes := []string{}
+	illOpcodes := []string{}
+
+	for _, mnemonic := range mnemonics {
+		opcode := strings.ToLower(mnemonic.Mnemonic)
+		switch mnemonic.Type {
+		case "Transfer", "Arithmetic", "Logic", "Shift & Rotate", "Bit Test", "Flag", "Interrupt":
+			stdOpcodes = append(stdOpcodes, opcode)
+		case "Jump":
+			ctrlOpcodes = append(ctrlOpcodes, opcode)
+		case "Illegal":
+			illOpcodes = append(illOpcodes, opcode)
+		}
+	}
+
+	// Create regex patterns
+	regexes := make(map[TokenType]*regexp.Regexp)
+	if len(stdOpcodes) > 0 {
+		regexes[TOKEN_MNEMONIC_STD] = regexp.MustCompile(`^(?i)(` + strings.Join(stdOpcodes, "|") + `)\b`)
+	}
+	if len(ctrlOpcodes) > 0 {
+		regexes[TOKEN_MNEMONIC_CTRL] = regexp.MustCompile(`^(?i)(` + strings.Join(ctrlOpcodes, "|") + `)\b`)
+	}
+	if len(illOpcodes) > 0 {
+		regexes[TOKEN_MNEMONIC_ILL] = regexp.MustCompile(`^(?i)(` + strings.Join(illOpcodes, "|") + `)\b`)
+	}
+
+	log.Debug("Loaded mnemonics: %d std, %d ctrl, %d illegal", len(stdOpcodes), len(ctrlOpcodes), len(illOpcodes))
+	return regexes
+}
+
+// createFallbackMnemonicRegexes provides hardcoded regexes as fallback
+func createFallbackMnemonicRegexes() map[TokenType]*regexp.Regexp {
+	log.Warn("Using fallback hardcoded mnemonic regexes")
+	return map[TokenType]*regexp.Regexp{
+		TOKEN_MNEMONIC_STD:  regexp.MustCompile(`^(?i)(adc|and|asl|bit|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|sbc|sec|sed|sei|sta|stx|sty|tax|txa|tay|tya|tsx|txs)\b`),
+		TOKEN_MNEMONIC_CTRL: regexp.MustCompile(`^(?i)(bcc|bcs|beq|bmi|bne|bpl|brk|bvc|bvs|jmp|jsr|rti|rts)\b`),
+		TOKEN_MNEMONIC_ILL:  regexp.MustCompile(`^(?i)(slo|rla|sre|rra|sax|lax|dcp|isc|anc|asr|arr|sbx|dop|top|jam)\b`),
+	}
+}
+
 // tokenDefinition holds a token type and the regex used to match it.
 type tokenDefinition struct {
 	tokenType TokenType
@@ -123,7 +190,13 @@ type tokenDefinition struct {
 }
 
 // The order of these definitions is important for correct matching.
-var tokenDefs = []tokenDefinition{
+var tokenDefs []tokenDefinition
+
+// initTokenDefs initializes tokenDefs with mnemonic regexes loaded from JSON
+func initTokenDefs() {
+	mnemonicRegexes := loadMnemonicsFromJSON()
+
+	tokenDefs = []tokenDefinition{
 	{TOKEN_COMMENT, regexp.MustCompile(`^//.*`)},                   // Handle // comments
 	{TOKEN_COMMENT, regexp.MustCompile(`^;.*`)},                    // Handle ; comments
 	{TOKEN_COMMENT, regexp.MustCompile(`^/\*.*?\*/`)},               // Handle /* */ comments
@@ -132,10 +205,21 @@ var tokenDefs = []tokenDefinition{
 	{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+`)},
 	{TOKEN_NUMBER_OCT, regexp.MustCompile(`^#?&[0-7]+`)}, // Corrected escaping for &
 	{TOKEN_STRING, regexp.MustCompile(`^"(\\|[^\"])*"`)}, // Corrected escaping for " and "
-	{TOKEN_MNEMONIC_STD, regexp.MustCompile(`^(?i)(adc|and|asl|bit|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|sbc|sec|sed|sei|sta|stx|sty|ta x|txa|tay|tya|tsx|txs)\b`)},
-	{TOKEN_MNEMONIC_CTRL, regexp.MustCompile(`^(?i)(bcc|bcs|beq|bmi|bne|bpl|brk|bvc|bvs|jmp|jsr|rti|rts)\b`)},
-	{TOKEN_MNEMONIC_ILL, regexp.MustCompile(`^(?i)(slo|rla|sre|rra|sax|lax|dcp|isc|anc|asr|arr|sbx|dop|top|jam)\b`)},
-	{TOKEN_MNEMONIC_65C02, regexp.MustCompile(`^(?i)((bbr|bbs|rmb|smb)[0-7]|trb|tsb|phx|phy|plx|ply|stz|bra)\b`)},
+	}
+
+	// Add dynamic mnemonic regexes from JSON
+	if regex, exists := mnemonicRegexes[TOKEN_MNEMONIC_STD]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_MNEMONIC_STD, regex})
+	}
+	if regex, exists := mnemonicRegexes[TOKEN_MNEMONIC_CTRL]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_MNEMONIC_CTRL, regex})
+	}
+	if regex, exists := mnemonicRegexes[TOKEN_MNEMONIC_ILL]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_MNEMONIC_ILL, regex})
+	}
+
+	// Continue with other token definitions
+	tokenDefs = append(tokenDefs, []tokenDefinition{
 	{TOKEN_DIRECTIVE_KICK_PRE, regexp.MustCompile(`^#(define|elif|else|endif|if|import|importif|importonce|undef)\b`)},
 	{TOKEN_DIRECTIVE_KICK_FLOW, regexp.MustCompile(`^\.(?i)(for|if|while|return)\b`)},
 	{TOKEN_DIRECTIVE_KICK_ASM, regexp.MustCompile(`^\.(?i)(align|assert|asserterror|break|cpu|define|disk|encoding|error|errorif|eval|file|filemodify|filenamespace|function|import|importonce|label|lohifill|m acro|memblock|modify|namespace|pc|plugin|print|printnow|pseudocommand|pseudopc|segment|segmentdef|segmentout|zp)\b`)},
@@ -161,6 +245,7 @@ var tokenDefs = []tokenDefinition{
 	{TOKEN_EQUAL, regexp.MustCompile(`^=`)},
 	{TOKEN_LESS, regexp.MustCompile(`^<`)},
 	{TOKEN_GREATER, regexp.MustCompile(`^>`)},
+	}...)
 }
 
 // Lexer holds the state of the lexical analysis.
@@ -174,6 +259,10 @@ type Lexer struct {
 
 // NewLexer creates a new Lexer.
 func NewLexer(input string) *Lexer {
+	// Initialize token definitions with dynamic mnemonics on first use
+	if len(tokenDefs) == 0 {
+		initTokenDefs()
+	}
 	l := &Lexer{input: input, line: 1, column: 1}
 	return l
 }

@@ -16,6 +16,7 @@
 
 .const MAX_SPRITES = 8
 .const SCREEN_MEM = $0400
+.const new_sprite = 10
 
 .CONST test = $100
 .CONST huhu = $100
@@ -36,7 +37,7 @@
 
 // Global and local labels
 .label global_label:
-.label .local_label:
+.label local_label:
     lda #<.local_label
     jmp global_label
 
