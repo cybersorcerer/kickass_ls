@@ -43,20 +43,28 @@ func parseLevel(s string) LogLevel {
 }
 
 func InitLogger() error {
-	// Use current working directory for logs
-	logDir := "/Users/Ronald.Funk/.local/share/6510lsp/log"
+	// Get home directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get home directory: %v", err)
+	}
+
+	// Create log directory in user's home
+	logDir := filepath.Join(homeDir, ".local", "share", "6510lsp", "log")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return err
+		return fmt.Errorf("failed to create log directory %s: %v", logDir, err)
 	}
 
 	logFilePath := filepath.Join(logDir, "6510lsp.log")
-	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+
+	// Truncate existing log file on startup for clean logs
+	file, err := os.OpenFile(logFilePath, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to open log file %s: %v", logFilePath, err)
 	}
 
 	Logger = log.New(file, "", log.Ldate|log.Ltime|log.Lshortfile)
-	Info("Logger initialized.")
+	Info("Logger initialized at %s", logFilePath)
 	return nil
 }
 

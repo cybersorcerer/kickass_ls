@@ -11,10 +11,7 @@ import (
 )
 
 func main() {
-	// Clear log file
-	if f, err := os.OpenFile("6510lsp.log", os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644); err == nil {
-		f.Close()
-	}
+	// Log file management is handled by internal/log package
 
 	// Parse command line flags
 	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)

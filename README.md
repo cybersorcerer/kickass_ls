@@ -2,12 +2,13 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/language-6502%2F6510%20Assembly-blue" alt="Language">
+  <img src="https://img.shields.io/badge/assembler-Kick%20Assembler-orange" alt="Kick Assembler">
   <img src="https://img.shields.io/badge/platform-Commodore%20C64-red" alt="Platform">
-  <img src="https.shields.io/badge/LSP-Language%20Server%20Protocol-green" alt="LSP">
+  <img src="https://img.shields.io/badge/LSP-Language%20Server%20Protocol-green" alt="LSP">
   <img src="https://img.shields.io/badge/editor-Neovim%200.11+-purple" alt="Neovim">
 </p>
 
-A comprehensive **Language Server Protocol (LSP)** implementation for **6502/6510 assembly language** development, specifically designed for **Commodore 64** programming. This project provides intelligent code analysis, semantic validation, and development assistance for retro computing enthusiasts and developers.
+A comprehensive **Language Server Protocol (LSP)** implementation for **6502/6510 assembly language** development, specifically designed for **Commodore 64** programming with **Kick Assembler** support. This project provides intelligent code analysis, semantic validation, and development assistance for retro computing enthusiasts and developers working with modern C64 development tools.
 
 ## ✨ Features
 
@@ -32,6 +33,16 @@ A comprehensive **Language Server Protocol (LSP)** implementation for **6502/651
 - **Style guide enforcement** with configurable rules
 - **Memory access pattern analysis**
 - **CPU flag dependency tracking**
+
+### ⚡ **Kick Assembler Integration**
+- **Complete directive support** for modern Kick Assembler syntax
+- **Variable and constant tracking** (`.var`, `.const`)
+- **Macro and pseudocommand** parsing and validation
+- **Namespace and scope** awareness
+- **Function definition** support with parameter validation
+- **Import directive** handling (`#import`, `.import`)
+- **Advanced control flow** (`.if`, `.for`, `.while`)
+- **Built-in function** completion and documentation
 
 ### ⚙️ **Flexible Configuration**
 - **Multiple configuration profiles**: `default`, `legacy`, `minimal`
@@ -264,11 +275,113 @@ The language server implements a sophisticated **6-pass semantic analysis** syst
 ## 🎨 Supported File Types
 
 The language server recognizes these file extensions:
-- `.asm` - Assembly source files
+- `.asm` - Assembly source files (Kick Assembler standard)
 - `.s` - Assembly source files (Unix convention)
 - `.6510` - 6510-specific assembly files
-- `.inc` - Include files
+- `.inc` - Include files (Kick Assembler includes)
 - `.a` - Assembly files (alternative extension)
+
+## ⚡ Kick Assembler Support
+
+This language server is specifically designed for **Kick Assembler**, the most popular modern assembler for C64 development. It provides comprehensive support for Kick Assembler's advanced features:
+
+### 📋 **Currently Supported Directives**
+
+| Directive | Support Level | Description |
+|-----------|---------------|-------------|
+| `.const` | ✅ **Full** | Constant definitions with scope tracking |
+| `.var` | ✅ **Full** | Variable declarations and assignments |
+| `.eval` | ✅ **Full** | Expression evaluation |
+| `.enum` | ✅ **Full** | Enumeration definitions |
+| `.label` | ✅ **Full** | Label declarations and multi-labels |
+| `.byte/.word/.dword` | ✅ **Full** | Data generation directives |
+| `.text` | ✅ **Full** | String data generation |
+| `.fill` | ✅ **Full** | Memory fill operations |
+| `#import` | ✅ **Full** | Preprocessor imports |
+| `.import` | ✅ **Full** | Binary/C64 file imports |
+| `.macro` | ✅ **Full** | Macro definitions and calls |
+| `.pseudocommand` | ✅ **Full** | Custom command definitions |
+| `.function` | ✅ **Full** | User-defined functions |
+| `.namespace` | ✅ **Full** | Namespace containers |
+| `.if/.else` | ✅ **Full** | Conditional compilation |
+| `.for/.while` | 🔄 **Planned** | Loop constructs |
+| `.align` | ✅ **Full** | Memory alignment |
+| `.assert/.asserterror` | 🔄 **Planned** | Testing directives |
+| `.break` | ✅ **Full** | Debug breakpoints |
+| `.cpu` | ✅ **Full** | CPU instruction set selection |
+| `.print/.printnow` | ✅ **Full** | Assembly-time output |
+
+### 🚀 **Advanced Kick Assembler Features**
+
+#### **Variable and Constant System**
+```kickassembler
+.const SCREEN = $0400        // Tracked as constant
+.var score = 0               // Tracked as variable
+.eval score = score + 100    // Expression evaluation
+```
+
+#### **Macro and Pseudocommand Support**
+```kickassembler
+.macro SetColor(color) {     // Full macro parsing
+    lda #color
+    sta $d020
+}
+
+.pseudocommand mov src:tar { // Custom command syntax
+    lda src
+    sta tar
+}
+```
+
+#### **Namespace Awareness**
+```kickassembler
+.namespace Graphics {        // Scope isolation
+    .function drawPixel(x, y) { ... }
+    .var currentColor = 1
+}
+```
+
+#### **Import System**
+```kickassembler
+#import "MyLibrary.asm"           // Preprocessor imports
+.import binary "Music.bin"        // Binary data imports
+.import c64 "charset.c64", $400   // C64 file format
+```
+
+### 🎯 **Planned Kick Assembler Enhancements**
+
+#### **Phase 1: Advanced Control Flow** (Q1 2024)
+- ✅ `.for` loop parsing and validation
+- ✅ `.while` loop support
+- ✅ Nested control structure validation
+- ✅ Loop variable tracking
+
+#### **Phase 2: Enhanced Testing Support** (Q2 2024)
+- ✅ `.assert` directive validation
+- ✅ `.asserterror` testing support
+- ✅ Test result reporting
+- ✅ Conditional test execution
+
+#### **Phase 3: Advanced Expression Engine** (Q3 2024)
+- ✅ Built-in function library completion
+- ✅ Mathematical expression validation
+- ✅ String manipulation functions
+- ✅ List and vector operations
+
+#### **Phase 4: Project Management** (Q4 2024)
+- ✅ Multi-file project analysis
+- ✅ Dependency graph generation
+- ✅ Cross-file symbol resolution
+- ✅ Build configuration support
+
+### 💡 **Kick Assembler Best Practices**
+
+The language server enforces and suggests Kick Assembler best practices:
+- **Consistent naming conventions** for variables and constants
+- **Proper scope usage** with namespaces
+- **Efficient macro design** with parameter validation
+- **Memory-aware coding** with alignment suggestions
+- **Modular development** with proper import structure
 
 ## 🐛 Troubleshooting
 
@@ -326,10 +439,12 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## 🙏 Acknowledgments
 
+- **Kick Assembler** - Mads Nielsen's excellent modern C64 assembler
 - **6502.org** - Comprehensive 6502 documentation and community
 - **C64 Wiki** - Detailed C64 hardware and software information
 - **Language Server Protocol** - Microsoft's LSP specification
 - **Neovim LSP** - Built-in LSP client implementation
+- **C64 Scene** - The vibrant retro computing community
 
 ---
 
