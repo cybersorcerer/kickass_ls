@@ -175,7 +175,12 @@ type BuiltinConstant struct {
 
 // loadMnemonicsFromJSON loads mnemonics from mnemonic.json and creates regex patterns
 func loadMnemonicsFromJSON() map[TokenType]*regexp.Regexp {
-	file, err := os.Open("mnemonic.json")
+	jsonPath := mnemonicJSONPath
+	if jsonPath == "" {
+		jsonPath = "mnemonic.json" // fallback
+	}
+
+	file, err := os.Open(jsonPath)
 	if err != nil {
 		log.Error("Failed to open mnemonic.json: %v", err)
 		return createFallbackMnemonicRegexes()
@@ -234,9 +239,19 @@ func createFallbackMnemonicRegexes() map[TokenType]*regexp.Regexp {
 // kickassJSONPath is set by the server to provide the correct path for kickass.json
 var kickassJSONPath string
 
+// mnemonicJSONPath is set by the server to provide the correct path for mnemonic.json
+var mnemonicJSONPath string
+
 // SetKickassJSONPath sets the path to kickass.json for lexer initialization
 func SetKickassJSONPath(path string) {
 	kickassJSONPath = path
+	// Force re-initialization of token definitions when path changes
+	tokenDefs = nil
+}
+
+// SetMnemonicJSONPath sets the path to mnemonic.json for lexer initialization
+func SetMnemonicJSONPath(path string) {
+	mnemonicJSONPath = path
 	// Force re-initialization of token definitions when path changes
 	tokenDefs = nil
 }

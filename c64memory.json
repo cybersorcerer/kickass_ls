@@ -1,0 +1,479 @@
+{
+  "memoryMap": {
+    "version": "2.0",
+    "source": "https://sta.c64.org/cbm64mem.html",
+    "regions": {
+      "0x0000": {
+        "name": "Processor Port Direction Register",
+        "category": "System",
+        "type": "register",
+        "size": 1,
+        "description": "Controls input/output capabilities of processor port bits",
+        "access": "read/write",
+        "bitFields": {
+          "0": "LORAM signal (1=output, 0=input)",
+          "1": "HIRAM signal (1=output, 0=input)",
+          "2": "CHAREN signal (1=output, 0=input)",
+          "3": "Cassette data output (1=output, 0=input)",
+          "4": "Cassette switch (1=output, 0=input)",
+          "5": "Cassette motor (1=output, 0=input)"
+        },
+        "examples": [
+          "lda #$37     ; Default: RAM/IO visible",
+          "sta $0000    ; Set port direction"
+        ],
+        "tips": ["Used for memory banking configuration"]
+      },
+      "0x0001": {
+        "name": "Processor Port",
+        "category": "System",
+        "type": "register",
+        "size": 1,
+        "description": "Controls memory configuration and cassette",
+        "access": "read/write",
+        "bitFields": {
+          "0": "LORAM (0=BASIC ROM at $A000-$BFFF)",
+          "1": "HIRAM (0=KERNAL ROM at $E000-$FFFF)",
+          "2": "CHAREN (0=Character ROM at $D000-$DFFF)",
+          "3": "Cassette data output line",
+          "4": "Cassette switch sense",
+          "5": "Cassette motor control"
+        },
+        "values": {
+          "0x37": "Default - All RAM/IO visible",
+          "0x36": "KERNAL + IO only",
+          "0x35": "BASIC + KERNAL + IO",
+          "0x34": "BASIC + KERNAL only",
+          "0x33": "Character ROM + IO only"
+        },
+        "examples": [
+          "lda #$34     ; All RAM mode",
+          "sta $0001    ; Switch to RAM"
+        ],
+        "related": ["0x0000"],
+        "tips": ["Essential for memory banking", "Default is $37"]
+      },
+      "0xD000": {
+        "name": "Sprite 0 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 0 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "examples": [
+          "lda #100     ; Set X position",
+          "sta $d000    ; Sprite 0 X coordinate"
+        ],
+        "related": ["0xD010", "0xD001"],
+        "tips": ["Full 9-bit X position with $D010 bit 0"]
+      },
+      "0xD010": {
+        "name": "Sprites 0-7 X Position MSB",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Most significant bits for sprite X positions",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Sprite 0 X MSB",
+          "1": "Sprite 1 X MSB",
+          "2": "Sprite 2 X MSB",
+          "3": "Sprite 3 X MSB",
+          "4": "Sprite 4 X MSB",
+          "5": "Sprite 5 X MSB",
+          "6": "Sprite 6 X MSB",
+          "7": "Sprite 7 X MSB"
+        },
+        "examples": [
+          "lda #%00000001 ; Enable sprite 0 X MSB",
+          "sta $d010      ; For X > 255"
+        ],
+        "related": ["0xD000", "0xD002", "0xD004"],
+        "tips": ["Enables sprite X positions > 255"]
+      },
+      "0xD011": {
+        "name": "VIC Control Register 1",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Main VIC-II control register for screen and raster",
+        "access": "read/write",
+        "bitFields": {
+          "0-2": "Vertical scroll (0-7)",
+          "3": "Screen height (0=24 rows, 1=25 rows)",
+          "4": "Screen enable (0=off, 1=on)",
+          "5": "Text/bitmap mode (0=text, 1=bitmap)",
+          "6": "Extended background mode",
+          "7": "Raster compare bit 8"
+        },
+        "examples": [
+          "lda $d011    ; Read current state",
+          "and #$7f     ; Clear raster bit 8",
+          "sta $d011    ; Set raster line < 256"
+        ],
+        "related": ["0xD012", "0xD016", "0xD018"],
+        "tips": ["Bit 7 is MSB of raster line for interrupts", "Bit 4 controls screen on/off"]
+      },
+      "0xD012": {
+        "name": "Raster Line Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Current raster line (bits 0-7) and raster interrupt line",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Raster line bits 0-7 (bit 8 in $D011)"
+        },
+        "examples": [
+          "lda #251     ; Set raster interrupt",
+          "sta $d012    ; at line 251",
+          "lda $d012    ; Read current raster line"
+        ],
+        "related": ["0xD011", "0xD01A", "0xD019"],
+        "tips": ["Combined with bit 7 of $D011 for full 9-bit raster", "Used for raster interrupts"]
+      },
+      "0xD015": {
+        "name": "Sprite Enable Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls which sprites are displayed",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Sprite 0 enable",
+          "1": "Sprite 1 enable",
+          "2": "Sprite 2 enable",
+          "3": "Sprite 3 enable",
+          "4": "Sprite 4 enable",
+          "5": "Sprite 5 enable",
+          "6": "Sprite 6 enable",
+          "7": "Sprite 7 enable"
+        },
+        "examples": [
+          "lda #%00000011 ; Enable sprites 0 and 1",
+          "sta $d015      ; Make sprites visible"
+        ],
+        "related": ["0xD000", "0xD001", "0xD010"],
+        "tips": ["Sprites must be enabled to be visible"]
+      },
+      "0xD018": {
+        "name": "VIC Memory Control Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls character and screen memory locations",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Not used",
+          "1-3": "Character memory location (x $800)",
+          "4-7": "Screen memory location (x $400)"
+        },
+        "values": {
+          "0x14": "Screen at $0400, Charset at $1000",
+          "0x15": "Screen at $0400, Charset at $1800",
+          "0x16": "Screen at $0400, Charset at $2000",
+          "0x17": "Screen at $0400, Charset at $2800"
+        },
+        "examples": [
+          "lda #$17     ; Screen $0400, Charset $2800",
+          "sta $d018    ; Set memory pointers"
+        ],
+        "related": ["0xDD00"],
+        "tips": ["Character set location relative to VIC bank"]
+      },
+      "0xD019": {
+        "name": "VIC Interrupt Flag Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Shows which VIC-II interrupts have occurred",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Raster interrupt flag",
+          "1": "Sprite-background collision flag",
+          "2": "Sprite-sprite collision flag",
+          "3": "Light pen interrupt flag",
+          "7": "Any VIC interrupt occurred"
+        },
+        "examples": [
+          "lda $d019    ; Read interrupt status",
+          "sta $d019    ; Acknowledge interrupts"
+        ],
+        "related": ["0xD01A", "0xD011", "0xD012"],
+        "tips": ["Must write to acknowledge interrupts", "Bit 7 indicates any VIC IRQ"]
+      },
+      "0xD01A": {
+        "name": "VIC Interrupt Enable Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls which VIC-II interrupts are enabled",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Raster interrupt enable",
+          "1": "Sprite-background collision enable",
+          "2": "Sprite-sprite collision enable",
+          "3": "Light pen interrupt enable"
+        },
+        "examples": [
+          "lda #$01     ; Enable raster interrupts",
+          "sta $d01a    ; Write to enable register"
+        ],
+        "related": ["0xD019", "0xD011", "0xD012"],
+        "tips": ["Must enable specific interrupt types", "Combined with global interrupt enable"]
+      },
+      "0xD020": {
+        "name": "Border Color Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls the color of the screen border",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "values": {
+          "0x00": "Black", "0x01": "White", "0x02": "Red", "0x03": "Cyan",
+          "0x04": "Purple", "0x05": "Green", "0x06": "Blue", "0x07": "Yellow",
+          "0x08": "Orange", "0x09": "Brown", "0x0A": "Light Red", "0x0B": "Dark Gray",
+          "0x0C": "Gray", "0x0D": "Light Green", "0x0E": "Light Blue", "0x0F": "Light Gray"
+        },
+        "examples": [
+          "lda #$02    ; Red border",
+          "sta $D020   ; Set border color"
+        ],
+        "related": ["0xD021", "0xD800"],
+        "tips": ["Use symbolic constants instead of magic numbers", "Border color is visible even when screen is off"]
+      },
+      "0xD021": {
+        "name": "Background Color Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls the background color of the screen",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "values": {
+          "0x00": "Black", "0x01": "White", "0x02": "Red", "0x03": "Cyan",
+          "0x04": "Purple", "0x05": "Green", "0x06": "Blue", "0x07": "Yellow",
+          "0x08": "Orange", "0x09": "Brown", "0x0A": "Light Red", "0x0B": "Dark Gray",
+          "0x0C": "Gray", "0x0D": "Light Green", "0x0E": "Light Blue", "0x0F": "Light Gray"
+        },
+        "examples": [
+          "lda #$06    ; Blue background",
+          "sta $D021   ; Set background color"
+        ],
+        "related": ["0xD020", "0xD022", "0xD023"],
+        "tips": ["Background color 0 (default)", "Use with multicolor modes for additional colors"]
+      },
+      "0xD400": {
+        "name": "SID Voice 1 Frequency Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 frequency control (low byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Frequency bits 0-7"
+        },
+        "examples": [
+          "lda #$1C     ; Low byte frequency",
+          "sta $d400    ; Voice 1 frequency"
+        ],
+        "related": ["0xD401", "0xD402", "0xD403"],
+        "tips": ["16-bit frequency with $D401", "Higher values = higher pitch"]
+      },
+      "0xD401": {
+        "name": "SID Voice 1 Frequency High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 frequency control (high byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Frequency bits 8-15"
+        },
+        "examples": [
+          "lda #$10     ; High byte frequency",
+          "sta $d401    ; Voice 1 frequency"
+        ],
+        "related": ["0xD400", "0xD402", "0xD403"],
+        "tips": ["Combined with $D400 for full 16-bit frequency"]
+      },
+      "0xD404": {
+        "name": "SID Voice 1 Control Register",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 control and waveform selection",
+        "access": "write",
+        "bitFields": {
+          "0": "Gate (voice on/off)",
+          "1": "Sync oscillator with voice 3",
+          "2": "Ring modulation with voice 3",
+          "3": "Test (disable oscillator)",
+          "4": "Triangle waveform",
+          "5": "Sawtooth waveform",
+          "6": "Pulse waveform",
+          "7": "Noise waveform"
+        },
+        "examples": [
+          "lda #%00010001 ; Triangle + Gate",
+          "sta $d404      ; Start voice 1"
+        ],
+        "related": ["0xD40B", "0xD412"],
+        "tips": ["Multiple waveforms can be combined", "Gate bit starts/stops voice"]
+      },
+      "0xD418": {
+        "name": "SID Volume and Filter Control",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Master volume and filter mode selection",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Volume (0-15)",
+          "4": "Low pass filter enable",
+          "5": "Band pass filter enable",
+          "6": "High pass filter enable",
+          "7": "Disconnect voice 3 output"
+        },
+        "examples": [
+          "lda #$0F     ; Maximum volume",
+          "sta $d418    ; Set volume"
+        ],
+        "related": ["0xD417", "0xD416"],
+        "tips": ["Volume affects all voices", "Filter affects selected voices only"]
+      },
+      "0xDC00": {
+        "name": "CIA1 Port A (Keyboard Matrix/Joystick 2)",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Keyboard matrix columns and joystick 2 control",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Joy2 Right / Column 0",
+          "1": "Joy2 Left / Column 1",
+          "2": "Joy2 Down / Column 2",
+          "3": "Joy2 Up / Column 3",
+          "4": "Joy2 Fire / Column 4",
+          "5": "Column 5",
+          "6": "Column 6",
+          "7": "Column 7"
+        },
+        "examples": [
+          "lda $dc00    ; Read joystick 2",
+          "and #$1f     ; Mask joystick bits"
+        ],
+        "related": ["0xDC01", "0xDC02", "0xDC03"],
+        "tips": ["0 = pressed/active", "Used with $DC01 for keyboard scanning"]
+      },
+      "0xDC01": {
+        "name": "CIA1 Port B (Keyboard Matrix/Joystick 1)",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Keyboard matrix rows and joystick 1 control",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Joy1 Right / Row 0",
+          "1": "Joy1 Left / Row 1",
+          "2": "Joy1 Down / Row 2",
+          "3": "Joy1 Up / Row 3",
+          "4": "Joy1 Fire / Row 4",
+          "5": "Row 5",
+          "6": "Row 6",
+          "7": "Row 7"
+        },
+        "examples": [
+          "lda $dc01    ; Read joystick 1",
+          "and #$1f     ; Mask joystick bits"
+        ],
+        "related": ["0xDC00", "0xDC02", "0xDC03"],
+        "tips": ["0 = pressed/active", "Used with $DC00 for keyboard scanning"]
+      },
+      "0xDC0D": {
+        "name": "CIA1 Interrupt Control Register",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Controls and reports interrupt conditions for CIA1",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Timer A underflow",
+          "1": "Timer B underflow",
+          "2": "Time-of-day alarm",
+          "3": "Serial port data ready",
+          "4": "FLAG pin (negative edge)",
+          "7": "Any CIA1 interrupt (read), Set/clear enable bits (write)"
+        },
+        "examples": [
+          "lda #$7f     ; Disable all CIA1 interrupts",
+          "sta $dc0d    ; Write to control register",
+          "lda $dc0d    ; Read interrupt status"
+        ],
+        "related": ["0xDD0D", "0x0314", "0x0315"],
+        "tips": ["Must read to acknowledge interrupts", "Bit 7 controls enable/disable when writing"]
+      },
+      "0xDD00": {
+        "name": "CIA2 Port A (Serial Bus/VIC Bank)",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Serial bus control and VIC-II bank selection",
+        "access": "read/write",
+        "bitFields": {
+          "0-1": "VIC bank selection (inverted)",
+          "2": "Serial ATN out",
+          "3": "Serial clock out",
+          "4": "Serial data out",
+          "5": "Serial clock in",
+          "6": "Serial data in",
+          "7": "Serial ATN in"
+        },
+        "values": {
+          "0x03": "VIC Bank 0 ($0000-$3FFF)",
+          "0x02": "VIC Bank 1 ($4000-$7FFF)",
+          "0x01": "VIC Bank 2 ($8000-$BFFF)",
+          "0x00": "VIC Bank 3 ($C000-$FFFF)"
+        },
+        "examples": [
+          "lda $dd00    ; Read current bank",
+          "and #$fc     ; Clear bank bits",
+          "ora #$02     ; Select bank 1",
+          "sta $dd00    ; Set VIC bank"
+        ],
+        "related": ["0xD018", "0xDD02"],
+        "tips": ["Bits 0-1 are inverted for VIC bank", "Default is bank 0"]
+      },
+      "0xDD0D": {
+        "name": "CIA2 Interrupt Control Register",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Controls and reports interrupt conditions for CIA2 (NMI)",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Timer A underflow",
+          "1": "Timer B underflow",
+          "2": "Time-of-day alarm",
+          "3": "Serial port data ready",
+          "4": "FLAG pin (negative edge)",
+          "7": "Any CIA2 interrupt (read), Set/clear enable bits (write)"
+        },
+        "examples": [
+          "lda #$7f     ; Disable all CIA2 NMI",
+          "sta $dd0d    ; Write to control register"
+        ],
+        "related": ["0xDC0D", "0xFFFA", "0xFFFB"],
+        "tips": ["CIA2 generates NMI instead of IRQ", "Used for RS232 and user port"]
+      }
+    }
+  }
+}

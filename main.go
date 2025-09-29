@@ -100,7 +100,7 @@ func main() {
 	}
 
 	// Start LSP server
-	lsp.Start(mnemonicPath, kickassDir)
+	lsp.Start()
 }
 
 // runTestMode analyzes a single file and outputs diagnostics
@@ -183,6 +183,46 @@ func runTestMode(filename, mnemonicPath, kickassDir string) {
 	} else {
 		os.Exit(0)
 	}
+}
+
+// initTestMode initializes LSP components for test modes using config directory
+func initTestMode() error {
+	// Get config directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("failed to get user home directory: %v", err)
+	}
+	configDir := filepath.Join(homeDir, ".config", "6510lsp")
+
+	// Initialize LSP components with config directory paths
+	lsp.SetKickassJSONPath(filepath.Join(configDir, "kickass.json"))
+	lsp.SetMnemonicJSONPath(filepath.Join(configDir, "mnemonic.json"))
+
+	err = lsp.LoadMnemonics(filepath.Join(configDir, "mnemonic.json"))
+	if err != nil {
+		return fmt.Errorf("error loading mnemonics: %v", err)
+	}
+
+	_, err = lsp.LoadKickassDirectives(configDir)
+	if err != nil {
+		return fmt.Errorf("error loading kickass directives: %v", err)
+	}
+
+	// Load built-in functions and constants
+	kickassJSONPath := filepath.Join(configDir, "kickass.json")
+	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
+	if err != nil {
+		return fmt.Errorf("error loading built-ins: %v", err)
+	}
+	lsp.SetBuiltins(builtinFunctions, builtinConstants)
+
+	// Load C64 memory map data
+	err = lsp.LoadC64MemoryMap(filepath.Join(configDir, "c64memory.json"))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: Could not load C64 memory map: %v\n", err)
+	}
+
+	return nil
 }
 
 // parseFilePosition parses file:line:char format
@@ -345,27 +385,11 @@ func runHoverTest(filePos, mnemonicPath, kickassDir string) {
 	}
 
 	// Initialize LSP components
-	lsp.SetKickassJSONPath(kickassDir)
-	err = lsp.LoadMnemonics(mnemonicPath)
+	err = initTestMode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading mnemonics: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
-
-	_, err = lsp.LoadKickassDirectives(kickassDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading kickass directives: %v\n", err)
-		os.Exit(3)
-	}
-
-	// Load built-in functions and constants
-	kickassJSONPath := filepath.Join(kickassDir, "kickass.json")
-	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading built-ins: %v\n", err)
-		os.Exit(3)
-	}
-	lsp.SetBuiltins(builtinFunctions, builtinConstants)
 
 	// Parse the document to get symbol tree
 	text := string(content)

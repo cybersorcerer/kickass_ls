@@ -67,6 +67,33 @@ type AddressingMode struct {
 	Cycles          string `json:"cycles"` // Can be "2", "4*", "2/3/4"
 }
 
+// C64MemoryMap represents the structure of c64memory.json
+type C64MemoryMap struct {
+	MemoryMap C64MemoryMapData `json:"memoryMap"`
+}
+
+// C64MemoryMapData represents the memory map metadata and regions
+type C64MemoryMapData struct {
+	Version string                     `json:"version"`
+	Source  string                     `json:"source"`
+	Regions map[string]C64MemoryRegion `json:"regions"`
+}
+
+// C64MemoryRegion represents a single memory address or region
+type C64MemoryRegion struct {
+	Name        string            `json:"name"`
+	Category    string            `json:"category"` // "VIC-II", "SID", "CIA", "System"
+	Type        string            `json:"type"`     // "register", "ram", "rom"
+	Size        int               `json:"size"`     // Size in bytes
+	Description string            `json:"description"`
+	Access      string            `json:"access"`    // "read", "write", "read/write"
+	BitFields   map[string]string `json:"bitFields"` // "0-3": "Color value"
+	Values      map[string]string `json:"values"`    // "0x00": "Black"
+	Examples    []string          `json:"examples"`
+	Related     []string          `json:"related"` // Related addresses
+	Tips        []string          `json:"tips"`    // Programming tips
+}
+
 // DocumentSymbol represents a symbol in a text document.
 type DocumentSymbol struct {
 	Name           string           `json:"name"`
@@ -79,6 +106,7 @@ type DocumentSymbol struct {
 
 // Global variable to store mnemonic data
 var mnemonics []Mnemonic
+var c64MemoryMap C64MemoryMap
 var kickassDirectives []KickassDirective
 var builtinFunctions []BuiltinFunction
 var builtinConstants []BuiltinConstant
@@ -501,38 +529,80 @@ func SetWarnUnusedLabels(enabled bool) {
 }
 
 // Start initializes and runs the LSP server.
-func Start(mnemonicPath string, kickassPath string) {
+func Start() {
 	log.Info("LSP server starting...")
+
+	// Check for config directory
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		log.Error("Failed to get user home directory: %v", err)
+		os.Exit(1)
+	}
+
+	configDir := filepath.Join(homeDir, ".config", "6510lsp")
+	if _, err := os.Stat(configDir); os.IsNotExist(err) {
+		log.Error("Configuration directory %s does not exist. Please create it and install the required JSON files.", configDir)
+		os.Exit(1)
+	}
+
+	log.Info("Using configuration directory: %s", configDir)
 
 	// Start the analysis worker
 	startAnalysisWorker()
 
+	// Load JSON Source of Truth files in parallel from config directory
+	var wg sync.WaitGroup
+	wg.Add(3)
+
 	// Load mnemonic data
-	err := loadMnemonics(mnemonicPath)
-	if err != nil {
-		log.Logger.Printf("Error loading mnemonics: %v\n", err)
-	}
+	go func() {
+		defer wg.Done()
+		mnemonicPath := filepath.Join(configDir, "mnemonic.json")
+		err := loadMnemonics(mnemonicPath)
+		if err != nil {
+			log.Error("Error loading mnemonics from %s: %v", mnemonicPath, err)
+		} else {
+			log.Info("Successfully loaded mnemonics from %s", mnemonicPath)
+		}
 
-	// Load kickass directives
-	kickassDirectives, err = LoadKickassDirectives(kickassPath)
-	if err != nil {
-		log.Error("Failed to load kickass directives: %v", err)
-	} else {
-		log.Info("Successfully loaded %d kickass directives.", len(kickassDirectives))
-	}
+		// Set mnemonic.json path for lexer
+		SetMnemonicJSONPath(mnemonicPath)
+	}()
 
-	// Load built-in functions and constants
-	kickassFilePath := filepath.Join(kickassPath, "kickass.json")
+	// Load C64 memory map data
+	go func() {
+		defer wg.Done()
+		c64MemoryPath := filepath.Join(configDir, "c64memory.json")
+		err := loadC64MemoryMap(c64MemoryPath)
+		if err != nil {
+			log.Error("Could not load C64 memory map from %s: %v", c64MemoryPath, err)
+			log.Error("Memory address hover information will be limited.")
+		} else {
+			log.Info("Successfully loaded C64 memory map with %d regions from %s", len(c64MemoryMap.MemoryMap.Regions), c64MemoryPath)
+		}
+	}()
 
-	// Set kickass.json path for lexer
-	SetKickassJSONPath(kickassFilePath)
+	// Load kickass data
+	go func() {
+		defer wg.Done()
+		kickassPath := filepath.Join(configDir, "kickass.json")
 
-	builtinFunctions, builtinConstants, err = LoadBuiltins(kickassFilePath)
-	if err != nil {
-		log.Error("Failed to load built-ins: %v", err)
-	} else {
-		log.Info("Successfully loaded %d built-in functions and %d built-in constants.", len(builtinFunctions), len(builtinConstants))
-	}
+		// Load kickass directives from single file
+		var err error
+		builtinFunctions, builtinConstants, err = LoadBuiltins(kickassPath)
+		if err != nil {
+			log.Error("Failed to load kickass builtins from %s: %v", kickassPath, err)
+		} else {
+			log.Info("Successfully loaded %d built-in functions and %d built-in constants from %s", len(builtinFunctions), len(builtinConstants), kickassPath)
+		}
+
+		// Set kickass.json path for lexer
+		SetKickassJSONPath(kickassPath)
+	}()
+
+	// Wait for all JSON files to load
+	wg.Wait()
+	log.Info("All JSON Source of Truth files loaded successfully from %s", configDir)
 
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
@@ -625,7 +695,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp_server",
-						"version": "0.9.2", // Version updated
+						"version": "0.9.3", // Version updated
 					},
 				},
 			}
@@ -761,6 +831,13 @@ func Start(mnemonicPath string, kickassPath string) {
 											word := getWordAtPosition(lineContent, int(charNum))
 											log.Logger.Printf("Hovering over: %s\n", word)
 
+											// Also try to extract memory address (priority over regular words)
+											memoryAddr := getMemoryAddressAtPosition(lineContent, int(charNum))
+											if memoryAddr != "" {
+												log.Logger.Printf("Memory address found: %s\n", memoryAddr)
+												word = memoryAddr // Use memory address instead of regular word
+											}
+
 											description := getOpcodeDescription(strings.ToUpper(word))
 											if description != "" {
 												responseResult = map[string]interface{}{
@@ -799,21 +876,32 @@ func Start(mnemonicPath string, kickassPath string) {
 																},
 															}
 														} else {
-															searchSymbol := normalizeLabel(word)
-															if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
-																var markdown string
-																if symbol.Signature != "" {
-																	markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
-																} else if symbol.Value != "" {
-																	markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
-																} else {
-																	markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
-																}
+															// Check for C64 memory address description
+															memoryDescription := getMemoryAddressDescription(word)
+															if memoryDescription != "" {
 																responseResult = map[string]interface{}{
 																	"contents": map[string]interface{}{
 																		"kind":  "markdown",
-																		"value": markdown,
+																		"value": memoryDescription,
 																	},
+																}
+															} else {
+																searchSymbol := normalizeLabel(word)
+																if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
+																	var markdown string
+																	if symbol.Signature != "" {
+																		markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
+																	} else if symbol.Value != "" {
+																		markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
+																	} else {
+																		markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
+																	}
+																	responseResult = map[string]interface{}{
+																		"contents": map[string]interface{}{
+																			"kind":  "markdown",
+																			"value": markdown,
+																		},
+																	}
 																}
 															}
 														}
@@ -1113,6 +1201,20 @@ func LoadMnemonics(path string) error {
 	return loadMnemonics(path)
 }
 
+// loadC64MemoryMap loads the C64 memory map from c64memory.json
+func loadC64MemoryMap(path string) error {
+	file, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(file, &c64MemoryMap)
+}
+
+// LoadC64MemoryMap is the exported version of loadC64MemoryMap for test mode
+func LoadC64MemoryMap(path string) error {
+	return loadC64MemoryMap(path)
+}
+
 // GetCompletionContext is the exported version of getCompletionContext for test mode
 func GetCompletionContext(line string, char int) (isOperand bool, word string) {
 	return getCompletionContext(line, char)
@@ -1283,6 +1385,93 @@ func getBuiltinConstantDescription(constant string) string {
 	return ""
 }
 
+// getMemoryAddressDescription provides hover information for C64 memory addresses
+func getMemoryAddressDescription(word string) string {
+	// Debug: Log what word we're checking
+	log.Debug("Checking memory address for word: '%s'", word)
+
+	// Check if the word looks like a hex address ($xxxx or 0xxxxx)
+	var addressStr string
+	if strings.HasPrefix(word, "$") {
+		addressStr = "0x" + strings.ToUpper(word[1:]) // Convert $d020 to 0xD020
+	} else if strings.HasPrefix(strings.ToLower(word), "0x") {
+		addressStr = "0x" + strings.ToUpper(word[2:]) // Convert 0xd020 to 0xD020
+	} else {
+		return "" // Not a hex address
+	}
+
+	// Check if we have information for this address in our memory map
+	if region, found := c64MemoryMap.MemoryMap.Regions[addressStr]; found {
+		var builder strings.Builder
+
+		// Header with register name and category
+		builder.WriteString(fmt.Sprintf("**%s** - %s\n\n", addressStr, region.Name))
+		builder.WriteString(fmt.Sprintf("*%s %s*\n\n", region.Category, region.Type))
+
+		// Description
+		if region.Description != "" {
+			builder.WriteString(region.Description)
+			builder.WriteString("\n\n")
+		}
+
+		// Access mode
+		if region.Access != "" {
+			builder.WriteString(fmt.Sprintf("**Access:** %s\n\n", region.Access))
+		}
+
+		// Bit fields
+		if len(region.BitFields) > 0 {
+			builder.WriteString("**Bit Fields:**\n")
+			for bits, desc := range region.BitFields {
+				builder.WriteString(fmt.Sprintf("- **Bits %s:** %s\n", bits, desc))
+			}
+			builder.WriteString("\n")
+		}
+
+		// Values/Colors
+		if len(region.Values) > 0 {
+			builder.WriteString("**Values:**\n")
+			count := 0
+			for value, desc := range region.Values {
+				if count >= 8 { // Limit to first 8 values for brevity
+					builder.WriteString("- ...\n")
+					break
+				}
+				builder.WriteString(fmt.Sprintf("- **%s:** %s\n", value, desc))
+				count++
+			}
+			builder.WriteString("\n")
+		}
+
+		// Examples
+		if len(region.Examples) > 0 {
+			builder.WriteString("**Examples:**\n\n")
+			builder.WriteString("```assembly\n")
+			builder.WriteString(strings.Join(region.Examples, "\n"))
+			builder.WriteString("\n```\n\n")
+		}
+
+		// Related addresses
+		if len(region.Related) > 0 {
+			builder.WriteString("**Related:** ")
+			builder.WriteString(strings.Join(region.Related, ", "))
+			builder.WriteString("\n\n")
+		}
+
+		// Programming tips
+		if len(region.Tips) > 0 {
+			builder.WriteString("**Tips:**\n")
+			for _, tip := range region.Tips {
+				builder.WriteString(fmt.Sprintf("- %s\n", tip))
+			}
+		}
+
+		return builder.String()
+	}
+
+	return ""
+}
+
 func getWordAtPosition(line string, char int) string {
 	if char < 0 || char >= len(line) {
 		return ""
@@ -1299,6 +1488,70 @@ func getWordAtPosition(line string, char int) string {
 	}
 
 	return line[start : end+1]
+}
+
+// getMemoryAddressAtPosition extracts memory addresses like $D020, $0800, etc.
+func getMemoryAddressAtPosition(line string, char int) string {
+	if char < 0 || char >= len(line) {
+		return ""
+	}
+
+	log.Debug("getMemoryAddressAtPosition: line='%s', char=%d, charValue='%c'", line, char, line[char])
+
+	// Check if we're on a hex digit or $ sign
+	isHexChar := func(c byte) bool {
+		return (c >= '0' && c <= '9') || (c >= 'A' && c <= 'F') || (c >= 'a' && c <= 'f')
+	}
+
+	// First, check if we're anywhere within a potential memory address
+	// Look backwards and forwards to find a complete $xxxx pattern
+
+	// Find the start by going backwards until we hit a non-hex/non-$ character
+	start := char
+	for start > 0 {
+		prevChar := line[start-1]
+		if prevChar == '$' || isHexChar(prevChar) {
+			start--
+		} else {
+			break
+		}
+	}
+
+	// Find the end by going forwards from current position
+	end := char
+	for end < len(line) {
+		currentChar := line[end]
+		if currentChar == '$' || isHexChar(currentChar) {
+			end++
+		} else {
+			break
+		}
+	}
+
+	// Extract the potential memory address
+	if start < end {
+		candidate := line[start:end]
+		log.Debug("getMemoryAddressAtPosition: candidate='%s'", candidate)
+
+		// Check if it's a valid memory address (starts with $ and has hex digits)
+		if strings.HasPrefix(candidate, "$") && len(candidate) >= 2 {
+			// Verify the part after $ contains only hex digits
+			hexPart := candidate[1:]
+			if len(hexPart) > 0 && len(hexPart) <= 4 {
+				for _, c := range hexPart {
+					if !isHexChar(byte(c)) {
+						log.Debug("getMemoryAddressAtPosition: invalid hex char '%c'", c)
+						return ""
+					}
+				}
+				log.Debug("getMemoryAddressAtPosition: returning '%s'", candidate)
+				return candidate
+			}
+		}
+	}
+
+	log.Debug("getMemoryAddressAtPosition: no valid address found")
+	return ""
 }
 
 func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
@@ -1676,6 +1929,15 @@ func SetBuiltins(functions []BuiltinFunction, constants []BuiltinConstant) {
 // GenerateHover generates hover information for a word at a specific position
 func GenerateHover(symbolTree *Scope, line string, char int) (string, bool) {
 	word := getWordAtPosition(line, char)
+	log.Debug("GenerateHover called: line='%s', char=%d, word='%s'", line, char, word)
+
+	// Also try to extract memory address (priority over regular words)
+	memoryAddr := getMemoryAddressAtPosition(line, char)
+	if memoryAddr != "" {
+		log.Debug("Memory address found: %s", memoryAddr)
+		word = memoryAddr // Use memory address instead of regular word
+	}
+
 	if word == "" {
 		return "", false
 	}
@@ -1702,6 +1964,16 @@ func GenerateHover(symbolTree *Scope, line string, char int) (string, bool) {
 	builtinConstDescription := getBuiltinConstantDescription(word)
 	if builtinConstDescription != "" {
 		return builtinConstDescription, true
+	}
+
+	// Check for memory address documentation
+	log.Debug("About to call getMemoryAddressDescription for word: '%s'", word)
+	memoryDescription := getMemoryAddressDescription(word)
+	if memoryDescription != "" {
+		log.Debug("Found memory description for: '%s'", word)
+		return memoryDescription, true
+	} else {
+		log.Debug("No memory description found for: '%s'", word)
 	}
 
 	// Check for symbol in symbol tree

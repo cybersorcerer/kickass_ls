@@ -1,0 +1,160 @@
+{
+  "memoryMap": {
+    "version": "1.0",
+    "source": "https://sta.c64.org/cbm64mem.html",
+    "regions": {
+      "0xD020": {
+        "name": "Border Color Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls the color of the screen border",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "values": {
+          "0x00": "Black", "0x01": "White", "0x02": "Red", "0x03": "Cyan",
+          "0x04": "Purple", "0x05": "Green", "0x06": "Blue", "0x07": "Yellow",
+          "0x08": "Orange", "0x09": "Brown", "0x0A": "Light Red", "0x0B": "Dark Gray",
+          "0x0C": "Gray", "0x0D": "Light Green", "0x0E": "Light Blue", "0x0F": "Light Gray"
+        },
+        "examples": [
+          "lda #$02    ; Red border",
+          "sta $D020   ; Set border color"
+        ],
+        "related": ["0xD021", "0xD800"],
+        "tips": ["Use symbolic constants instead of magic numbers", "Border color is visible even when screen is off"]
+      },
+      "0xD021": {
+        "name": "Background Color Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls the background color of the screen",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "values": {
+          "0x00": "Black", "0x01": "White", "0x02": "Red", "0x03": "Cyan",
+          "0x04": "Purple", "0x05": "Green", "0x06": "Blue", "0x07": "Yellow",
+          "0x08": "Orange", "0x09": "Brown", "0x0A": "Light Red", "0x0B": "Dark Gray",
+          "0x0C": "Gray", "0x0D": "Light Green", "0x0E": "Light Blue", "0x0F": "Light Gray"
+        },
+        "examples": [
+          "lda #$06    ; Blue background",
+          "sta $D021   ; Set background color"
+        ],
+        "related": ["0xD020", "0xD022", "0xD023"],
+        "tips": ["Background color 0 (default)", "Use with multicolor modes for additional colors"]
+      },
+      "0xDC0D": {
+        "name": "CIA1 Interrupt Control Register",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Controls and reports interrupt conditions for CIA1",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Timer A underflow",
+          "1": "Timer B underflow",
+          "2": "Time-of-day alarm",
+          "3": "Serial port data ready",
+          "4": "FLAG pin (negative edge)",
+          "7": "Any CIA1 interrupt (read), Set/clear enable bits (write)"
+        },
+        "examples": [
+          "lda #$7f     ; Disable all CIA1 interrupts",
+          "sta $dc0d    ; Write to control register",
+          "lda $dc0d    ; Read interrupt status"
+        ],
+        "related": ["0xDD0D", "0x0314", "0x0315"],
+        "tips": ["Must read to acknowledge interrupts", "Bit 7 controls enable/disable when writing"]
+      },
+      "0xDD0D": {
+        "name": "CIA2 Interrupt Control Register",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "Controls and reports interrupt conditions for CIA2 (NMI)",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Timer A underflow",
+          "1": "Timer B underflow",
+          "2": "Time-of-day alarm",
+          "3": "Serial port data ready",
+          "4": "FLAG pin (negative edge)",
+          "7": "Any CIA2 interrupt (read), Set/clear enable bits (write)"
+        },
+        "examples": [
+          "lda #$7f     ; Disable all CIA2 NMI",
+          "sta $dd0d    ; Write to control register"
+        ],
+        "related": ["0xDC0D", "0xFFFA", "0xFFFB"],
+        "tips": ["CIA2 generates NMI instead of IRQ", "Used for RS232 and user port"]
+      },
+      "0xD011": {
+        "name": "VIC Control Register 1",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Main VIC-II control register for screen and raster",
+        "access": "read/write",
+        "bitFields": {
+          "0-2": "Vertical scroll (0-7)",
+          "3": "Screen height (0=24 rows, 1=25 rows)",
+          "4": "Screen enable (0=off, 1=on)",
+          "5": "Text/bitmap mode (0=text, 1=bitmap)",
+          "6": "Extended background mode",
+          "7": "Raster compare bit 8"
+        },
+        "examples": [
+          "lda $d011    ; Read current state",
+          "and #$7f     ; Clear raster bit 8",
+          "sta $d011    ; Set raster line < 256"
+        ],
+        "related": ["0xD012", "0xD016", "0xD018"],
+        "tips": ["Bit 7 is MSB of raster line for interrupts", "Bit 4 controls screen on/off"]
+      },
+      "0xD012": {
+        "name": "Raster Line Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Current raster line (bits 0-7) and raster interrupt line",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Raster line bits 0-7 (bit 8 in $D011)"
+        },
+        "examples": [
+          "lda #251     ; Set raster interrupt",
+          "sta $d012    ; at line 251",
+          "lda $d012    ; Read current raster line"
+        ],
+        "related": ["0xD011", "0xD01A", "0xD019"],
+        "tips": ["Combined with bit 7 of $D011 for full 9-bit raster", "Used for raster interrupts"]
+      },
+      "0xD01A": {
+        "name": "VIC Interrupt Enable Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls which VIC-II interrupts are enabled",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Raster interrupt enable",
+          "1": "Sprite-background collision enable",
+          "2": "Sprite-sprite collision enable",
+          "3": "Light pen interrupt enable"
+        },
+        "examples": [
+          "lda #$01     ; Enable raster interrupts",
+          "sta $d01a    ; Write to enable register"
+        ],
+        "related": ["0xD019", "0xD011", "0xD012"],
+        "tips": ["Must enable specific interrupt types", "Combined with global interrupt enable"]
+      }
+    }
+  }
+}
