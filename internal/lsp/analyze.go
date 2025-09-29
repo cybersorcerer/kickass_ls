@@ -853,21 +853,20 @@ func (a *SemanticAnalyzer) checkIllegalOpcode(mnemonic string, token Token) {
 		return
 	}
 
-	illegalOpcodes := map[string]string{
-		"SLO": "Shift Left then OR - undocumented opcode",
-		"RLA": "Rotate Left then AND - undocumented opcode",
-		"SAX": "Store A AND X - undocumented opcode",
-		"LAX": "Load A and X - undocumented opcode",
-		"DCP": "Decrement then Compare - undocumented opcode",
-		"ISC": "Increment then Subtract with Carry - undocumented opcode",
-		"JAM": "Jam/Kill CPU - illegal opcode",
-		"SBC": "Subtract with Carry (duplicate) - undocumented opcode",
-		// Note: NOP is removed - it's a standard legal 6502 opcode
+	// Check if this mnemonic is marked as illegal in mnemonic.json
+	if isIllegalMnemonic(mnemonic) {
+		a.addWarning(token, "'%s' is an undocumented/illegal opcode - may not work on all systems", mnemonic)
 	}
+}
 
-	if description, isIllegal := illegalOpcodes[mnemonic]; isIllegal {
-		a.addWarning(token, "'%s' is an undocumented/illegal opcode (%s) - may not work on all systems", mnemonic, description)
+// isIllegalMnemonic checks if a mnemonic is marked as "Illegal" type in the loaded mnemonic data
+func isIllegalMnemonic(mnemonic string) bool {
+	for _, m := range mnemonics {
+		if m.Mnemonic == mnemonic && m.Type == "Illegal" {
+			return true
+		}
 	}
+	return false
 }
 
 // checkZeroPageOptimization suggests zero page addressing optimizations

@@ -34,12 +34,32 @@
   - Recommendation: Only consider after all features proven stable
   - Alternative: Gradual refactoring of individual components
 
-### Specific Next Steps:
+### Updated Analysis: Illegal Opcodes Status
 
-1. **Start with illegal opcodes** - pure lexer additions (SLO, RLA, etc.)
-2. **Add built-in functions** - extend parser without changing existing evaluation
+**✅ ILLEGAL OPCODES: Already Comprehensive**
+After detailed analysis, the illegal opcodes implementation is more complete than expected:
+
+- **mnemonic.json**: Contains 45 illegal opcodes with full addressing modes and descriptions
+- **Lexer**: Correctly loads illegal opcodes and categorizes as TOKEN_MNEMONIC_ILL
+- **Hover provider**: Shows warnings with "⚠️ **ILLEGAL OPCODE**" for type "Illegal" opcodes
+- **analyze.go**: Has redundant hardcoded map with only 8 opcodes (outdated subset)
+
+**Issues Found:**
+1. **JAM opcode missing type field** in mnemonic.json (should be type: "Illegal")
+2. **Redundant warning system** in analyze.go with outdated subset
+3. **SBC listed incorrectly** in hardcoded map (SBC is legitimate, not illegal)
+
+### Revised Next Steps:
+
+1. **✅ Built-in functions** - Already implemented and working
+2. **Fix illegal opcodes issues**:
+   - Add missing "type": "Illegal" to JAM opcode in mnemonic.json
+   - Remove/update redundant hardcoded illegal opcodes map in analyze.go
+   - Remove incorrect SBC entry from illegal opcodes list
 3. **Implement anonymous labels** - new token types for !, !+, !-
 4. **Add semantic passes** - layer on top of existing symbol resolution
 5. **Consider formatting** - only after everything else is rock solid
+
+**Key Finding**: Illegal opcodes are essentially complete. The next logical step is anonymous labels or enhanced semantic analysis, not illegal opcodes.
 
 The key insight from today: **incremental additions > wholesale changes**. Each plan document represents months of work - we must proceed with surgical precision, not broad strokes.

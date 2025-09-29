@@ -1084,6 +1084,7 @@
   {
     "mnemonic": "JAM",
     "description": "JAM opcodes: $02 $12 $22 $32 $42 $52 $62 $72 $92 $B2 $D2 $F2 As soon one of these opcodes is executed, the byte following the opcode will be fetched, data and address bus will be set to $ff (all 1s) and program execution ceases. No hardware interrupts will be executed either. Only a reset is able to restart execution. This opcode leaves no trace of any operation performed! No registers or flags are affected.",
+    "type": "Illegal",
     "addressing_modes": [
       {
         "opcode": "02",

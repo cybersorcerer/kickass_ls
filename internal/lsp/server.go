@@ -624,8 +624,8 @@ func Start(mnemonicPath string, kickassPath string) {
 						},
 					},
 					"serverInfo": map[string]interface{}{
-						"name":    "6510lsp",
-						"version": "0.8.4", // Version updated
+						"name":    "6510lsp_server",
+						"version": "0.9.0", // Version updated
 					},
 				},
 			}
@@ -1106,6 +1106,11 @@ func loadMnemonics(path string) error {
 		return err
 	}
 	return json.Unmarshal(file, &mnemonics)
+}
+
+// LoadMnemonics is the exported version of loadMnemonics for test mode
+func LoadMnemonics(path string) error {
+	return loadMnemonics(path)
 }
 
 func getOpcodeDescription(mnemonic string) string {
