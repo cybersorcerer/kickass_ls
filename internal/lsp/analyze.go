@@ -24,13 +24,14 @@ type MacroDefinition struct {
 	UsageCount  int
 }
 
-// MemoryMap represents C64/6502 memory layout
+// MemoryMap represents C64/6502 memory layout for assembler context
 type MemoryMap struct {
-	ZeroPage  Range64 // $0000-$00FF - Fast access
-	Stack     Range64 // $0100-$01FF - Stack area
-	BasicArea Range64 // $0800-$9FFF - BASIC ROM
-	IO        Range64 // $D000-$DFFF - I/O registers
-	Kernal    Range64 // $E000-$FFFF - KERNAL ROM
+	ZeroPage     Range64 // $0000-$00FF - Fast access (RAM)
+	Stack        Range64 // $0100-$01FF - Stack area (RAM)
+	CartridgeLow Range64 // $8000-$9FFF - Cartridge ROM (when present)
+	BasicROM     Range64 // $A000-$BFFF - BASIC ROM (switchable)
+	IO           Range64 // $D000-$DFFF - I/O registers + Character ROM
+	KernalROM    Range64 // $E000-$FFFF - KERNAL ROM
 }
 
 // Range64 represents a memory address range
@@ -67,14 +68,15 @@ func NewAnalysisContext() *AnalysisContext {
 	}
 }
 
-// NewC64MemoryMap creates the standard C64 memory map
+// NewC64MemoryMap creates the standard C64 memory map for assembler context
 func NewC64MemoryMap() *MemoryMap {
 	return &MemoryMap{
-		ZeroPage:  Range64{Start: 0x0000, End: 0x00FF},
-		Stack:     Range64{Start: 0x0100, End: 0x01FF},
-		BasicArea: Range64{Start: 0x0800, End: 0x9FFF},
-		IO:        Range64{Start: 0xD000, End: 0xDFFF},
-		Kernal:    Range64{Start: 0xE000, End: 0xFFFF},
+		ZeroPage:     Range64{Start: 0x0000, End: 0x00FF},
+		Stack:        Range64{Start: 0x0100, End: 0x01FF},
+		CartridgeLow: Range64{Start: 0x8000, End: 0x9FFF},
+		BasicROM:     Range64{Start: 0xA000, End: 0xBFFF},
+		IO:           Range64{Start: 0xD000, End: 0xDFFF},
+		KernalROM:    Range64{Start: 0xE000, End: 0xFFFF},
 	}
 }
 
@@ -83,10 +85,14 @@ func (mm *MemoryMap) IsZeroPage(addr int64) bool {
 	return addr >= mm.ZeroPage.Start && addr <= mm.ZeroPage.End
 }
 
-// IsROMArea checks if an address is in ROM
+// IsROMArea checks if an address is in ROM for assembler context
+// Only warns about areas that are typically ROM and cannot be easily switched
 func (mm *MemoryMap) IsROMArea(addr int64) bool {
-	return (addr >= mm.BasicArea.Start && addr <= mm.BasicArea.End) ||
-		(addr >= mm.Kernal.Start && addr <= mm.Kernal.End)
+	// For assembler context, be conservative:
+	// - CartridgeLow: Usually not present during development
+	// - BasicROM: Often switched out for assembler programs
+	// - KernalROM: Always ROM, cannot be switched easily
+	return (addr >= mm.KernalROM.Start && addr <= mm.KernalROM.End)
 }
 
 // IsIOArea checks if an address is in I/O space
@@ -563,7 +569,7 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 	directive := strings.ToLower(node.Name.Value)
 
 	switch directive {
-	case ".pc", "*":
+	case ".pc", "*", "*=":
 		// Set program counter
 		if node.Value != nil {
 			if addr := a.evaluateExpression(node.Value); addr != -1 {

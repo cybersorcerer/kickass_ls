@@ -80,6 +80,7 @@ const (
 	TOKEN_EQUAL    // =
 	TOKEN_LESS     // <
 	TOKEN_GREATER  // >
+	TOKEN_AT       // @ (program counter reference)
 )
 
 var tokenNames = map[TokenType]string{
@@ -126,6 +127,7 @@ var tokenNames = map[TokenType]string{
 	TOKEN_EQUAL:               "EQUAL",
 	TOKEN_LESS:                "LESS",
 	TOKEN_GREATER:             "GREATER",
+	TOKEN_AT:                  "AT",
 }
 
 func (t TokenType) String() string {
@@ -482,6 +484,7 @@ func initTokenDefs() {
 	{TOKEN_EQUAL, regexp.MustCompile(`^=`)},
 	{TOKEN_LESS, regexp.MustCompile(`^<`)},
 	{TOKEN_GREATER, regexp.MustCompile(`^>`)},
+	{TOKEN_AT, regexp.MustCompile(`^@`)},
 	}...)
 }
 

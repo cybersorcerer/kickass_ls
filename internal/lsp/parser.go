@@ -495,6 +495,7 @@ func NewParser(l *Lexer) *Parser {
 	p.registerPrefix(TOKEN_LESS, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_GREATER, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_DOT, p.parsePrefixExpression)
+	p.registerPrefix(TOKEN_AT, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_LPAREN, p.parseGroupedExpression)
 
 	// Register built-in functions and constants
@@ -663,6 +664,17 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 		stmt.Token.Literal = dotToken.Literal + p.curToken.Literal
 	} else {
 		stmt.Token = p.curToken
+	}
+
+	// Handle special case for program counter assignment (*=)
+	if p.curToken.Type == TOKEN_DIRECTIVE_PC {
+		// For *=$address syntax, parse the address expression directly
+		stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+		if !p.peekTokenIs(TOKEN_EOF) && p.peekToken.Type != TOKEN_COMMENT && p.curToken.Line == p.peekToken.Line {
+			p.nextToken()
+			stmt.Value = p.parseExpression(LOWEST)
+		}
+		return stmt
 	}
 
 	// Handle pre-tokenized directives (they already contain the full directive name)
