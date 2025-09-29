@@ -1,261 +1,717 @@
-[
-	{
-		"directive": ".const",
-    	"description": "Defines a constant. A constant can't be assigned a new value. Note that not all values are immutable. If you define a constant that points to a list, the content of the list can still change. If you want to make a mutable value immutable, you can use its lock() function, which will lock it's content",
-		"signature": ".const constant_name=value",
-		"examples": [
-			".const x=25 //Defines a constant x with a value of 25"
-		]
-	},
-	{
-		"directive": ".var",
-    	"description": "Defines a variable. With variables you can store data for later use. Before you can use a variable you have to declare it. You do this with the .var directive",
-		"signature": ".var variable_name=value",
-		"examples": [
-			".var c=1                 // Declares the variable c to be 1",
-    	    ".var name = \"MYSTRING\" // Variables can assume any value, for example string"
-		]
-	},
-	{
-		"directive": ".eval",
-    	"description": "The .eval directive is used to make Kick Assembler evaluate expressions. In fact, the .var directive above is just a convenient shorthand of \".eval var x =25\", where var is a subexpression that declares a variable.",
-		"signature": ".eval expression",
-		"examples": [
-			".eval x=x+10 // Adds 10 to whatever is in variable x",
-    	    ".eval x++    // Gives x=x+1",
-        	".eval x--    // Gives x=x-1",
-        	".eval x+=3   // Gives x=x+3",
-        	".eval x-=7   // Gives x=x-7",
-        	".eval x*=3   // Gives x=x*3",
-        	".eval x/=2   // Gives x=x/2"
-		]
-	},
-	{
-		"directive": ".enum",
-    	"description": "With the .enum statement you can define enumerations, which are series of constants.",
-		"signature": ".enum {value1, value2, valueN}",
-		"examples": [
-			".enum {singleColor, multiColor}      // Defines singleColor=0, multiColor=1",
-			".enum {effect1=1,effect2=2,end=$ff}  // Assigns values explicitly",
-			".enum {up,down,left,right, none=$ff} // You can mix implicit and explicit",
-			"                                     // assignment of values"
-		]
-	},
-	{
-		"directive": ".label",
-    	"description": "Label declarations in Kick Assembler end with \":\" and have no postfix when referred to. You can put labels in front of mnemonic arguments. This can be useful when creating self modifying code. Kick Assembler also supports multi labels, which are labels that can be declared more than once. These are useful to prevent name conflicts between labels. A multi label starts with a **!** and when your reference it you have to end with a **+** to refer to the next multi label or **-** to refer to the previous multi label.",
-		"signature": "label_name: [instruction]",
-		"examples": [
-			"loop:   inc $d020",
-			"ldx tmpX:#$00"
-		]
-	},
-	{
-		"directive": ".byte",
-    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
-		"signature": ".byte bytevalue1, bytevalue2, bytevalueN",
-		"examples": [
-			".byte 1,2,3,4 // Generates the bytes 1,2,3,4"
-		]
-	},
-	{
-		"directive": ".word",
-    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
-		"signature": ".word wordvalue1, wordvalue2, wordvalueN",
-		"examples": [
-			".word $2000,$1234 // Generates the bytes $00,$20,$34,$12"
-		]
-	},
-	{
-		"directive": ".dword",
-    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
-		"examples": [
-			".dword $12341234 // Generates the bytes $34,$12,$34,$12"
-		]
-	},
-	{
-		"directive": ".text",
-    	"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
-		"signature": ".text \"string\"",
-		"examples": [
-			".text \"Hello World\""
-		]
-	},
-	{
-		"directive": ".fill",
-    	"description": "With the .fill directive you can fill a section of the memory with bytes. It works like a loop and automatically sets the variable i to the iteration number.",
-		"signature": ".fill count, value",
-		"examples": [
-			".fill 5, 0  // Generates byte 0,0,0,0,0",
-			".fill 5, i  // Generates byte 0,1,2,3,4",
-			".fill 256, 127.5 + 127.5*sin(toRadians(i*360/256)) // Generates a sine curve",
-			".fill 4, [$10,$20]             // Generates .byte $10,$20,$10,$20,$10,$20,$10,$20",
-			".fill 3, ['D','E','M','O','!'] // Generates the same bytes as .text \"DEMO!DEMO!DEMO!\"",
-			".fill 3, [i,i*$10]             // Generates .byte 0,0,1,$10,2,$20"
-		]
-	},
-	{
-		"directive": "#import",
-    	"description": "Use the preprocessor to import other source files.",
-		"signature": "#import file_name",
-		"examples": [
-			"#import \"MyLibrary.asm\" // Import the file \"mylibrary.asm\""
-		]
-	},
-	{
-		"directive": "#importif",
-    	"description": "Use the preprocessor to import other source files.",
-		"signature": "#importif var/const file_name",
-		"examples": [
-			"#importif STAND_ALONE \"UpstartCode.asm\" // Only import \"UpstartCode.asm\" if STAND_ALONE is defined"
-		]
-	},
-	{
-		"directive": ".import",
-    	"description": "With the .import directive you can import data from external files into your code. You can import binary, C64, and text files. The binary, c64 and text import takes an offset and a length as optional parameters.",
-		"signature": ".import file_name",
-		"examples": [
-			".import binary \"Music.bin\" // import the bytes from the file 'music.bin'",
-			".import c64 \"charset.c64\" // (Same as binary but skips the first two address bytes)",
-			".import binary \"Music.bin\", 100 // import the bytes from the file 'music.bin', but skip the first 100 bytes",
-			".import c64 \"charset.c64\", $400, $200 // Imports $200 bytes starting from position $402"
-		]
-	},
-	{
-		"directive": ".print",
-    	"description": "With the .print directive you can output text to the user while assembling.",
-		"signature": ".print \"message text\"",
-		"examples": [
-			".print \"Hello world\""
-		]
-	},
-	{
-		"directive": ".printnow",
-    	"description": "You can define your own functions which you can use like any of the build in library functions.",
-		"signature": ".printnow \"message text\"",
-		"examples": [
-			".printnow \"loop=$\" + toHexString(loop)"
-		]
-	},
-	{
-		"directive": ".pseudocommand",
-    	"description": "Pseudo commands are a special kind of macros that take command arguments, like #20, table,y or ($30),y as arguments just like mnemonics do. With these you can make your own extended commands.",
-		"signature": ".pseudocommand command_name arg1:arg3:argN",
-		"examples": [
-			".pseudocommand mov src:tar {",
-    		"   lda src",
-    		"   sta tar",
-            "}"
-		]
-	},
-	{
-		"directive": ".function",
-    	"description": "You can define you own functions which you can use like any of the build in library functions. Functions consist of non-byte generating directives like .eval, .for, .var, and .if. When the assembler evaluates the .return directive it returns the value given by the proceeding expression. If no expression is given, or if no .return directive is reached, a null value is returned. You can have several functions of the same name, as long as they have a different number of arguments.",
-		"signature": ".function function_name(args) {}",
-		"examples": [
-			"// Returns a string telling if a number is odd or even",
-			".function oddEven(number) {",
-    		"   .if ([number&1] == 0 ) .return \"even\"",
-    		"   else .return \"odd\"",
-			"}"
-		]
-	},
-	{
-		"directive": ".namespace",
-    	"description": "Namespaces are containers of functions, macros and pseudocommands. There can only be one of each of these entities in namespace. Every namespace also have an its own associated scope so each time you define a namespace a scopes is automatically defined. A simple way to declare a namespace is shown in the following example. The namespace directives is covered in more detail later (and often the .filenamespace directive is more handy)",
-		"signature": ".namespace namespace_name {}",
-		"examples": [
-			".function myFunction() { .return 1 }",
-            "label1:",
-            ".namespace mySpace {",
-            "   .function myFunction() { .return 1 } // <- This won't collide",
-            "   label1:  <- This won't collide",
-            "}"
-		]
-	},
-	{
-		"directive": ".macro",
-    	"description": "Macros are collections of assembler directives. When called, they generate code as if the directives where placed at the macro call. A macro can have any number of arguments. Macro calls are encapsulated in a scope, hence any variable defined inside a macro can't be seen from directly the outside. This means that a series of macro calls to the same macro doesn't interfere",
-		"signature": ".macro macro_name(macro_parameter) {}",
-		"examples": [
-			"// Define macro",
-			".macro SetColor(color) {",
-			"    lda #color",
-			"    sta $d020",
-			"}",
-			"// Execute macro",
-			":SetColor(1)",
-			"SetColor(2)   // The colon in front of macro calls is optional from version 4.0"
-		]
-	},
-	{
-		"directive": ".align",
-    	"description": "With the .align directive, you can align the program counter to a given interval. This is useful for optimizing your code as crossing a memory page boundary yields a penalty of one cycle for memory referring commands. To avoid this, use the .align command to align your tables",
-		"signature": ".align $address",
-		"examples": [
-			"        *=$10ff       // Bad place for the data",
-			"        .align $100   //Alignment to the nearest page boundary saves a cycle",
-			"data:   .byte 1,2,3,4,5,6,7,8"
-		]
-	},
-	{
-		"directive": ".assert",
-    	"description": "Assert directives are useful for testing. They were made to make it easy to test the assembler itself, but you can use them for testing your own pseudo-commands, macros, functions. When assertions are used, the assembler will automatically count the number of assertions and the number of failed assertions and display these when the assembling has finished. With the assert directive you can test the value of expressions. .assert takes three arguments: a description, an expression, and an expected result.",
-		"signature": ".assert description, expression, expected_result",
-		"examples": [
-			".assert '2+5*10/2', 2+5*10/2, 27",
-			".assert '2+2', 2+2, 5",
-			".assert 'Vector(1,2,3)+Vector(1,1,1)', Vector(1,2,3)+Vector(1,1,1), Vector(2,3,4)"
-		]
-	},
-	{
-		"directive": ".asserterror",
-    	"description": "Asserts that a given expression or codeblock generates an error. Like the assert directive the asserterror directive also has a form that can assert code. o make sure that an expression gives an error when the user gives the wrong parameters to a function, use the .asserterror directive.",
-		"signature": ".asserterror description, expression",
-		"examples": [
-			".asserterror 'Test1' , 20/10",
-			".asserterror  'Test2' , 20/false",
-			".asserterror 'Test 3', List().get(27)"
-		]
-	},
-	{
-		"directive": ".break",
-    	"description": "The .break directive puts a breakpoint on the current memory position. You can add an argument to a breakpoint. The syntax of this argument is dependant on the consumer. For example .break 'if y<5' is written for VICE's conditional expressions. VICE will then break if the y register is below 5",
-		"signature": ".break [condition]",
-		"examples": [
-			"loop:",
-    		"     .break         // This will put a breakpoint on 'inc $d020",
-    		"     inc $d020"
-		]
-	},
-	{
-		"directive": ".cpu",
-    	"description": "Kick Assembler supports different sets of opcodes. The default set includes the standard 6502 mnemonics plus the illegal opcodes. To switch between instruction sets of different cpu's use the .cpu directive.",
-		"signature": ".cpu _6502NoIllegals | _6502 | dtv | _65c02",
-		"examples": [
-			".cpu _65c02            // The 65c02 instruction set.",
-			".cpu _6502NoIllegals.  // The standard 6502 instructions",
-			".cpu _6502             // The standard 6502 instruction + the illegal opcodes. This is the default setting for KickAssembler.",
-			".cpu dtv               // The standard 6502 instruction set + the DTV commands"
-		]
-	},
-	{
-		"directive": ".if",
-    	"description": "If-directives work like in standard programming languages. With an .if directive you have the proceeding directive executed only if a given boolean expression is evaluated to true. You can group several statements together in a block with {…} and have them executed together. By adding an else statement you can have an expression executed if the boolean expression is false.",
-		"signature": ".if(x>10) {...} else {...}",
-		"examples": [
-			"// Add the x'th entry of a table if x is positive or",
-			"// subtract it if x is negative",
-			".if (x>=0) adc zpXtable+x else sbc zpXtable+abs(x)",
-            "",
-			"// Init an offset table or display a warning if the table length is exceeded",
-			".if (i<tableLength) {",
-   			"    lda #0",
-			"    sta offset1+i",
-   			"    sta offset2+i",
-			"} else {",
-			"    .error 'Error!! I is too high!'",
-			"}"
-		]
-	}
-]
+{
+	"directives": [
+		{
+			"directive": ".const",
+			"description": "Defines a constant. A constant can't be assigned a new value. Note that not all values are immutable. If you define a constant that points to a list, the content of the list can still change. If you want to make a mutable value immutable, you can use its lock() function, which will lock it's content",
+			"signature": ".const constant_name=value",
+			"examples": [
+				".const x=25 //Defines a constant x with a value of 25"
+			]
+		},
+		{
+			"directive": ".var",
+			"description": "Defines a variable. With variables you can store data for later use. Before you can use a variable you have to declare it. You do this with the .var directive",
+			"signature": ".var variable_name=value",
+			"examples": [
+				".var c=1                 // Declares the variable c to be 1",
+				".var name = \"MYSTRING\" // Variables can assume any value, for example string"
+			]
+		},
+		{
+			"directive": ".eval",
+			"description": "The .eval directive is used to make Kick Assembler evaluate expressions. In fact, the .var directive above is just a convenient shorthand of \".eval var x =25\", where var is a subexpression that declares a variable.",
+			"signature": ".eval expression",
+			"examples": [
+				".eval x=x+10 // Adds 10 to whatever is in variable x",
+				".eval x++    // Gives x=x+1",
+				".eval x--    // Gives x=x-1",
+				".eval x+=3   // Gives x=x+3",
+				".eval x-=7   // Gives x=x-7",
+				".eval x*=3   // Gives x=x*3",
+				".eval x/=2   // Gives x=x/2"
+			]
+		},
+		{
+			"directive": ".enum",
+			"description": "With the .enum statement you can define enumerations, which are series of constants.",
+			"signature": ".enum {value1, value2, valueN}",
+			"examples": [
+				".enum {singleColor, multiColor}      // Defines singleColor=0, multiColor=1",
+				".enum {effect1=1,effect2=2,end=$ff}  // Assigns values explicitly",
+				".enum {up,down,left,right, none=$ff} // You can mix implicit and explicit",
+				"                                     // assignment of values"
+			]
+		},
+		{
+			"directive": ".label",
+			"description": "Label declarations in Kick Assembler end with \":\" and have no postfix when referred to. You can put labels in front of mnemonic arguments. This can be useful when creating self modifying code. Kick Assembler also supports multi labels, which are labels that can be declared more than once. These are useful to prevent name conflicts between labels. A multi label starts with a **!** and when your reference it you have to end with a **+** to refer to the next multi label or **-** to refer to the previous multi label.",
+			"signature": "label_name: [instruction]",
+			"examples": [
+				"loop:   inc $d020",
+				"ldx tmpX:#$00"
+			]
+		},
+		{
+			"directive": ".byte",
+			"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+			"signature": ".byte bytevalue1, bytevalue2, bytevalueN",
+			"examples": [
+				".byte 1,2,3,4 // Generates the bytes 1,2,3,4"
+			]
+		},
+		{
+			"directive": ".word",
+			"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+			"signature": ".word wordvalue1, wordvalue2, wordvalueN",
+			"examples": [
+				".word $2000,$1234 // Generates the bytes $00,$20,$34,$12"
+			]
+		},
+		{
+			"directive": ".dword",
+			"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+			"examples": [
+				".dword $12341234 // Generates the bytes $34,$12,$34,$12"
+			]
+		},
+		{
+			"directive": ".text",
+			"description": "The .byte, .word, .dword and .text directives are used to generate byte, word (one word= two bytes), dword (double word = 4 bytes) and text data as in standard 65xx assemblers.",
+			"signature": ".text \"string\"",
+			"examples": [
+				".text \"Hello World\""
+			]
+		},
+		{
+			"directive": ".fill",
+			"description": "With the .fill directive you can fill a section of the memory with bytes. It works like a loop and automatically sets the variable i to the iteration number.",
+			"signature": ".fill count, value",
+			"examples": [
+				".fill 5, 0  // Generates byte 0,0,0,0,0",
+				".fill 5, i  // Generates byte 0,1,2,3,4",
+				".fill 256, 127.5 + 127.5*sin(toRadians(i*360/256)) // Generates a sine curve",
+				".fill 4, [$10,$20]             // Generates .byte $10,$20,$10,$20,$10,$20,$10,$20",
+				".fill 3, ['D','E','M','O','!'] // Generates the same bytes as .text \"DEMO!DEMO!DEMO!\"",
+				".fill 3, [i,i*$10]             // Generates .byte 0,0,1,$10,2,$20"
+			]
+		},
+		{
+			"directive": "#import",
+			"description": "Use the preprocessor to import other source files.",
+			"signature": "#import file_name",
+			"examples": [
+				"#import \"MyLibrary.asm\" // Import the file \"mylibrary.asm\""
+			]
+		},
+		{
+			"directive": "#importif",
+			"description": "Use the preprocessor to import other source files.",
+			"signature": "#importif var/const file_name",
+			"examples": [
+				"#importif STAND_ALONE \"UpstartCode.asm\" // Only import \"UpstartCode.asm\" if STAND_ALONE is defined"
+			]
+		},
+		{
+			"directive": ".import",
+			"description": "With the .import directive you can import data from external files into your code. You can import binary, C64, and text files. The binary, c64 and text import takes an offset and a length as optional parameters.",
+			"signature": ".import file_name",
+			"examples": [
+				".import binary \"Music.bin\" // import the bytes from the file 'music.bin'",
+				".import c64 \"charset.c64\" // (Same as binary but skips the first two address bytes)",
+				".import binary \"Music.bin\", 100 // import the bytes from the file 'music.bin', but skip the first 100 bytes",
+				".import c64 \"charset.c64\", $400, $200 // Imports $200 bytes starting from position $402"
+			]
+		},
+		{
+			"directive": ".print",
+			"description": "With the .print directive you can output text to the user while assembling.",
+			"signature": ".print \"message text\"",
+			"examples": [
+				".print \"Hello world\""
+			]
+		},
+		{
+			"directive": ".printnow",
+			"description": "You can define your own functions which you can use like any of the build in library functions.",
+			"signature": ".printnow \"message text\"",
+			"examples": [
+				".printnow \"loop=$\" + toHexString(loop)"
+			]
+		},
+		{
+			"directive": ".pseudocommand",
+			"description": "Pseudo commands are a special kind of macros that take command arguments, like #20, table,y or ($30),y as arguments just like mnemonics do. With these you can make your own extended commands.",
+			"signature": ".pseudocommand command_name arg1:arg3:argN",
+			"examples": [
+				".pseudocommand mov src:tar {",
+				"   lda src",
+				"   sta tar",
+				"}"
+			]
+		},
+		{
+			"directive": ".function",
+			"description": "You can define you own functions which you can use like any of the build in library functions. Functions consist of non-byte generating directives like .eval, .for, .var, and .if. When the assembler evaluates the .return directive it returns the value given by the proceeding expression. If no expression is given, or if no .return directive is reached, a null value is returned. You can have several functions of the same name, as long as they have a different number of arguments.",
+			"signature": ".function function_name(args) {}",
+			"examples": [
+				"// Returns a string telling if a number is odd or even",
+				".function oddEven(number) {",
+				"   .if ([number&1] == 0 ) .return \"even\"",
+				"   else .return \"odd\"",
+				"}"
+			]
+		},
+		{
+			"directive": ".namespace",
+			"description": "Namespaces are containers of functions, macros and pseudocommands. There can only be one of each of these entities in namespace. Every namespace also have an its own associated scope so each time you define a namespace a scopes is automatically defined. A simple way to declare a namespace is shown in the following example. The namespace directives is covered in more detail later (and often the .filenamespace directive is more handy)",
+			"signature": ".namespace namespace_name {}",
+			"examples": [
+				".function myFunction() { .return 1 }",
+				"label1:",
+				".namespace mySpace {",
+				"   .function myFunction() { .return 1 } // <- This won't collide",
+				"   label1:  <- This won't collide",
+				"}"
+			]
+		},
+		{
+			"directive": ".macro",
+			"description": "Macros are collections of assembler directives. When called, they generate code as if the directives where placed at the macro call. A macro can have any number of arguments. Macro calls are encapsulated in a scope, hence any variable defined inside a macro can't be seen from directly the outside. This means that a series of macro calls to the same macro doesn't interfere",
+			"signature": ".macro macro_name(macro_parameter) {}",
+			"examples": [
+				"// Define macro",
+				".macro SetColor(color) {",
+				"    lda #color",
+				"    sta $d020",
+				"}",
+				"// Execute macro",
+				":SetColor(1)",
+				"SetColor(2)   // The colon in front of macro calls is optional from version 4.0"
+			]
+		},
+		{
+			"directive": ".align",
+			"description": "With the .align directive, you can align the program counter to a given interval. This is useful for optimizing your code as crossing a memory page boundary yields a penalty of one cycle for memory referring commands. To avoid this, use the .align command to align your tables",
+			"signature": ".align $address",
+			"examples": [
+				"        *=$10ff       // Bad place for the data",
+				"        .align $100   //Alignment to the nearest page boundary saves a cycle",
+				"data:   .byte 1,2,3,4,5,6,7,8"
+			]
+		},
+		{
+			"directive": ".assert",
+			"description": "Assert directives are useful for testing. They were made to make it easy to test the assembler itself, but you can use them for testing your own pseudo-commands, macros, functions. When assertions are used, the assembler will automatically count the number of assertions and the number of failed assertions and display these when the assembling has finished. With the assert directive you can test the value of expressions. .assert takes three arguments: a description, an expression, and an expected result.",
+			"signature": ".assert description, expression, expected_result",
+			"examples": [
+				".assert '2+5*10/2', 2+5*10/2, 27",
+				".assert '2+2', 2+2, 5",
+				".assert 'Vector(1,2,3)+Vector(1,1,1)', Vector(1,2,3)+Vector(1,1,1), Vector(2,3,4)"
+			]
+		},
+		{
+			"directive": ".asserterror",
+			"description": "Asserts that a given expression or codeblock generates an error. Like the assert directive the asserterror directive also has a form that can assert code. o make sure that an expression gives an error when the user gives the wrong parameters to a function, use the .asserterror directive.",
+			"signature": ".asserterror description, expression",
+			"examples": [
+				".asserterror 'Test1' , 20/10",
+				".asserterror  'Test2' , 20/false",
+				".asserterror 'Test 3', List().get(27)"
+			]
+		},
+		{
+			"directive": ".break",
+			"description": "The .break directive puts a breakpoint on the current memory position. You can add an argument to a breakpoint. The syntax of this argument is dependant on the consumer. For example .break 'if y<5' is written for VICE's conditional expressions. VICE will then break if the y register is below 5",
+			"signature": ".break [condition]",
+			"examples": [
+				"loop:",
+				"     .break         // This will put a breakpoint on 'inc $d020",
+				"     inc $d020"
+			]
+		},
+		{
+			"directive": ".cpu",
+			"description": "Kick Assembler supports different sets of opcodes. The default set includes the standard 6502 mnemonics plus the illegal opcodes. To switch between instruction sets of different cpu's use the .cpu directive.",
+			"signature": ".cpu _6502NoIllegals | _6502 | dtv | _65c02",
+			"examples": [
+				".cpu _65c02            // The 65c02 instruction set.",
+				".cpu _6502NoIllegals.  // The standard 6502 instructions",
+				".cpu _6502             // The standard 6502 instruction + the illegal opcodes. This is the default setting for KickAssembler.",
+				".cpu dtv               // The standard 6502 instruction set + the DTV commands"
+			]
+		},
+		{
+			"directive": ".if",
+			"description": "If-directives work like in standard programming languages. With an .if directive you have the proceeding directive executed only if a given boolean expression is evaluated to true. You can group several statements together in a block with {…} and have them executed together. By adding an else statement you can have an expression executed if the boolean expression is false.",
+			"signature": ".if(x>10) {...} else {...}",
+			"examples": [
+				"// Add the x'th entry of a table if x is positive or",
+				"// subtract it if x is negative",
+				".if (x>=0) adc zpXtable+x else sbc zpXtable+abs(x)",
+				"",
+				"// Init an offset table or display a warning if the table length is exceeded",
+				".if (i<tableLength) {",
+				"    lda #0",
+				"    sta offset1+i",
+				"    sta offset2+i",
+				"} else {",
+				"    .error 'Error!! I is too high!'",
+				"}"
+			]
+		}
+	],
+	"builtinFunctions": [
+		{
+			"name": "abs",
+			"category": "math",
+			"description": "Returns the absolute value of a number",
+			"signature": "abs(value: number): number",
+			"examples": [
+				"abs(-5)    // Returns 5",
+				"abs(3.14)  // Returns 3.14"
+			]
+		},
+		{
+			"name": "sin",
+			"category": "math",
+			"description": "Returns the sine of an angle (in radians)",
+			"signature": "sin(angle: number): number",
+			"examples": [
+				"sin(toRadians(90))  // Returns 1.0",
+				"sin(PI/2)           // Returns 1.0"
+			]
+		},
+		{
+			"name": "cos",
+			"category": "math",
+			"description": "Returns the cosine of an angle (in radians)",
+			"signature": "cos(angle: number): number",
+			"examples": [
+				"cos(0)              // Returns 1.0",
+				"cos(PI)             // Returns -1.0"
+			]
+		},
+		{
+			"name": "tan",
+			"category": "math",
+			"description": "Returns the tangent of an angle (in radians)",
+			"signature": "tan(angle: number): number",
+			"examples": [
+				"tan(toRadians(45))  // Returns 1.0",
+				"tan(PI/4)           // Returns 1.0"
+			]
+		},
+		{
+			"name": "sqrt",
+			"category": "math",
+			"description": "Returns the square root of a number",
+			"signature": "sqrt(value: number): number",
+			"examples": [
+				"sqrt(16)            // Returns 4.0",
+				"sqrt(2)             // Returns 1.414..."
+			]
+		},
+		{
+			"name": "pow",
+			"category": "math",
+			"description": "Returns the value of a number raised to the power of another number",
+			"signature": "pow(base: number, exponent: number): number",
+			"examples": [
+				"pow(2, 3)           // Returns 8.0",
+				"pow(10, 2)          // Returns 100.0"
+			]
+		},
+		{
+			"name": "floor",
+			"category": "math",
+			"description": "Returns the largest integer less than or equal to a number",
+			"signature": "floor(value: number): number",
+			"examples": [
+				"floor(3.7)          // Returns 3.0",
+				"floor(-2.3)         // Returns -3.0"
+			]
+		},
+		{
+			"name": "ceil",
+			"category": "math",
+			"description": "Returns the smallest integer greater than or equal to a number",
+			"signature": "ceil(value: number): number",
+			"examples": [
+				"ceil(3.2)           // Returns 4.0",
+				"ceil(-2.7)          // Returns -2.0"
+			]
+		},
+		{
+			"name": "round",
+			"category": "math",
+			"description": "Returns the value of a number rounded to the nearest integer",
+			"signature": "round(value: number): number",
+			"examples": [
+				"round(3.6)          // Returns 4.0",
+				"round(3.2)          // Returns 3.0"
+			]
+		},
+		{
+			"name": "max",
+			"category": "math",
+			"description": "Returns the larger of two numbers",
+			"signature": "max(a: number, b: number): number",
+			"examples": [
+				"max(5, 10)          // Returns 10",
+				"max(-3, -7)         // Returns -3"
+			]
+		},
+		{
+			"name": "min",
+			"category": "math",
+			"description": "Returns the smaller of two numbers",
+			"signature": "min(a: number, b: number): number",
+			"examples": [
+				"min(5, 10)          // Returns 5",
+				"min(-3, -7)         // Returns -7"
+			]
+		},
+		{
+			"name": "mod",
+			"category": "math",
+			"description": "Returns the remainder of a division operation",
+			"signature": "mod(dividend: number, divisor: number): number",
+			"examples": [
+				"mod(10, 3)          // Returns 1",
+				"mod(256, 16)        // Returns 0"
+			]
+		},
+		{
+			"name": "random",
+			"category": "math",
+			"description": "Returns a random number between 0.0 and 1.0",
+			"signature": "random(): number",
+			"examples": [
+				"random()            // Returns 0.0 to 1.0",
+				"floor(random()*256) // Returns 0 to 255"
+			]
+		},
+		{
+			"name": "toRadians",
+			"category": "math",
+			"description": "Converts degrees to radians",
+			"signature": "toRadians(degrees: number): number",
+			"examples": [
+				"toRadians(90)       // Returns PI/2",
+				"toRadians(180)      // Returns PI"
+			]
+		},
+		{
+			"name": "toDegrees",
+			"category": "math",
+			"description": "Converts radians to degrees",
+			"signature": "toDegrees(radians: number): number",
+			"examples": [
+				"toDegrees(PI)       // Returns 180",
+				"toDegrees(PI/2)     // Returns 90"
+			]
+		},
+		{
+			"name": "LoadBinary",
+			"category": "file",
+			"description": "Loads binary data from a file and returns it as a list of bytes",
+			"signature": "LoadBinary(filename: string): List<byte>",
+			"examples": [
+				"LoadBinary(\"music.bin\")",
+				".fill LoadBinary(\"charset.bin\").size(), LoadBinary(\"charset.bin\").get(i)"
+			]
+		},
+		{
+			"name": "LoadPicture",
+			"category": "file",
+			"description": "Loads a picture file and returns it as a multidimensional list",
+			"signature": "LoadPicture(filename: string): List<List<pixel>>",
+			"examples": [
+				"LoadPicture(\"sprite.png\")",
+				".var pic = LoadPicture(\"background.bmp\")"
+			]
+		},
+		{
+			"name": "LoadSid",
+			"category": "file",
+			"description": "Loads a SID music file and returns song information",
+			"signature": "LoadSid(filename: string): SidInfo",
+			"examples": [
+				"LoadSid(\"music.sid\")",
+				".var song = LoadSid(\"background.sid\")"
+			]
+		},
+		{
+			"name": "createFile",
+			"category": "file",
+			"description": "Creates a new file for writing data",
+			"signature": "createFile(filename: string): File",
+			"examples": [
+				"createFile(\"output.bin\")",
+				".var outFile = createFile(\"data.prg\")"
+			]
+		},
+		{
+			"name": "toIntString",
+			"category": "string",
+			"description": "Converts a number to its string representation",
+			"signature": "toIntString(value: number): string",
+			"examples": [
+				"toIntString(42)      // Returns \"42\"",
+				"toIntString(-128)    // Returns \"-128\""
+			]
+		},
+		{
+			"name": "toHexString",
+			"category": "string",
+			"description": "Converts a number to its hexadecimal string representation",
+			"signature": "toHexString(value: number): string",
+			"examples": [
+				"toHexString(255)     // Returns \"ff\"",
+				"toHexString(4096)    // Returns \"1000\""
+			]
+		},
+		{
+			"name": "toBinaryString",
+			"category": "string",
+			"description": "Converts a number to its binary string representation",
+			"signature": "toBinaryString(value: number): string",
+			"examples": [
+				"toBinaryString(5)    // Returns \"101\"",
+				"toBinaryString(255)  // Returns \"11111111\""
+			]
+		},
+		{
+			"name": "Vector",
+			"category": "3d",
+			"description": "Creates a 3D vector with x, y, z components",
+			"signature": "Vector(x: number, y: number, z: number): Vector3D",
+			"examples": [
+				"Vector(1, 0, 0)      // Unit vector along X axis",
+				"Vector(1, 2, 3)      // Vector with components 1,2,3"
+			]
+		},
+		{
+			"name": "Matrix",
+			"category": "3d",
+			"description": "Creates a 4x4 transformation matrix",
+			"signature": "Matrix(): Matrix4x4",
+			"examples": [
+				"Matrix()             // Identity matrix",
+				".var transform = Matrix()"
+			]
+		},
+		{
+			"name": "RotationMatrix",
+			"category": "3d",
+			"description": "Creates a rotation matrix around the specified axis",
+			"signature": "RotationMatrix(axis: Vector3D, angle: number): Matrix4x4",
+			"examples": [
+				"RotationMatrix(Vector(0,1,0), toRadians(90))",
+				"RotationMatrix(Vector(1,0,0), PI/2)"
+			]
+		},
+		{
+			"name": "ScaleMatrix",
+			"category": "3d",
+			"description": "Creates a scaling matrix with the specified scale factors",
+			"signature": "ScaleMatrix(x: number, y: number, z: number): Matrix4x4",
+			"examples": [
+				"ScaleMatrix(2, 2, 2) // Uniform 2x scaling",
+				"ScaleMatrix(1, 2, 1) // 2x scaling in Y only"
+			]
+		},
+		{
+			"name": "MoveMatrix",
+			"category": "3d",
+			"description": "Creates a translation matrix with the specified offset",
+			"signature": "MoveMatrix(x: number, y: number, z: number): Matrix4x4",
+			"examples": [
+				"MoveMatrix(10, 0, 0) // Move 10 units along X",
+				"MoveMatrix(0, 5, -2) // Move in Y and Z"
+			]
+		}
+	],
+	"builtinConstants": [
+		{
+			"name": "PI",
+			"category": "math",
+			"description": "Mathematical constant π (pi) ≈ 3.14159",
+			"value": "3.141592653589793",
+			"examples": [
+				"sin(PI/2)           // Returns 1.0",
+				"2*PI*radius         // Circumference"
+			]
+		},
+		{
+			"name": "E",
+			"category": "math",
+			"description": "Mathematical constant e (Euler's number) ≈ 2.71828",
+			"value": "2.718281828459045",
+			"examples": [
+				"pow(E, 1)           // Returns E",
+				"log(E)              // Returns 1.0"
+			]
+		},
+		{
+			"name": "BLACK",
+			"category": "color",
+			"description": "C64 color constant for black",
+			"value": "0",
+			"examples": [
+				"lda #BLACK",
+				"sta $d020           // Set border to black"
+			]
+		},
+		{
+			"name": "WHITE",
+			"category": "color",
+			"description": "C64 color constant for white",
+			"value": "1",
+			"examples": [
+				"lda #WHITE",
+				"sta $d021           // Set background to white"
+			]
+		},
+		{
+			"name": "RED",
+			"category": "color",
+			"description": "C64 color constant for red",
+			"value": "2",
+			"examples": [
+				"lda #RED",
+				"sta $d020           // Set border to red"
+			]
+		},
+		{
+			"name": "CYAN",
+			"category": "color",
+			"description": "C64 color constant for cyan",
+			"value": "3",
+			"examples": [
+				"lda #CYAN",
+				"sta $d021           // Set background to cyan"
+			]
+		},
+		{
+			"name": "PURPLE",
+			"category": "color",
+			"description": "C64 color constant for purple",
+			"value": "4",
+			"examples": [
+				"lda #PURPLE",
+				"sta $d020           // Set border to purple"
+			]
+		},
+		{
+			"name": "GREEN",
+			"category": "color",
+			"description": "C64 color constant for green",
+			"value": "5",
+			"examples": [
+				"lda #GREEN",
+				"sta $d021           // Set background to green"
+			]
+		},
+		{
+			"name": "BLUE",
+			"category": "color",
+			"description": "C64 color constant for blue",
+			"value": "6",
+			"examples": [
+				"lda #BLUE",
+				"sta $d020           // Set border to blue"
+			]
+		},
+		{
+			"name": "YELLOW",
+			"category": "color",
+			"description": "C64 color constant for yellow",
+			"value": "7",
+			"examples": [
+				"lda #YELLOW",
+				"sta $d021           // Set background to yellow"
+			]
+		},
+		{
+			"name": "ORANGE",
+			"category": "color",
+			"description": "C64 color constant for orange",
+			"value": "8",
+			"examples": [
+				"lda #ORANGE",
+				"sta $d020           // Set border to orange"
+			]
+		},
+		{
+			"name": "BROWN",
+			"category": "color",
+			"description": "C64 color constant for brown",
+			"value": "9",
+			"examples": [
+				"lda #BROWN",
+				"sta $d021           // Set background to brown"
+			]
+		},
+		{
+			"name": "LIGHT_RED",
+			"category": "color",
+			"description": "C64 color constant for light red",
+			"value": "10",
+			"examples": [
+				"lda #LIGHT_RED",
+				"sta $d020           // Set border to light red"
+			]
+		},
+		{
+			"name": "DARK_GRAY",
+			"category": "color",
+			"description": "C64 color constant for dark gray",
+			"value": "11",
+			"examples": [
+				"lda #DARK_GRAY",
+				"sta $d021           // Set background to dark gray"
+			]
+		},
+		{
+			"name": "GRAY",
+			"category": "color",
+			"description": "C64 color constant for gray",
+			"value": "12",
+			"examples": [
+				"lda #GRAY",
+				"sta $d020           // Set border to gray"
+			]
+		},
+		{
+			"name": "LIGHT_GREEN",
+			"category": "color",
+			"description": "C64 color constant for light green",
+			"value": "13",
+			"examples": [
+				"lda #LIGHT_GREEN",
+				"sta $d021           // Set background to light green"
+			]
+		},
+		{
+			"name": "LIGHT_BLUE",
+			"category": "color",
+			"description": "C64 color constant for light blue",
+			"value": "14",
+			"examples": [
+				"lda #LIGHT_BLUE",
+				"sta $d020           // Set border to light blue"
+			]
+		},
+		{
+			"name": "LIGHT_GRAY",
+			"category": "color",
+			"description": "C64 color constant for light gray",
+			"value": "15",
+			"examples": [
+				"lda #LIGHT_GRAY",
+				"sta $d021           // Set background to light gray"
+			]
+		}
+	]
+}

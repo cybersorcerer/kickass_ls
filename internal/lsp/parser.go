@@ -391,6 +391,14 @@ type IntegerLiteral struct {
 func (il *IntegerLiteral) expressionNode()      {}
 func (il *IntegerLiteral) TokenLiteral() string { return il.Token.Literal }
 
+type StringLiteral struct {
+	Token Token
+	Value string
+}
+
+func (sl *StringLiteral) expressionNode()      {}
+func (sl *StringLiteral) TokenLiteral() string { return sl.Token.Literal }
+
 type PrefixExpression struct {
 	Token    Token
 	Operator string
@@ -480,6 +488,7 @@ func NewParser(l *Lexer) *Parser {
 	p.registerPrefix(TOKEN_NUMBER_HEX, p.parseIntegerLiteral)
 	p.registerPrefix(TOKEN_NUMBER_BIN, p.parseIntegerLiteral)
 	p.registerPrefix(TOKEN_NUMBER_OCT, p.parseIntegerLiteral)
+	p.registerPrefix(TOKEN_STRING, p.parseStringLiteral)
 	p.registerPrefix(TOKEN_HASH, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_MINUS, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_PLUS, p.parsePrefixExpression)
@@ -487,6 +496,14 @@ func NewParser(l *Lexer) *Parser {
 	p.registerPrefix(TOKEN_GREATER, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_DOT, p.parsePrefixExpression)
 	p.registerPrefix(TOKEN_LPAREN, p.parseGroupedExpression)
+
+	// Register built-in functions and constants
+	p.registerPrefix(TOKEN_BUILTIN_MATH_FUNC, p.parseBuiltinFunction)
+	p.registerPrefix(TOKEN_BUILTIN_STRING_FUNC, p.parseBuiltinFunction)
+	p.registerPrefix(TOKEN_BUILTIN_FILE_FUNC, p.parseBuiltinFunction)
+	p.registerPrefix(TOKEN_BUILTIN_3D_FUNC, p.parseBuiltinFunction)
+	p.registerPrefix(TOKEN_BUILTIN_MATH_CONST, p.parseBuiltinConstant)
+	p.registerPrefix(TOKEN_BUILTIN_COLOR_CONST, p.parseBuiltinConstant)
 
 	p.infixParseFns = make(map[TokenType]infixParseFn)
 	p.registerInfix(TOKEN_PLUS, p.parseInfixExpression)
@@ -520,8 +537,52 @@ func (p *Parser) nextToken() {
 	p.peekToken = p.lexer.NextToken()
 }
 
+// tokenTypeToUserFriendly converts technical token types to user-friendly descriptions
+func tokenTypeToUserFriendly(tokenType TokenType) string {
+	switch tokenType {
+	case TOKEN_IDENTIFIER:
+		return "identifier"
+	case TOKEN_NUMBER_DEC:
+		return "number"
+	case TOKEN_NUMBER_HEX:
+		return "hex number"
+	case TOKEN_NUMBER_BIN:
+		return "binary number"
+	case TOKEN_NUMBER_OCT:
+		return "octal number"
+	case TOKEN_STRING:
+		return "string"
+	case TOKEN_EQUAL:
+		return "'='"
+	case TOKEN_COMMA:
+		return "','"
+	case TOKEN_LPAREN:
+		return "'('"
+	case TOKEN_RPAREN:
+		return "')'"
+	case TOKEN_LBRACE:
+		return "'{'"
+	case TOKEN_RBRACE:
+		return "'}'"
+	case TOKEN_COLON:
+		return "':'"
+	case TOKEN_DOT:
+		return "'.'"
+	case TOKEN_EOF:
+		return "end of line"
+	case TOKEN_LABEL:
+		return "label"
+	case TOKEN_COMMENT:
+		return "comment"
+	default:
+		return string(tokenType)
+	}
+}
+
 func (p *Parser) peekError(t TokenType) {
-	msg := fmt.Sprintf("expected next token to be %s, got %s instead", t, p.peekToken.Type)
+	expected := tokenTypeToUserFriendly(t)
+	got := tokenTypeToUserFriendly(p.peekToken.Type)
+	msg := fmt.Sprintf("expected %s, got %s instead", expected, got)
 	p.diagnostics = append(p.diagnostics, Diagnostic{Message: msg, Range: Range{Start: Position{Line: p.peekToken.Line - 1, Character: p.peekToken.Column - 1}, End: Position{Line: p.peekToken.Line - 1, Character: p.peekToken.Column - 1 + len(p.peekToken.Literal)}}, Severity: SeverityError, Source: "parser"})
 }
 
@@ -602,6 +663,66 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 		stmt.Token.Literal = dotToken.Literal + p.curToken.Literal
 	} else {
 		stmt.Token = p.curToken
+	}
+
+	// Handle pre-tokenized directives (they already contain the full directive name)
+	if p.curToken.Type == TOKEN_DIRECTIVE_KICK_PRE || p.curToken.Type == TOKEN_DIRECTIVE_KICK_FLOW ||
+		p.curToken.Type == TOKEN_DIRECTIVE_KICK_ASM || p.curToken.Type == TOKEN_DIRECTIVE_KICK_DATA ||
+		p.curToken.Type == TOKEN_DIRECTIVE_KICK_TEXT {
+		// Parse arguments/value/block based on what follows
+		if p.peekTokenIs(TOKEN_IDENTIFIER) {
+			// Handle directives with values like .const name = value
+			if !p.expectPeek(TOKEN_IDENTIFIER) {
+				return nil
+			}
+			stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+			// Check if this is followed by an equals sign for value directives
+			if p.peekTokenIs(TOKEN_EQUAL) {
+				p.nextToken() // advance to EQUAL
+				equalToken := p.curToken
+				if p.peekToken.Line != equalToken.Line {
+					p.diagnostics = append(p.diagnostics, Diagnostic{
+						Message: "missing expression after '='",
+						Range: Range{
+							Start: Position{Line: equalToken.Line - 1, Character: equalToken.Column},
+							End:   Position{Line: equalToken.Line - 1, Character: equalToken.Column + 1},
+						},
+						Severity: SeverityError,
+						Source:   "parser",
+					})
+					return nil
+				}
+				// Check if the expression is on the same line as the equals
+				if p.peekToken.Line == equalToken.Line {
+					p.nextToken()
+					stmt.Value = p.parseExpression(LOWEST)
+				}
+			}
+		} else if p.peekTokenIs(TOKEN_LBRACE) {
+			// Handle directives with blocks like .function name() { ... }
+			if !p.expectPeek(TOKEN_IDENTIFIER) {
+				return nil
+			}
+			stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+			if p.peekTokenIs(TOKEN_LPAREN) {
+				p.nextToken()
+				stmt.Parameters = p.parseIdentifierList()
+			}
+			if !p.expectPeek(TOKEN_LBRACE) {
+				return nil
+			}
+			stmt.Block = p.parseBlockStatement()
+		} else {
+			// Handle directives with arguments like .fill count, value or .print "message"
+			// For these directives, the directive name itself is the identifier
+			stmt.Name = &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+			// Parse the rest of the line as arguments/expressions
+			if !p.peekTokenIs(TOKEN_EOF) && p.peekToken.Line == p.curToken.Line {
+				p.nextToken()
+				stmt.Value = p.parseExpression(LOWEST)
+			}
+		}
+		return stmt
 	}
 
 	if strings.EqualFold(stmt.Token.Literal, ".label") && p.peekTokenIs(TOKEN_LABEL) {
@@ -778,7 +899,7 @@ func (p *Parser) parseExpression(precedence int) Expression {
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
 		p.diagnostics = append(p.diagnostics, Diagnostic{
-			Message: fmt.Sprintf("no prefix parse function for %s found", p.curToken.Type),
+			Message: fmt.Sprintf("Unexpected token '%s' in this context", p.curToken.Literal),
 			Range: Range{
 				Start: Position{
 					Line:      p.curToken.Line - 1,
@@ -812,6 +933,31 @@ func (p *Parser) parseIdentifier() Expression {
 	return &Identifier{Token: p.curToken, Value: p.curToken.Literal}
 }
 
+// parseBuiltinFunction handles built-in function tokens
+func (p *Parser) parseBuiltinFunction() Expression {
+	funcToken := p.curToken
+
+	// Check if next token is LPAREN for function call
+	if !p.expectPeek(TOKEN_LPAREN) {
+		return nil
+	}
+
+	// Create a CallExpression with the builtin function as the function
+	callExp := &CallExpression{
+		Token: funcToken,
+		Function: &Identifier{Token: funcToken, Value: funcToken.Literal},
+	}
+
+	// Parse the arguments
+	callExp.Arguments = p.parseExpressionList(TOKEN_RPAREN)
+	return callExp
+}
+
+// parseBuiltinConstant handles built-in constant tokens
+func (p *Parser) parseBuiltinConstant() Expression {
+	return &Identifier{Token: p.curToken, Value: p.curToken.Literal}
+}
+
 func (p *Parser) parseIntegerLiteral() Expression {
 	lit := &IntegerLiteral{Token: p.curToken}
 	var val int64
@@ -819,7 +965,18 @@ func (p *Parser) parseIntegerLiteral() Expression {
 
 	switch p.curToken.Type {
 	case TOKEN_NUMBER_DEC:
-		val, err = strconv.ParseInt(p.curToken.Literal, 10, 64)
+		// Handle both integers and floats
+		literal := strings.TrimPrefix(p.curToken.Literal, "#")
+		if strings.Contains(literal, ".") {
+			// For floating point numbers, store as integer representation
+			// This is a simplified approach - in a real parser you'd want FloatLiteral
+			floatVal, err := strconv.ParseFloat(literal, 64)
+			if err == nil {
+				val = int64(floatVal) // Convert to int for now
+			}
+		} else {
+			val, err = strconv.ParseInt(literal, 10, 64)
+		}
 	case TOKEN_NUMBER_HEX:
 		cleaned := strings.TrimPrefix(p.curToken.Literal, "#")
 		cleaned = strings.TrimPrefix(cleaned, "$")
@@ -837,7 +994,7 @@ func (p *Parser) parseIntegerLiteral() Expression {
 	if err != nil {
 		//p.diagnostics = append(p.diagnostics, Diagnostic{Message: fmt.Sprintf("could not parse %q as integer", p.curToken.Literal), Range: Range{Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1}, End: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1 + len(p.curToken.Literal), Severity: SeverityError, Source: "parser"}})
 		p.diagnostics = append(p.diagnostics, Diagnostic{
-			Message: fmt.Sprintf("could not parse %q as integer", p.curToken.Literal),
+			Message: fmt.Sprintf("Invalid number format '%s'. Expected: decimal (123), hex ($FF), binary (%%11111111), or octal (&177)", p.curToken.Literal),
 			Range: Range{
 				Start: Position{
 					Line:      p.curToken.Line - 1,
@@ -856,6 +1013,10 @@ func (p *Parser) parseIntegerLiteral() Expression {
 
 	lit.Value = val
 	return lit
+}
+
+func (p *Parser) parseStringLiteral() Expression {
+	return &StringLiteral{Token: p.curToken, Value: p.curToken.Literal}
 }
 
 func (p *Parser) parsePrefixExpression() Expression {

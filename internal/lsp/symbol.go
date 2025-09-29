@@ -93,8 +93,8 @@ func NewRootScope(uri string) *Scope {
 
 // AddSymbol adds a symbol to the scope.
 func (s *Scope) AddSymbol(symbol *Symbol) error {
-	if _, exists := s.Symbols[symbol.Name]; exists {
-		return fmt.Errorf("symbol '%s' already defined in this scope", symbol.Name)
+	if existing, exists := s.Symbols[symbol.Name]; exists {
+		return fmt.Errorf("symbol '%s' already defined in this scope (originally defined at line %d)", symbol.Name, existing.Position.Line+1)
 	}
 	log.Debug("Adding symbol '%s' to scope '%s'", symbol.Name, s.Name)
 	s.Symbols[symbol.Name] = symbol

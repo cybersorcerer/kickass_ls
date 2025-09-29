@@ -52,6 +52,16 @@ const (
 	TOKEN_DIRECTIVE_KICK_DATA
 	TOKEN_DIRECTIVE_KICK_TEXT
 
+	// Built-in Functions
+	TOKEN_BUILTIN_MATH_FUNC
+	TOKEN_BUILTIN_STRING_FUNC
+	TOKEN_BUILTIN_FILE_FUNC
+	TOKEN_BUILTIN_3D_FUNC
+
+	// Built-in Constants
+	TOKEN_BUILTIN_MATH_CONST
+	TOKEN_BUILTIN_COLOR_CONST
+
 	// Punctuation
 	TOKEN_COLON    // :
 	TOKEN_HASH     // #
@@ -93,6 +103,12 @@ var tokenNames = map[TokenType]string{
 	TOKEN_DIRECTIVE_KICK_ASM:  "DIRECTIVE_KICK_ASM",
 	TOKEN_DIRECTIVE_KICK_DATA: "DIRECTIVE_KICK_DATA",
 	TOKEN_DIRECTIVE_KICK_TEXT: "DIRECTIVE_KICK_TEXT",
+	TOKEN_BUILTIN_MATH_FUNC:   "BUILTIN_MATH_FUNC",
+	TOKEN_BUILTIN_STRING_FUNC: "BUILTIN_STRING_FUNC",
+	TOKEN_BUILTIN_FILE_FUNC:   "BUILTIN_FILE_FUNC",
+	TOKEN_BUILTIN_3D_FUNC:     "BUILTIN_3D_FUNC",
+	TOKEN_BUILTIN_MATH_CONST:  "BUILTIN_MATH_CONST",
+	TOKEN_BUILTIN_COLOR_CONST: "BUILTIN_COLOR_CONST",
 	TOKEN_COLON:               "COLON",
 	TOKEN_HASH:                "HASH",
 	TOKEN_DOT:                 "DOT",
@@ -123,6 +139,36 @@ func (t TokenType) String() string {
 type MnemonicInfo struct {
 	Mnemonic string `json:"mnemonic"`
 	Type     string `json:"type"`
+}
+
+// DirectiveInfo represents a directive from kickass.json for lexer use
+type DirectiveInfo struct {
+	Directive string `json:"directive"`
+}
+
+// KickAssConfig represents the structure of the extended kickass.json
+type KickAssConfig struct {
+	Directives        []DirectiveInfo   `json:"directives"`
+	BuiltinFunctions  []BuiltinFunction `json:"builtinFunctions"`
+	BuiltinConstants  []BuiltinConstant `json:"builtinConstants"`
+}
+
+// BuiltinFunction represents a built-in function from kickass.json
+type BuiltinFunction struct {
+	Name        string   `json:"name"`
+	Category    string   `json:"category"`
+	Description string   `json:"description"`
+	Signature   string   `json:"signature"`
+	Examples    []string `json:"examples"`
+}
+
+// BuiltinConstant represents a built-in constant from kickass.json
+type BuiltinConstant struct {
+	Name        string   `json:"name"`
+	Category    string   `json:"category"`
+	Description string   `json:"description"`
+	Value       string   `json:"value"`
+	Examples    []string `json:"examples"`
 }
 
 // loadMnemonicsFromJSON loads mnemonics from mnemonic.json and creates regex patterns
@@ -183,6 +229,162 @@ func createFallbackMnemonicRegexes() map[TokenType]*regexp.Regexp {
 	}
 }
 
+// kickassJSONPath is set by the server to provide the correct path for kickass.json
+var kickassJSONPath string
+
+// SetKickassJSONPath sets the path to kickass.json for lexer initialization
+func SetKickassJSONPath(path string) {
+	kickassJSONPath = path
+	// Force re-initialization of token definitions when path changes
+	tokenDefs = nil
+}
+
+// loadDirectivesFromJSON loads directives, functions and constants from kickass.json and creates regex patterns
+func loadDirectivesFromJSON() map[TokenType]*regexp.Regexp {
+	jsonPath := kickassJSONPath
+	if jsonPath == "" {
+		jsonPath = "kickass.json" // fallback
+	}
+
+	file, err := os.Open(jsonPath)
+	if err != nil {
+		log.Error("Failed to open kickass.json at %s: %v", jsonPath, err)
+		return createFallbackDirectiveRegexes()
+	}
+	defer file.Close()
+
+	var config KickAssConfig
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		log.Error("Failed to parse kickass.json: %v", err)
+		return createFallbackDirectiveRegexes()
+	}
+
+	directives := config.Directives
+
+	// Group directives by category
+	preDirectives := []string{}    // #import, #importif etc
+	flowDirectives := []string{}   // .if, .for, .while, .return
+	asmDirectives := []string{}    // .align, .assert, .function, .macro etc
+	dataDirectives := []string{}   // .byte, .const, .var etc
+	textDirectives := []string{}   // .text, .te
+
+	for _, directive := range directives {
+		dir := strings.ToLower(directive.Directive)
+
+		// Remove leading # or . for processing
+		cleanDir := strings.TrimPrefix(strings.TrimPrefix(dir, "#"), ".")
+
+		if strings.HasPrefix(directive.Directive, "#") {
+			// Preprocessor directives
+			preDirectives = append(preDirectives, cleanDir)
+		} else {
+			// Categorize by common patterns
+			switch cleanDir {
+			case "if", "for", "while", "return":
+				flowDirectives = append(flowDirectives, cleanDir)
+			case "by", "byte", "const", "dw", "dword", "enum", "fill", "fillword", "struct", "var", "wo", "word":
+				dataDirectives = append(dataDirectives, cleanDir)
+			case "te", "text":
+				textDirectives = append(textDirectives, cleanDir)
+			default:
+				// Everything else goes to ASM
+				asmDirectives = append(asmDirectives, cleanDir)
+			}
+		}
+	}
+
+	// Create regex patterns
+	regexes := make(map[TokenType]*regexp.Regexp)
+	if len(preDirectives) > 0 {
+		regexes[TOKEN_DIRECTIVE_KICK_PRE] = regexp.MustCompile(`^#(` + strings.Join(preDirectives, "|") + `)\b`)
+	}
+	if len(flowDirectives) > 0 {
+		regexes[TOKEN_DIRECTIVE_KICK_FLOW] = regexp.MustCompile(`^\.(?i)(` + strings.Join(flowDirectives, "|") + `)\b`)
+	}
+	if len(asmDirectives) > 0 {
+		regexes[TOKEN_DIRECTIVE_KICK_ASM] = regexp.MustCompile(`^\.(?i)(` + strings.Join(asmDirectives, "|") + `)\b`)
+	}
+	if len(dataDirectives) > 0 {
+		regexes[TOKEN_DIRECTIVE_KICK_DATA] = regexp.MustCompile(`^\.(?i)(` + strings.Join(dataDirectives, "|") + `)\b`)
+	}
+	if len(textDirectives) > 0 {
+		regexes[TOKEN_DIRECTIVE_KICK_TEXT] = regexp.MustCompile(`^\.(?i)(` + strings.Join(textDirectives, "|") + `)\b`)
+	}
+
+	// Group built-in functions by category
+	mathFunctions := []string{}
+	stringFunctions := []string{}
+	fileFunctions := []string{}
+	d3Functions := []string{}
+
+	for _, function := range config.BuiltinFunctions {
+		funcName := strings.ToLower(function.Name)
+		switch function.Category {
+		case "math":
+			mathFunctions = append(mathFunctions, funcName)
+		case "string":
+			stringFunctions = append(stringFunctions, funcName)
+		case "file":
+			fileFunctions = append(fileFunctions, funcName)
+		case "3d":
+			d3Functions = append(d3Functions, funcName)
+		}
+	}
+
+	// Group built-in constants by category
+	mathConstants := []string{}
+	colorConstants := []string{}
+
+	for _, constant := range config.BuiltinConstants {
+		constName := strings.ToLower(constant.Name)
+		switch constant.Category {
+		case "math":
+			mathConstants = append(mathConstants, constName)
+		case "color":
+			colorConstants = append(colorConstants, constName)
+		}
+	}
+
+	// Add built-in function regexes
+	if len(mathFunctions) > 0 {
+		regexes[TOKEN_BUILTIN_MATH_FUNC] = regexp.MustCompile(`^(?i)(` + strings.Join(mathFunctions, "|") + `)\b`)
+	}
+	if len(stringFunctions) > 0 {
+		regexes[TOKEN_BUILTIN_STRING_FUNC] = regexp.MustCompile(`^(?i)(` + strings.Join(stringFunctions, "|") + `)\b`)
+	}
+	if len(fileFunctions) > 0 {
+		regexes[TOKEN_BUILTIN_FILE_FUNC] = regexp.MustCompile(`^(?i)(` + strings.Join(fileFunctions, "|") + `)\b`)
+	}
+	if len(d3Functions) > 0 {
+		regexes[TOKEN_BUILTIN_3D_FUNC] = regexp.MustCompile(`^(?i)(` + strings.Join(d3Functions, "|") + `)\b`)
+	}
+
+	// Add built-in constant regexes
+	if len(mathConstants) > 0 {
+		regexes[TOKEN_BUILTIN_MATH_CONST] = regexp.MustCompile(`^(?i)(` + strings.Join(mathConstants, "|") + `)\b`)
+	}
+	if len(colorConstants) > 0 {
+		regexes[TOKEN_BUILTIN_COLOR_CONST] = regexp.MustCompile(`^(?i)(` + strings.Join(colorConstants, "|") + `)\b`)
+	}
+
+	log.Debug("Loaded directives: %d pre, %d flow, %d asm, %d data, %d text", len(preDirectives), len(flowDirectives), len(asmDirectives), len(dataDirectives), len(textDirectives))
+	log.Debug("Loaded functions: %d math, %d string, %d file, %d 3d", len(mathFunctions), len(stringFunctions), len(fileFunctions), len(d3Functions))
+	log.Debug("Loaded constants: %d math, %d color", len(mathConstants), len(colorConstants))
+	return regexes
+}
+
+// createFallbackDirectiveRegexes provides hardcoded regexes as fallback
+func createFallbackDirectiveRegexes() map[TokenType]*regexp.Regexp {
+	log.Warn("Using fallback hardcoded directive regexes")
+	return map[TokenType]*regexp.Regexp{
+		TOKEN_DIRECTIVE_KICK_PRE:  regexp.MustCompile(`^#(define|elif|else|endif|if|import|importif|importonce|undef)\b`),
+		TOKEN_DIRECTIVE_KICK_FLOW: regexp.MustCompile(`^\.(?i)(for|if|while|return)\b`),
+		TOKEN_DIRECTIVE_KICK_ASM:  regexp.MustCompile(`^\.(?i)(align|assert|asserterror|break|cpu|define|disk|encoding|error|errorif|eval|file|filemodify|filenamespace|function|import|importonce|label|lohifill|macro|memblock|modify|namespace|pc|plugin|print|printnow|pseudocommand|pseudopc|segment|segmentdef|segmentout|zp)\b`),
+		TOKEN_DIRECTIVE_KICK_DATA: regexp.MustCompile(`^\.(?i)(by|byte|const|dw|dword|enum|fill|fillword|struct|var|wo|word)\b`),
+		TOKEN_DIRECTIVE_KICK_TEXT: regexp.MustCompile(`^\.(?i)(te|text)\b`),
+	}
+}
+
 // tokenDefinition holds a token type and the regex used to match it.
 type tokenDefinition struct {
 	tokenType TokenType
@@ -192,9 +394,10 @@ type tokenDefinition struct {
 // The order of these definitions is important for correct matching.
 var tokenDefs []tokenDefinition
 
-// initTokenDefs initializes tokenDefs with mnemonic regexes loaded from JSON
+// initTokenDefs initializes tokenDefs with mnemonic and directive regexes loaded from JSON
 func initTokenDefs() {
 	mnemonicRegexes := loadMnemonicsFromJSON()
+	directiveRegexes := loadDirectivesFromJSON()
 
 	tokenDefs = []tokenDefinition{
 	{TOKEN_COMMENT, regexp.MustCompile(`^//.*`)},                   // Handle // comments
@@ -202,7 +405,7 @@ func initTokenDefs() {
 	{TOKEN_COMMENT, regexp.MustCompile(`^/\*.*?\*/`)},               // Handle /* */ comments
 	{TOKEN_NUMBER_HEX, regexp.MustCompile(`^#?\$[0-9a-zA-Z]+`)},  // Corrected escaping for $
 	{TOKEN_NUMBER_BIN, regexp.MustCompile(`^#?%[0-1]+`)},         // Corrected escaping for %
-	{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+`)},
+	{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+(\.[0-9]+)?`)},
 	{TOKEN_NUMBER_OCT, regexp.MustCompile(`^#?&[0-7]+`)}, // Corrected escaping for &
 	{TOKEN_STRING, regexp.MustCompile(`^"(\\|[^\"])*"`)}, // Corrected escaping for " and "
 	}
@@ -218,13 +421,47 @@ func initTokenDefs() {
 		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_MNEMONIC_ILL, regex})
 	}
 
+	// Add dynamic directive regexes from JSON
+	if regex, exists := directiveRegexes[TOKEN_DIRECTIVE_KICK_PRE]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_DIRECTIVE_KICK_PRE, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_DIRECTIVE_KICK_FLOW]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_DIRECTIVE_KICK_FLOW, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_DIRECTIVE_KICK_ASM]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_DIRECTIVE_KICK_ASM, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_DIRECTIVE_KICK_DATA]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_DIRECTIVE_KICK_DATA, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_DIRECTIVE_KICK_TEXT]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_DIRECTIVE_KICK_TEXT, regex})
+	}
+
+	// Add dynamic built-in function regexes from JSON
+	if regex, exists := directiveRegexes[TOKEN_BUILTIN_MATH_FUNC]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_MATH_FUNC, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_BUILTIN_STRING_FUNC]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_STRING_FUNC, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_BUILTIN_FILE_FUNC]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_FILE_FUNC, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_BUILTIN_3D_FUNC]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_3D_FUNC, regex})
+	}
+
+	// Add dynamic built-in constant regexes from JSON
+	if regex, exists := directiveRegexes[TOKEN_BUILTIN_MATH_CONST]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_MATH_CONST, regex})
+	}
+	if regex, exists := directiveRegexes[TOKEN_BUILTIN_COLOR_CONST]; exists {
+		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_COLOR_CONST, regex})
+	}
+
 	// Continue with other token definitions
 	tokenDefs = append(tokenDefs, []tokenDefinition{
-	{TOKEN_DIRECTIVE_KICK_PRE, regexp.MustCompile(`^#(define|elif|else|endif|if|import|importif|importonce|undef)\b`)},
-	{TOKEN_DIRECTIVE_KICK_FLOW, regexp.MustCompile(`^\.(?i)(for|if|while|return)\b`)},
-	{TOKEN_DIRECTIVE_KICK_ASM, regexp.MustCompile(`^\.(?i)(align|assert|asserterror|break|cpu|define|disk|encoding|error|errorif|eval|file|filemodify|filenamespace|function|import|importonce|label|lohifill|m acro|memblock|modify|namespace|pc|plugin|print|printnow|pseudocommand|pseudopc|segment|segmentdef|segmentout|zp)\b`)},
-	{TOKEN_DIRECTIVE_KICK_DATA, regexp.MustCompile(`^\.(?i)(by|byte|const|dw|dword|enum|fill|fillword|struct|var|wo|word)\b`)},
-	{TOKEN_DIRECTIVE_KICK_TEXT, regexp.MustCompile(`^\.(?i)(te|text)\b`)},
 	{TOKEN_DIRECTIVE_PC, regexp.MustCompile(`^(\*=)`)},              // Corrected escaping for *=
 	{TOKEN_LABEL, regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*):`)}, // Corrected escaping for :
 	{TOKEN_IDENTIFIER, regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*`)},

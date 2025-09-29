@@ -94,10 +94,16 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 		}
 		return SemanticTokenVariable, 0 // Default to variable
 		
-	case TOKEN_HASH, TOKEN_LESS, TOKEN_GREATER, TOKEN_PLUS, TOKEN_MINUS, 
+	case TOKEN_BUILTIN_MATH_FUNC, TOKEN_BUILTIN_STRING_FUNC, TOKEN_BUILTIN_FILE_FUNC, TOKEN_BUILTIN_3D_FUNC:
+		return SemanticTokenFunction, SemanticTokenModifierReadonly // Built-in functions
+
+	case TOKEN_BUILTIN_MATH_CONST, TOKEN_BUILTIN_COLOR_CONST:
+		return SemanticTokenVariable, SemanticTokenModifierReadonly // Built-in constants
+
+	case TOKEN_HASH, TOKEN_LESS, TOKEN_GREATER, TOKEN_PLUS, TOKEN_MINUS,
 		 TOKEN_ASTERISK, TOKEN_SLASH, TOKEN_EQUAL:
 		return SemanticTokenOperator, 0 // Operators
-		
+
 	default:
 		return -1, 0 // Skip this token
 	}

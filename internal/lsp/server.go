@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -79,6 +80,8 @@ type DocumentSymbol struct {
 // Global variable to store mnemonic data
 var mnemonics []Mnemonic
 var kickassDirectives []KickassDirective
+var builtinFunctions []BuiltinFunction
+var builtinConstants []BuiltinConstant
 var warnUnusedLabelsEnabled bool
 
 // LSPConfiguration holds all configurable LSP settings
@@ -518,6 +521,19 @@ func Start(mnemonicPath string, kickassPath string) {
 		log.Info("Successfully loaded %d kickass directives.", len(kickassDirectives))
 	}
 
+	// Load built-in functions and constants
+	kickassFilePath := filepath.Join(kickassPath, "kickass.json")
+
+	// Set kickass.json path for lexer
+	SetKickassJSONPath(kickassFilePath)
+
+	builtinFunctions, builtinConstants, err = LoadBuiltins(kickassFilePath)
+	if err != nil {
+		log.Error("Failed to load built-ins: %v", err)
+	} else {
+		log.Info("Successfully loaded %d built-in functions and %d built-in constants.", len(builtinFunctions), len(builtinConstants))
+	}
+
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
 
@@ -609,7 +625,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp",
-						"version": "0.8.0", // Version updated
+						"version": "0.8.4", // Version updated
 					},
 				},
 			}
@@ -763,21 +779,43 @@ func Start(mnemonicPath string, kickassPath string) {
 														},
 													}
 												} else {
-													searchSymbol := normalizeLabel(word)
-													if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
-														var markdown string
-														if symbol.Signature != "" {
-															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
-														} else if symbol.Value != "" {
-															markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
-														} else {
-															markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
-														}
+													// Check for built-in functions
+													builtinFuncDescription := getBuiltinFunctionDescription(word)
+													if builtinFuncDescription != "" {
 														responseResult = map[string]interface{}{
 															"contents": map[string]interface{}{
 																"kind":  "markdown",
-																"value": markdown,
+																"value": builtinFuncDescription,
 															},
+														}
+													} else {
+														// Check for built-in constants
+														builtinConstDescription := getBuiltinConstantDescription(word)
+														if builtinConstDescription != "" {
+															responseResult = map[string]interface{}{
+																"contents": map[string]interface{}{
+																	"kind":  "markdown",
+																	"value": builtinConstDescription,
+																},
+															}
+														} else {
+															searchSymbol := normalizeLabel(word)
+															if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
+																var markdown string
+																if symbol.Signature != "" {
+																	markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
+																} else if symbol.Value != "" {
+																	markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
+																} else {
+																	markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
+																}
+																responseResult = map[string]interface{}{
+																	"contents": map[string]interface{}{
+																		"kind":  "markdown",
+																		"value": markdown,
+																	},
+																}
+															}
 														}
 													}
 												}
@@ -1160,6 +1198,76 @@ func getDirectiveDescription(directive string) string {
 	return ""
 }
 
+// getBuiltinFunctionDescription returns markdown description for built-in functions
+func getBuiltinFunctionDescription(function string) string {
+	for _, f := range builtinFunctions {
+		if strings.EqualFold(f.Name, function) {
+			var builder strings.Builder
+
+			// Header with function name and category
+			builder.WriteString(fmt.Sprintf("**%s** (%s function)\n\n", f.Name, f.Category))
+
+			// Signature in code block
+			if f.Signature != "" {
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(f.Signature)
+				builder.WriteString("\n```\n\n")
+			}
+
+			// Description
+			if f.Description != "" {
+				builder.WriteString(f.Description)
+				builder.WriteString("\n\n")
+			}
+
+			// Examples
+			if len(f.Examples) > 0 {
+				builder.WriteString("**Examples:**\n\n")
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(strings.Join(f.Examples, "\n"))
+				builder.WriteString("\n```")
+			}
+
+			return builder.String()
+		}
+	}
+	return ""
+}
+
+// getBuiltinConstantDescription returns markdown description for built-in constants
+func getBuiltinConstantDescription(constant string) string {
+	for _, c := range builtinConstants {
+		if strings.EqualFold(c.Name, constant) {
+			var builder strings.Builder
+
+			// Header with constant name and category
+			builder.WriteString(fmt.Sprintf("**%s** (%s constant)\n\n", c.Name, c.Category))
+
+			// Value in code block
+			if c.Value != "" {
+				builder.WriteString(fmt.Sprintf("**Value:** `%s`\n\n", c.Value))
+			}
+
+			// Description
+			if c.Description != "" {
+				builder.WriteString(c.Description)
+				builder.WriteString("\n\n")
+			}
+
+			// Examples
+			if len(c.Examples) > 0 {
+				builder.WriteString("**Examples:**\n\n")
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(strings.Join(c.Examples, "\n"))
+				builder.WriteString("\n```")
+			}
+
+			return builder.String()
+		}
+	}
+	return ""
+}
+
 func getWordAtPosition(line string, char int) string {
 	if char < 0 || char >= len(line) {
 		return ""
@@ -1207,6 +1315,54 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 				}
 			}
 		} else {
+			// Check if we should use relaxed matching for built-ins
+			useRelaxedMatching := len(wordToComplete) <= 2 ||
+				(len(wordToComplete) <= 3 && strings.TrimSpace(wordToComplete) != "" &&
+					strings.ContainsAny(wordToComplete, "0123456789"))
+
+			// Add built-in functions
+			for _, fn := range builtinFunctions {
+				shouldInclude := useRelaxedMatching ||
+					strings.HasPrefix(strings.ToLower(fn.Name), strings.ToLower(wordToComplete))
+				if shouldInclude {
+					item := map[string]interface{}{
+						"label":            fn.Name,
+						"kind":             float64(3), // Function
+						"detail":           fn.Signature,
+						"documentation":    fmt.Sprintf("**%s**\n\n%s", fn.Category, fn.Description),
+						"insertText":       fn.Name + "(${1})",
+						"insertTextFormat": 2, // Snippet
+					}
+					if len(fn.Examples) > 0 {
+						item["documentation"] = fmt.Sprintf("**%s**\n\n%s\n\n**Example:** `%s`",
+							fn.Category, fn.Description, fn.Examples[0])
+					}
+					items = append(items, item)
+				}
+			}
+
+			// Add built-in constants
+			for _, const_ := range builtinConstants {
+				shouldInclude := useRelaxedMatching ||
+					strings.HasPrefix(strings.ToLower(const_.Name), strings.ToLower(wordToComplete))
+				if shouldInclude {
+					item := map[string]interface{}{
+						"label":         const_.Name,
+						"kind":          float64(21), // Constant
+						"detail":        fmt.Sprintf("%s constant", const_.Category),
+						"documentation": const_.Description,
+					}
+					if const_.Value != "" {
+						item["detail"] = fmt.Sprintf("%s = %s", const_.Name, const_.Value)
+					}
+					if len(const_.Examples) > 0 {
+						item["documentation"] = fmt.Sprintf("%s\n\n**Example:** `%s`",
+							const_.Description, const_.Examples[0])
+					}
+					items = append(items, item)
+				}
+			}
+
 			symbols := symbolTree.FindAllVisibleSymbols(lineNum)
 			for _, symbol := range symbols {
 				if strings.HasPrefix(symbol.Name, wordToComplete) {
@@ -1287,6 +1443,33 @@ func isDirective(word string) bool {
 	return false
 }
 
+// extractWordAtPosition extracts the word being typed at the given position in the text.
+// It looks backward and forward from the position to find word boundaries.
+func extractWordAtPosition(text string, pos int) string {
+	if pos < 0 || pos > len(text) {
+		return ""
+	}
+
+	// Define word character set for assembly language identifiers
+	isWordChar := func(r rune) bool {
+		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+	}
+
+	// Find start of word by going backwards
+	start := pos
+	for start > 0 && isWordChar(rune(text[start-1])) {
+		start--
+	}
+
+	// Find end of word by going forwards
+	end := pos
+	for end < len(text) && isWordChar(rune(text[end])) {
+		end++
+	}
+
+	return text[start:end]
+}
+
 // getCompletionContext determines if we are completing an operand or a mnemonic
 // and returns the word being completed.
 func getCompletionContext(line string, char int) (isOperand bool, word string) {
@@ -1348,7 +1531,9 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	}
 
 	// Cursor is in the middle of a word.
-	wordToComplete := parts[len(parts)-1]
+	// Instead of using the last field from strings.Fields, we need to extract
+	// the actual word being typed at the cursor position.
+	wordToComplete := extractWordAtPosition(context, len(context))
 	log.Debug("Word to complete: '%s'", wordToComplete)
 
 	// Is this word the "verb" (mnemonic/directive) or an operand?
@@ -1445,4 +1630,24 @@ func applyCase(original, suggestion string) string {
 
 	// Mixed case (e.g. lDa) or other weirdness, default to lower
 	return strings.ToLower(suggestion)
+}
+
+// LoadBuiltins loads built-in functions and constants from kickass.json
+func LoadBuiltins(filePath string) ([]BuiltinFunction, []BuiltinConstant, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer file.Close()
+
+	var config struct {
+		BuiltinFunctions []BuiltinFunction `json:"builtinFunctions"`
+		BuiltinConstants []BuiltinConstant `json:"builtinConstants"`
+	}
+
+	if err := json.NewDecoder(file).Decode(&config); err != nil {
+		return nil, nil, err
+	}
+
+	return config.BuiltinFunctions, config.BuiltinConstants, nil
 }

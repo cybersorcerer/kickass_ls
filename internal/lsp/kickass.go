@@ -25,15 +25,26 @@ func LoadKickassDirectives(workspaceRoot string) ([]KickassDirective, error) {
 	}
 
 	var directives []KickassDirective
-	err = json.Unmarshal(file, &directives)
-	if err != nil {
-		// Try unmarshalling as a single object
-		var singleDirective KickassDirective
-		err2 := json.Unmarshal(file, &singleDirective)
-		if err2 != nil {
-			return nil, err // Return original error
+
+	// First try to parse as new structure with "directives" field
+	var config struct {
+		Directives []KickassDirective `json:"directives"`
+	}
+	err = json.Unmarshal(file, &config)
+	if err == nil && len(config.Directives) > 0 {
+		directives = config.Directives
+	} else {
+		// Fallback: try unmarshalling as array
+		err = json.Unmarshal(file, &directives)
+		if err != nil {
+			// Try unmarshalling as a single object
+			var singleDirective KickassDirective
+			err2 := json.Unmarshal(file, &singleDirective)
+			if err2 != nil {
+				return nil, err // Return original error
+			}
+			directives = []KickassDirective{singleDirective}
 		}
-		directives = []KickassDirective{singleDirective}
 	}
 
 	return directives, nil
