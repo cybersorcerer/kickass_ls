@@ -625,7 +625,7 @@ func Start(mnemonicPath string, kickassPath string) {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp_server",
-						"version": "0.9.0", // Version updated
+						"version": "0.9.1", // Version updated
 					},
 				},
 			}
@@ -1111,6 +1111,16 @@ func loadMnemonics(path string) error {
 // LoadMnemonics is the exported version of loadMnemonics for test mode
 func LoadMnemonics(path string) error {
 	return loadMnemonics(path)
+}
+
+// GetCompletionContext is the exported version of getCompletionContext for test mode
+func GetCompletionContext(line string, char int) (isOperand bool, word string) {
+	return getCompletionContext(line, char)
+}
+
+// GenerateCompletions is the exported version of generateCompletions for test mode
+func GenerateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
+	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete)
 }
 
 func getOpcodeDescription(mnemonic string) string {
@@ -1655,4 +1665,286 @@ func LoadBuiltins(filePath string) ([]BuiltinFunction, []BuiltinConstant, error)
 	}
 
 	return config.BuiltinFunctions, config.BuiltinConstants, nil
+}
+
+// SetBuiltins sets the global built-in functions and constants
+func SetBuiltins(functions []BuiltinFunction, constants []BuiltinConstant) {
+	builtinFunctions = functions
+	builtinConstants = constants
+}
+
+// GenerateHover generates hover information for a word at a specific position
+func GenerateHover(symbolTree *Scope, line string, char int) (string, bool) {
+	word := getWordAtPosition(line, char)
+	if word == "" {
+		return "", false
+	}
+
+	// Check for opcode description
+	description := getOpcodeDescription(strings.ToUpper(word))
+	if description != "" {
+		return description, true
+	}
+
+	// Check for directive description
+	directiveDescription := getDirectiveDescription(strings.ToLower(word))
+	if directiveDescription != "" {
+		return directiveDescription, true
+	}
+
+	// Check for built-in functions
+	builtinFuncDescription := getBuiltinFunctionDescription(word)
+	if builtinFuncDescription != "" {
+		return builtinFuncDescription, true
+	}
+
+	// Check for built-in constants
+	builtinConstDescription := getBuiltinConstantDescription(word)
+	if builtinConstDescription != "" {
+		return builtinConstDescription, true
+	}
+
+	// Check for symbol in symbol tree
+	searchSymbol := normalizeLabel(word)
+	if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
+		var markdown string
+		if symbol.Signature != "" {
+			markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
+		} else if symbol.Value != "" {
+			markdown = fmt.Sprintf("(%s) **%s** = `%s`", symbol.Kind.String(), symbol.Name, symbol.Value)
+		} else {
+			markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Name)
+		}
+		return markdown, true
+	}
+
+	return "", false
+}
+
+// GenerateSignatureHelp generates signature help for function calls at a specific position
+func GenerateSignatureHelp(symbolTree *Scope, line string, char int) (string, bool) {
+	// Debug: show what we're analyzing
+	if char > len(line) {
+		char = len(line)
+	}
+
+	// Find function call context - look backwards for opening parenthesis
+	openParen := -1
+	for i := char; i >= 0; i-- {
+		if line[i] == '(' {
+			openParen = i
+			break
+		} else if line[i] == ')' || line[i] == ';' {
+			// Found closing paren or comment before opening - not in function call
+			return "", false
+		}
+	}
+
+	if openParen == -1 {
+		return "", false
+	}
+
+	// Extract function name before the opening parenthesis
+	funcName := ""
+	for i := openParen - 1; i >= 0; i-- {
+		c := line[i]
+		if (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' {
+			funcName = string(c) + funcName
+		} else {
+			break
+		}
+	}
+
+	if funcName == "" {
+		return "", false
+	}
+
+	// Check built-in functions first
+
+	for _, fn := range builtinFunctions {
+		if strings.EqualFold(fn.Name, funcName) {
+			// Count current parameter position by counting commas
+			paramIndex := 0
+			for i := openParen + 1; i < char; i++ {
+				if line[i] == ',' {
+					paramIndex++
+				}
+			}
+
+			// Format signature with current parameter highlighted
+			signature := fmt.Sprintf("**%s**\n\n```kickassembler\n%s\n```\n\n%s", fn.Name, fn.Signature, fn.Description)
+
+			if len(fn.Examples) > 0 {
+				signature += fmt.Sprintf("\n\n**Example:**\n```kickassembler\n%s\n```", fn.Examples[0])
+			}
+
+			// Add parameter position info
+			signature += fmt.Sprintf("\n\n*Parameter %d*", paramIndex+1)
+
+			return signature, true
+		}
+	}
+
+	// Check user-defined functions/macros in symbol tree
+	if symbol, found := symbolTree.FindSymbol(normalizeLabel(funcName)); found {
+		if symbol.Kind == Function || symbol.Kind == Macro {
+			signature := fmt.Sprintf("**%s** (%s)", symbol.Name, symbol.Kind.String())
+			if symbol.Signature != "" {
+				signature += fmt.Sprintf("\n\n```kickassembler\n%s\n```", symbol.Signature)
+			}
+			return signature, true
+		}
+	}
+
+	return "", false
+}
+
+// ListSymbols returns all symbols in a scope with their metadata
+func ListSymbols(scope *Scope) []map[string]interface{} {
+	var symbols []map[string]interface{}
+
+	// Add symbols from all scopes recursively
+	addSymbolsFromScope(scope, &symbols)
+
+	return symbols
+}
+
+func addSymbolsFromScope(scope *Scope, symbols *[]map[string]interface{}) {
+	if scope == nil {
+		return
+	}
+
+	// Add symbols from current scope
+	for _, symbol := range scope.Symbols {
+		symbolInfo := map[string]interface{}{
+			"name":     symbol.Name,
+			"type":     strings.ToLower(symbol.Kind.String()),
+			"location": fmt.Sprintf("line %d", symbol.Position.Line+1),
+		}
+
+		// Add additional details based on symbol type
+		if symbol.Value != "" {
+			if symbol.Kind == Constant || symbol.Kind == Variable {
+				symbolInfo["detail"] = fmt.Sprintf("= %s", symbol.Value)
+			} else {
+				symbolInfo["detail"] = symbol.Value
+			}
+		}
+
+		if symbol.Signature != "" {
+			symbolInfo["detail"] = symbol.Signature
+		}
+
+		*symbols = append(*symbols, symbolInfo)
+	}
+
+	// Recursively add symbols from child scopes
+	for _, childScope := range scope.Children {
+		addSymbolsFromScope(childScope, symbols)
+	}
+}
+
+// GetBuiltins returns the current built-in functions and constants
+func GetBuiltins() ([]BuiltinFunction, []BuiltinConstant) {
+	return builtinFunctions, builtinConstants
+}
+
+// FindReferences finds all references to a symbol at a specific position
+func FindReferences(scope *Scope, line string, char int, lineNum int) ([]map[string]interface{}, string) {
+	// Get word at position
+	word := getWordAtPosition(line, char)
+	if word == "" {
+		return nil, ""
+	}
+
+	// Check if it's a built-in
+	for _, fn := range builtinFunctions {
+		if strings.EqualFold(fn.Name, word) {
+			return []map[string]interface{}{
+				{
+					"location": "Built-in function",
+					"type":     "built-in",
+				},
+			}, word
+		}
+	}
+
+	for _, const_ := range builtinConstants {
+		if strings.EqualFold(const_.Name, word) {
+			return []map[string]interface{}{
+				{
+					"location": "Built-in constant",
+					"type":     "built-in",
+				},
+			}, word
+		}
+	}
+
+	// Find symbol in scope
+	normalizedSymbol := normalizeLabel(word)
+	symbol, found := scope.FindSymbol(normalizedSymbol)
+	if !found {
+		return nil, word
+	}
+
+	// Find all references to this symbol
+	references := []map[string]interface{}{}
+
+	// Add definition location
+	references = append(references, map[string]interface{}{
+		"location": fmt.Sprintf("line %d:%d", symbol.Position.Line+1, symbol.Position.Character+1),
+		"type":     "definition",
+	})
+
+	// Find usages (this is simplified - in reality we'd need to parse and track all usages)
+	// For now, we'll just show the definition
+	references = append(references, map[string]interface{}{
+		"location": fmt.Sprintf("line %d:%d", lineNum+1, char+1),
+		"type":     "reference",
+	})
+
+	return references, word
+}
+
+// GotoDefinition finds the definition of a symbol at a specific position
+func GotoDefinition(scope *Scope, line string, char int) (map[string]interface{}, string, bool) {
+	// Get word at position
+	word := getWordAtPosition(line, char)
+	if word == "" {
+		return nil, "", false
+	}
+
+	// Check if it's a built-in function
+	for _, fn := range builtinFunctions {
+		if strings.EqualFold(fn.Name, word) {
+			return map[string]interface{}{
+				"type": "built-in",
+				"kind": "function",
+			}, word, true
+		}
+	}
+
+	// Check if it's a built-in constant
+	for _, const_ := range builtinConstants {
+		if strings.EqualFold(const_.Name, word) {
+			return map[string]interface{}{
+				"type": "built-in",
+				"kind": "constant",
+			}, word, true
+		}
+	}
+
+	// Find symbol in scope
+	normalizedSymbol := normalizeLabel(word)
+	symbol, found := scope.FindSymbol(normalizedSymbol)
+	if !found {
+		return nil, word, false
+	}
+
+	definition := map[string]interface{}{
+		"location": fmt.Sprintf("line %d:%d", symbol.Position.Line+1, symbol.Position.Character+1),
+		"type":     strings.ToLower(symbol.Kind.String()),
+	}
+
+	return definition, word, true
 }

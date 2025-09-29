@@ -455,6 +455,17 @@ func (a *SemanticAnalyzer) isBranchInstruction(mnemonic string) bool {
 	return false
 }
 
+// isJumpInstruction checks if the mnemonic is a jump or call instruction
+func (a *SemanticAnalyzer) isJumpInstruction(mnemonic string) bool {
+	jumps := []string{"JMP", "JSR"}
+	for _, jump := range jumps {
+		if mnemonic == jump {
+			return true
+		}
+	}
+	return false
+}
+
 // processInstruction handles instruction processing with PC tracking
 func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	if node == nil || a.context == nil || node.Token.Literal == "" {
@@ -467,9 +478,14 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	// Update program counter
 	a.context.CurrentPC += int64(length)
 
-	// Check for branch distance validation
+	// Check for branch distance validation (relative branches only)
 	if a.isBranchInstruction(mnemonic) && node.Operand != nil {
 		a.validateBranchDistance(node.Operand, node.Token)
+	}
+
+	// Check for undefined symbols in jump/call instructions
+	if a.isJumpInstruction(mnemonic) && node.Operand != nil {
+		a.validateJumpTarget(node.Operand, node.Token)
 	}
 
 	// Check for illegal opcodes
@@ -517,6 +533,22 @@ func (a *SemanticAnalyzer) validateBranchDistance(operand Expression, token Toke
 				Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
 				Context:    "branch",
 				PC:         a.context.CurrentPC, // Store the PC where the branch instruction is
+			})
+		}
+	}
+}
+
+// validateJumpTarget checks for undefined symbols in jump/call instructions
+func (a *SemanticAnalyzer) validateJumpTarget(operand Expression, token Token) {
+	if ident, ok := operand.(*Identifier); ok {
+		if _, found := a.context.DefinedLabels[normalizeLabel(ident.Value)]; !found {
+			// Symbol not found, check if it might be a forward reference
+			// Add forward reference for later resolution
+			a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
+				SymbolName: ident.Value,
+				Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
+				Context:    "jump",
+				PC:         a.context.CurrentPC,
 			})
 		}
 	}
