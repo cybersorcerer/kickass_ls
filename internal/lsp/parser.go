@@ -616,15 +616,57 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseDirectiveStatement()
 	case TOKEN_PLUS:
 		return p.parseExpressionStatement()
+	case TOKEN_IDENTIFIER:
+		// Check if this identifier at the start of a line looks like an invalid mnemonic
+		return p.parseIdentifierStatement()
 	default:
 		return nil
 	}
+}
+
+func (p *Parser) parseIdentifierStatement() Statement {
+	// Check if this identifier followed by operand looks like an invalid mnemonic
+	if !p.peekTokenIs(TOKEN_EOF) && p.peekToken.Type != TOKEN_COMMENT && p.curToken.Line == p.peekToken.Line {
+		// Looks like: "identifier operand" pattern - could be invalid mnemonic
+		if p.isLikelyInvalidMnemonic(p.curToken.Literal) {
+			p.diagnostics = append(p.diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Range: Range{
+					Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1},
+					End:   Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1 + len(p.curToken.Literal)},
+				},
+				Message: fmt.Sprintf("Unknown opcode '%s'", p.curToken.Literal),
+				Source:  "parser",
+			})
+		}
+	}
+
+	// Fall back to expression statement for normal identifiers
+	stmt := &ExpressionStatement{Token: p.curToken}
+	stmt.Expression = p.parseExpression(LOWEST)
+	return stmt
 }
 
 func (p *Parser) parseExpressionStatement() *ExpressionStatement {
 	stmt := &ExpressionStatement{Token: p.curToken}
 	stmt.Expression = p.parseExpression(LOWEST)
 	return stmt
+}
+
+// isLikelyInvalidMnemonic checks if an identifier looks like it could be an invalid mnemonic
+func (p *Parser) isLikelyInvalidMnemonic(identifier string) bool {
+	// Simple heuristic: 3-4 character identifiers at line start are likely invalid mnemonics
+	// This catches common cases like "xyz", "abc", "def" without false positives
+	if len(identifier) == 3 || len(identifier) == 4 {
+		// All uppercase or lowercase, no numbers
+		for _, char := range identifier {
+			if !((char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')) {
+				return false
+			}
+		}
+		return true
+	}
+	return false
 }
 
 func (p *Parser) parseInstructionStatement() *InstructionStatement {

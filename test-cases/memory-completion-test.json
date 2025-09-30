@@ -1,0 +1,32 @@
+{
+  "name": "Memory Completion Test",
+  "description": "Test if completion after 'lda #$' shows memory addresses",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
+    "files": {
+      "memory.asm": "start:\n    lda #$"
+    }
+  },
+  "testCases": [
+    {
+      "name": "Memory address completion after lda #$",
+      "description": "After 'lda #$', should show memory addresses like $D020, not functions",
+      "type": "completion",
+      "input": {
+        "file": "memory.asm",
+        "line": 1,
+        "character": 10
+      },
+      "expected": {
+        "completionItems": [
+          {"label": "$D020"},
+          {"label": "$D021"},
+          {"label": "$DC00"}
+        ],
+        "minItems": 3
+      }
+    }
+  ]
+}

@@ -222,6 +222,9 @@ func initTestMode() error {
 		fmt.Fprintf(os.Stderr, "Warning: Could not load C64 memory map: %v\n", err)
 	}
 
+	// Initialize lexer token definitions AFTER all JSON files are loaded
+	lsp.InitTokenDefs()
+
 	return nil
 }
 
@@ -267,27 +270,11 @@ func runCompletionTest(filePos, mnemonicPath, kickassDir string) {
 	}
 
 	// Initialize LSP components
-	lsp.SetKickassJSONPath(kickassDir)
-	err = lsp.LoadMnemonics(mnemonicPath)
+	err = initTestMode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading mnemonics: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
-
-	_, err = lsp.LoadKickassDirectives(kickassDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading kickass directives: %v\n", err)
-		os.Exit(3)
-	}
-
-	// Load built-in functions and constants
-	kickassJSONPath := filepath.Join(kickassDir, "kickass.json")
-	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading built-ins: %v\n", err)
-		os.Exit(3)
-	}
-	lsp.SetBuiltins(builtinFunctions, builtinConstants)
 
 	// Parse the document to get symbol tree
 	text := string(content)
@@ -310,7 +297,7 @@ func runCompletionTest(filePos, mnemonicPath, kickassDir string) {
 	isOperand, wordToComplete := lsp.GetCompletionContext(currentLine, char)
 
 	// Generate completions
-	completions := lsp.GenerateCompletions(scope, line, isOperand, wordToComplete)
+	completions := lsp.GenerateCompletionsWithContext(scope, line, isOperand, wordToComplete, currentLine, char)
 
 	// Output results
 	fmt.Printf("Completion at %s:%d:%d:\n", file, line+1, char+1)
@@ -439,27 +426,11 @@ func runSignatureTest(filePos, mnemonicPath, kickassDir string) {
 	}
 
 	// Initialize LSP components
-	lsp.SetKickassJSONPath(kickassDir)
-	err = lsp.LoadMnemonics(mnemonicPath)
+	err = initTestMode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading mnemonics: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
-
-	_, err = lsp.LoadKickassDirectives(kickassDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading kickass directives: %v\n", err)
-		os.Exit(3)
-	}
-
-	// Load built-in functions and constants
-	kickassJSONPath := filepath.Join(kickassDir, "kickass.json")
-	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading built-ins: %v\n", err)
-		os.Exit(3)
-	}
-	lsp.SetBuiltins(builtinFunctions, builtinConstants)
 
 	// Parse the document to get symbol tree
 	text := string(content)
@@ -502,27 +473,11 @@ func runSymbolsTest(filename, mnemonicPath, kickassDir string) {
 	}
 
 	// Initialize LSP components
-	lsp.SetKickassJSONPath(kickassDir)
-	err = lsp.LoadMnemonics(mnemonicPath)
+	err = initTestMode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading mnemonics: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
-
-	_, err = lsp.LoadKickassDirectives(kickassDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading kickass directives: %v\n", err)
-		os.Exit(3)
-	}
-
-	// Load built-in functions and constants
-	kickassJSONPath := filepath.Join(kickassDir, "kickass.json")
-	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading built-ins: %v\n", err)
-		os.Exit(3)
-	}
-	lsp.SetBuiltins(builtinFunctions, builtinConstants)
 
 	// Parse the document to get symbol tree
 	text := string(content)
@@ -565,7 +520,7 @@ func runSymbolsTest(filename, mnemonicPath, kickassDir string) {
 
 	// Add built-ins summary
 	fmt.Printf("\nBuilt-ins:\n")
-	builtinFunctions, builtinConstants = lsp.GetBuiltins()
+	builtinFunctions, builtinConstants := lsp.GetBuiltins()
 	if len(builtinFunctions) > 0 {
 		fmt.Printf("- %d functions (sin, cos, pow, etc.)\n", len(builtinFunctions))
 	}
@@ -594,27 +549,11 @@ func runReferencesTest(filePos, mnemonicPath, kickassDir string) {
 	}
 
 	// Initialize LSP components
-	lsp.SetKickassJSONPath(kickassDir)
-	err = lsp.LoadMnemonics(mnemonicPath)
+	err = initTestMode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading mnemonics: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
-
-	_, err = lsp.LoadKickassDirectives(kickassDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading kickass directives: %v\n", err)
-		os.Exit(3)
-	}
-
-	// Load built-in functions and constants
-	kickassJSONPath := filepath.Join(kickassDir, "kickass.json")
-	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading built-ins: %v\n", err)
-		os.Exit(3)
-	}
-	lsp.SetBuiltins(builtinFunctions, builtinConstants)
 
 	// Parse the document to get symbol tree
 	text := string(content)
@@ -677,27 +616,11 @@ func runGotoDefinitionTest(filePos, mnemonicPath, kickassDir string) {
 	}
 
 	// Initialize LSP components
-	lsp.SetKickassJSONPath(kickassDir)
-	err = lsp.LoadMnemonics(mnemonicPath)
+	err = initTestMode()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading mnemonics: %v\n", err)
+		fmt.Fprintf(os.Stderr, "%v\n", err)
 		os.Exit(3)
 	}
-
-	_, err = lsp.LoadKickassDirectives(kickassDir)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading kickass directives: %v\n", err)
-		os.Exit(3)
-	}
-
-	// Load built-in functions and constants
-	kickassJSONPath := filepath.Join(kickassDir, "kickass.json")
-	builtinFunctions, builtinConstants, err := lsp.LoadBuiltins(kickassJSONPath)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error loading built-ins: %v\n", err)
-		os.Exit(3)
-	}
-	lsp.SetBuiltins(builtinFunctions, builtinConstants)
 
 	// Parse the document to get symbol tree
 	text := string(content)

@@ -1,0 +1,128 @@
+{
+  "name": "Completion Context Problems",
+  "description": "Test problematic completion behavior - mnemonics offered after opcodes",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
+    "files": {
+      "completion-test.asm": ".const SCREEN = $0400\n.var counter = 0\n\nstart:\n    lda \n    sta \n    bne \n    jsr \n    inc \n    nop"
+    }
+  },
+  "testCases": [
+    {
+      "name": "PROBLEM: Mnemonics offered after LDA space",
+      "description": "After 'lda ', mnemonics should NOT be offered (currently they are)",
+      "type": "completion",
+      "input": {
+        "file": "completion-test.asm",
+        "line": 4,
+        "character": 8
+      },
+      "expected": {
+        "shouldNotContain": [
+          {
+            "label": "LDA",
+            "kind": 14
+          },
+          {
+            "label": "STA",
+            "kind": 14
+          },
+          {
+            "label": "ADC",
+            "kind": 14
+          }
+        ],
+        "shouldContain": [
+          {
+            "label": "#",
+            "description": "immediate addressing"
+          },
+          {
+            "label": "SCREEN",
+            "kind": 12
+          }
+        ]
+      }
+    },
+    {
+      "name": "PROBLEM: Mnemonics offered after STA space",
+      "description": "After 'sta ', mnemonics should NOT be offered",
+      "type": "completion",
+      "input": {
+        "file": "completion-test.asm",
+        "line": 5,
+        "character": 8
+      },
+      "expected": {
+        "shouldNotContain": [
+          {
+            "label": "LDA",
+            "kind": 14
+          },
+          {
+            "label": "STA",
+            "kind": 14
+          }
+        ]
+      }
+    },
+    {
+      "name": "PROBLEM: Mnemonics offered after BNE space",
+      "description": "After 'bne ', mnemonics should NOT be offered",
+      "type": "completion",
+      "input": {
+        "file": "completion-test.asm",
+        "line": 6,
+        "character": 8
+      },
+      "expected": {
+        "shouldNotContain": [
+          {
+            "label": "BNE",
+            "kind": 14
+          },
+          {
+            "label": "BEQ",
+            "kind": 14
+          }
+        ],
+        "shouldContain": [
+          {
+            "label": "start",
+            "kind": 12,
+            "description": "label"
+          }
+        ]
+      }
+    },
+    {
+      "name": "CORRECT: Mnemonics at line start",
+      "description": "At beginning of line, mnemonics SHOULD be offered",
+      "type": "completion",
+      "input": {
+        "file": "completion-test.asm",
+        "line": 9,
+        "character": 4
+      },
+      "expected": {
+        "minItems": 50,
+        "shouldContain": [
+          {
+            "label": "LDA",
+            "kind": 14
+          },
+          {
+            "label": "STA",
+            "kind": 14
+          },
+          {
+            "label": "INC",
+            "kind": 14
+          }
+        ]
+      }
+    }
+  ]
+}

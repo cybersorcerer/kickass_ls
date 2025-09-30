@@ -494,6 +494,11 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 		a.validateJumpTarget(node.Operand, node.Token)
 	}
 
+	// Check for undefined symbols in all instructions (general validation)
+	if node.Operand != nil {
+		a.validateOperandSymbols(node.Operand, node.Token)
+	}
+
 	// Check for illegal opcodes
 	a.checkIllegalOpcode(mnemonic, node.Token)
 
@@ -560,13 +565,57 @@ func (a *SemanticAnalyzer) validateJumpTarget(operand Expression, token Token) {
 	}
 }
 
+// validateOperandSymbols checks for undefined symbols in any instruction operand
+func (a *SemanticAnalyzer) validateOperandSymbols(operand Expression, token Token) {
+	a.validateSymbolsInExpression(operand, token)
+}
+
+// validateSymbolsInExpression recursively validates symbols in expressions
+func (a *SemanticAnalyzer) validateSymbolsInExpression(expr Expression, token Token) {
+	if expr == nil || a.context == nil {
+		return
+	}
+
+	switch e := expr.(type) {
+	case *Identifier:
+		// Skip if this is a memory register (starts with $)
+		if strings.HasPrefix(e.Value, "$") {
+			return
+		}
+
+		// Check if symbol is defined
+		if _, found := a.context.DefinedLabels[normalizeLabel(e.Value)]; !found {
+			// Create forward reference for later resolution
+			a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
+				SymbolName: e.Value,
+				Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
+				Context:    "operand",
+				PC:         a.context.CurrentPC,
+			})
+		}
+	case *PrefixExpression:
+		// Check the right operand (e.g., in "#symbol", ">symbol", "<symbol")
+		if e.Right != nil {
+			a.validateSymbolsInExpression(e.Right, token)
+		}
+	case *InfixExpression:
+		// Check both left and right operands (e.g., in "symbol+1")
+		if e.Left != nil {
+			a.validateSymbolsInExpression(e.Left, token)
+		}
+		if e.Right != nil {
+			a.validateSymbolsInExpression(e.Right, token)
+		}
+	}
+}
+
 // processDirective handles directive processing (.pc, .byte, etc.)
 func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 	if node == nil || node.Name == nil || a.context == nil {
 		return
 	}
 
-	directive := strings.ToLower(node.Name.Value)
+	directive := strings.ToLower(node.Token.Literal)
 
 	switch directive {
 	case ".pc", "*", "*=":
@@ -575,6 +624,42 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 			if addr := a.evaluateExpression(node.Value); addr != -1 {
 				a.context.CurrentPC = addr
 			}
+		}
+	case ".const", "const":
+		// Constant definition - add to symbol table
+		if node.Name != nil && node.Value != nil {
+			symbol := &Symbol{
+				Name:     node.Name.Value,
+				Kind:     Constant,
+				Position: Position{Line: node.Name.Token.Line - 1, Character: node.Name.Token.Column - 1},
+			}
+
+			// Try to evaluate the constant value
+			if addr := a.evaluateExpression(node.Value); addr != -1 {
+				symbol.Address = addr
+				symbol.Value = fmt.Sprintf("$%04X", addr)
+			}
+
+			// Add to symbol table
+			a.context.DefinedLabels[normalizeLabel(node.Name.Value)] = symbol
+		}
+	case ".var", "var":
+		// Variable definition - add to symbol table
+		if node.Name != nil && node.Value != nil {
+			symbol := &Symbol{
+				Name:     node.Name.Value,
+				Kind:     Variable,
+				Position: Position{Line: node.Name.Token.Line - 1, Character: node.Name.Token.Column - 1},
+			}
+
+			// Try to evaluate the variable value
+			if addr := a.evaluateExpression(node.Value); addr != -1 {
+				symbol.Address = addr
+				symbol.Value = fmt.Sprintf("$%04X", addr)
+			}
+
+			// Add to symbol table
+			a.context.DefinedLabels[normalizeLabel(node.Name.Value)] = symbol
 		}
 	case ".byte", ".byt":
 		// Single byte data

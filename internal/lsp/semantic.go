@@ -83,7 +83,7 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 		return SemanticTokenString, 0 // Strings
 		
 	case TOKEN_LABEL:
-		return SemanticTokenFunction, SemanticTokenModifierDeclaration // Labels
+		return SemanticTokenFunction, 0 // Labels (consistent with symbol-based labels)
 		
 	case TOKEN_IDENTIFIER:
 		// Check if it's a known symbol
@@ -111,15 +111,15 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 
 // TokenType constants for semantic highlighting
 const (
-	SemanticTokenKeyword = iota
-	SemanticTokenVariable
-	SemanticTokenFunction
-	SemanticTokenMacro
-	SemanticTokenPseudoCommand
-	SemanticTokenNumber
-	SemanticTokenComment
-	SemanticTokenString
-	SemanticTokenOperator
+	SemanticTokenKeyword = iota        // 0: "keyword"
+	SemanticTokenVariable              // 1: "variable"
+	SemanticTokenFunction              // 2: "function"
+	SemanticTokenMacro                 // 3: "macro"
+	SemanticTokenPseudoCommand         // 4: "pseudocommand"
+	SemanticTokenNumber                // 5: "number"
+	SemanticTokenComment               // 6: "comment"
+	SemanticTokenString                // 7: "string"
+	SemanticTokenOperator              // 8: "operator"
 )
 
 // TokenModifier constants

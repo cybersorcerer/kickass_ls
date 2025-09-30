@@ -13,7 +13,7 @@ func toDocumentSymbolKind(kind SymbolKind) float64 {
 	case Variable:
 		return 13 // Variable  
 	case Label:
-		return 12 // Function (closest match for labels)
+		return 13 // Variable (labels are named memory addresses/positions)
 	case Function:
 		return 12 // Function
 	case Macro:

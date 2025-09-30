@@ -604,6 +604,9 @@ func Start() {
 	wg.Wait()
 	log.Info("All JSON Source of Truth files loaded successfully from %s", configDir)
 
+	// Initialize lexer token definitions AFTER all JSON files are loaded
+	InitTokenDefs()
+
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
 
@@ -671,7 +674,7 @@ func Start() {
 						"hoverProvider": true,
 						"completionProvider": map[string]interface{}{
 							"resolveProvider":   false,
-							"triggerCharacters": []string{" ", "."},
+							"triggerCharacters": []string{" ", ".", "$"},
 						},
 						"definitionProvider":     true,
 						"referencesProvider":     true,
@@ -679,7 +682,7 @@ func Start() {
 						"semanticTokensProvider": map[string]interface{}{
 							"legend": map[string]interface{}{
 								"tokenTypes": []string{
-									"keyword", "variable", "function", "macro", "number", "comment", "string", "operator",
+									"keyword", "variable", "function", "macro", "pseudocommand", "number", "comment", "string", "operator",
 								},
 								"tokenModifiers": []string{
 									"declaration", "readonly",
@@ -695,7 +698,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp_server",
-						"version": "0.9.3", // Version updated
+						"version": "0.9.4", // Version updated
 					},
 				},
 			}
@@ -949,7 +952,7 @@ func Start() {
 											lineContent := lines[int(lineNum)]
 											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
 											log.Debug("Completion context: isOperand=%v, wordToComplete='%s'", isOperand, wordToComplete)
-											completionItems = generateCompletions(symbolTree, int(lineNum), isOperand, wordToComplete)
+											completionItems = generateCompletions(symbolTree, int(lineNum), isOperand, wordToComplete, lineContent, int(charNum))
 										}
 									}
 								}
@@ -1222,7 +1225,12 @@ func GetCompletionContext(line string, char int) (isOperand bool, word string) {
 
 // GenerateCompletions is the exported version of generateCompletions for test mode
 func GenerateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
-	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete)
+	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, "", 0)
+}
+
+// GenerateCompletionsWithContext is the extended version for test mode with line context
+func GenerateCompletionsWithContext(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int) []map[string]interface{} {
+	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, lineContent, cursorPos)
 }
 
 func getOpcodeDescription(mnemonic string) string {
@@ -1554,10 +1562,96 @@ func getMemoryAddressAtPosition(line string, char int) string {
 	return ""
 }
 
-func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
+func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int) []map[string]interface{} {
 	items := []map[string]interface{}{}
 
+	// Special case: check for memory address completion even if isOperand=false
+	// This handles cases where cursor is on or near $ symbol
+	memoryPrefix := ""
+	log.Debug("Checking for memory completion: wordToComplete='%s', lineContent='%s', cursorPos=%d", wordToComplete, lineContent, cursorPos)
+
+	if strings.HasPrefix(wordToComplete, "$") {
+		memoryPrefix = strings.ToUpper(wordToComplete)
+		log.Debug("Found $ prefix in wordToComplete: '%s'", memoryPrefix)
+	} else if lineContent != "" && cursorPos <= len(lineContent) {
+		// Look backwards in the line to see if we're completing a memory address
+		startPos := cursorPos
+		if startPos > len(lineContent) {
+			startPos = len(lineContent)
+		}
+
+		for i := startPos - 1; i >= 0; i-- {
+			log.Debug("Checking character at position %d: '%c'", i, lineContent[i])
+			if i < len(lineContent) && lineContent[i] == '$' {
+				// Found $, extract from $ to cursor position
+				memoryPrefix = strings.ToUpper(lineContent[i:startPos])
+				log.Debug("Found $ in line at position %d, extracted: '%s'", i, memoryPrefix)
+				break
+			} else if i < len(lineContent) && lineContent[i] == '#' {
+				// Found # - check if we should offer memory addresses
+				// Only if cursor is directly after # with no other characters
+				if i+1 == startPos {
+					memoryPrefix = "$"
+					log.Debug("Found # at position %d with cursor directly after, offering memory addresses", i)
+				} else {
+					log.Debug("Found # at position %d but cursor not directly after, skipping memory completion", i)
+				}
+				break
+			} else if i < len(lineContent) && (lineContent[i] == ' ' || lineContent[i] == '\t') {
+				// Hit whitespace, stop looking
+				log.Debug("Hit whitespace at position %d, stopping search", i)
+				break
+			}
+		}
+	}
+
+	// If we found memory prefix, add memory completions regardless of isOperand
+	if memoryPrefix != "" {
+		log.Debug("Memory address completion requested with prefix: '%s'", memoryPrefix)
+
+		// Add all memory registers that match the prefix
+		for address, region := range c64MemoryMap.MemoryMap.Regions {
+			// Convert 0xD000 format to $D000 format for matching
+			addressHex := strings.TrimPrefix(address, "0x")
+			addressWithDollar := "$" + addressHex
+			if strings.HasPrefix(strings.ToUpper(addressWithDollar), strings.ToUpper(memoryPrefix)) {
+				// Create documentation string
+				documentation := fmt.Sprintf("**%s** - %s\n\n*%s %s*\n\n%s",
+					"0x"+address, region.Name, region.Category, region.Type, region.Description)
+
+				// Add access information
+				if region.Access != "" {
+					documentation += fmt.Sprintf("\n\n**Access:** %s", region.Access)
+				}
+
+				// Add bit fields if available
+				if len(region.BitFields) > 0 {
+					documentation += "\n\n**Bit Fields:**"
+					for bits, desc := range region.BitFields {
+						documentation += fmt.Sprintf("\n- **Bits %s:** %s", bits, desc)
+					}
+				}
+
+				item := map[string]interface{}{
+					"label":         addressWithDollar,
+					"kind":          float64(12), // Value/Constant
+					"detail":        fmt.Sprintf("%s - %s", region.Category, region.Name),
+					"documentation": documentation,
+					"insertText":    addressWithDollar,
+					"sortText":      fmt.Sprintf("0_%s", address), // Sort memory addresses first
+				}
+				items = append(items, item)
+			}
+		}
+	}
+
 	if isOperand {
+		// If we already found memory address completions, don't add other operands
+		if memoryPrefix != "" {
+			log.Debug("Already found memory completions, skipping other operand completions")
+			return items
+		}
+
 		wordToComplete = strings.TrimPrefix(wordToComplete, "#")
 		if strings.Contains(wordToComplete, ".") {
 			parts := strings.Split(wordToComplete, ".")
@@ -1678,15 +1772,37 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 			}
 		}
 
-		// Offer mnemonics
-		for _, m := range mnemonics {
-			if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
-				items = append(items, map[string]interface{}{
-					"label":         applyCase(wordToComplete, m.Mnemonic),
-					"kind":          float64(14), // Keyword
-					"detail":        "6502/6510 Opcode",
-					"documentation": m.Description,
-				})
+		// Only offer mnemonics if we're truly at the beginning of a line or after a label
+		// Check if we're completing after a mnemonic + space (which would be wrong)
+		shouldOfferMnemonics := true
+		if len(lineContent) > 0 && cursorPos > 0 {
+			// Look at the line content before cursor to see if there's already a mnemonic
+			beforeCursor := lineContent[:cursorPos]
+			trimmed := strings.TrimSpace(beforeCursor)
+			if trimmed != "" {
+				parts := strings.Fields(trimmed)
+				if len(parts) > 0 {
+					lastWord := parts[len(parts)-1]
+					// If the last word is a mnemonic, don't offer more mnemonics
+					if isMnemonic(lastWord) {
+						shouldOfferMnemonics = false
+						log.Debug("Not offering mnemonics after existing mnemonic: '%s'", lastWord)
+					}
+				}
+			}
+		}
+
+		// Offer mnemonics only if appropriate
+		if shouldOfferMnemonics {
+			for _, m := range mnemonics {
+				if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+					items = append(items, map[string]interface{}{
+						"label":         applyCase(wordToComplete, m.Mnemonic),
+						"kind":          float64(14), // Keyword
+						"detail":        "6502/6510 Opcode",
+						"documentation": m.Description,
+					})
+				}
 			}
 		}
 	}
@@ -1841,7 +1957,7 @@ func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
 	case Variable:
 		return VariableCompletion
 	case Label:
-		return PropertyCompletion
+		return VariableCompletion
 	case Function:
 		return FunctionCompletion
 	case Macro:

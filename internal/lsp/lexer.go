@@ -177,20 +177,23 @@ type BuiltinConstant struct {
 func loadMnemonicsFromJSON() map[TokenType]*regexp.Regexp {
 	jsonPath := mnemonicJSONPath
 	if jsonPath == "" {
-		jsonPath = "mnemonic.json" // fallback
+		log.Error("FATAL: mnemonicJSONPath not set - must be initialized from $HOME/.config/6510lsp")
+		os.Exit(1)
 	}
 
 	file, err := os.Open(jsonPath)
 	if err != nil {
-		log.Error("Failed to open mnemonic.json: %v", err)
-		return createFallbackMnemonicRegexes()
+		log.Error("FATAL: Failed to open mnemonic.json at '%s': %v", jsonPath, err)
+		log.Error("mnemonic.json is the Source of Truth and MUST be available at $HOME/.config/6510lsp")
+		os.Exit(1)
 	}
 	defer file.Close()
 
 	var mnemonics []MnemonicInfo
 	if err := json.NewDecoder(file).Decode(&mnemonics); err != nil {
-		log.Error("Failed to parse mnemonic.json: %v", err)
-		return createFallbackMnemonicRegexes()
+		log.Error("FATAL: Failed to parse mnemonic.json at '%s': %v", jsonPath, err)
+		log.Error("mnemonic.json must contain valid JSON data")
+		os.Exit(1)
 	}
 
 	// Group mnemonics by type
@@ -201,7 +204,7 @@ func loadMnemonicsFromJSON() map[TokenType]*regexp.Regexp {
 	for _, mnemonic := range mnemonics {
 		opcode := strings.ToLower(mnemonic.Mnemonic)
 		switch mnemonic.Type {
-		case "Transfer", "Arithmetic", "Logic", "Shift & Rotate", "Bit Test", "Flag", "Interrupt":
+		case "Transfer", "Arithmetic", "Logic", "Shift & Rotate", "Bit Test", "Flag", "Interrupt", "Comparison", "Decrement & Increment", "Other", "Stack":
 			stdOpcodes = append(stdOpcodes, opcode)
 		case "Jump":
 			ctrlOpcodes = append(ctrlOpcodes, opcode)
@@ -226,14 +229,10 @@ func loadMnemonicsFromJSON() map[TokenType]*regexp.Regexp {
 	return regexes
 }
 
-// createFallbackMnemonicRegexes provides hardcoded regexes as fallback
+// createFallbackMnemonicRegexes provides empty fallback since JSON is now complete
 func createFallbackMnemonicRegexes() map[TokenType]*regexp.Regexp {
-	log.Warn("Using fallback hardcoded mnemonic regexes")
-	return map[TokenType]*regexp.Regexp{
-		TOKEN_MNEMONIC_STD:  regexp.MustCompile(`^(?i)(adc|and|asl|bit|clc|cld|cli|clv|cmp|cpx|cpy|dec|dex|dey|eor|inc|inx|iny|lda|ldx|ldy|lsr|nop|ora|pha|php|pla|plp|rol|ror|sbc|sec|sed|sei|sta|stx|sty|tax|txa|tay|tya|tsx|txs)\b`),
-		TOKEN_MNEMONIC_CTRL: regexp.MustCompile(`^(?i)(bcc|bcs|beq|bmi|bne|bpl|brk|bvc|bvs|jmp|jsr|rti|rts)\b`),
-		TOKEN_MNEMONIC_ILL:  regexp.MustCompile(`^(?i)(slo|rla|sre|rra|sax|lax|dcp|isc|anc|asr|arr|sbx|dop|top|jam)\b`),
-	}
+	log.Error("JSON loading failed - mnemonic.json should be the only source of truth")
+	return map[TokenType]*regexp.Regexp{}
 }
 
 // kickassJSONPath is set by the server to provide the correct path for kickass.json
@@ -254,6 +253,12 @@ func SetMnemonicJSONPath(path string) {
 	mnemonicJSONPath = path
 	// Force re-initialization of token definitions when path changes
 	tokenDefs = nil
+}
+
+// InitTokenDefs initializes token definitions after all JSON files are loaded
+// MUST be called after SetMnemonicJSONPath and SetKickassJSONPath
+func InitTokenDefs() {
+	initTokenDefs()
 }
 
 // loadDirectivesFromJSON loads directives, functions and constants from kickass.json and creates regex patterns
@@ -514,9 +519,11 @@ type Lexer struct {
 
 // NewLexer creates a new Lexer.
 func NewLexer(input string) *Lexer {
-	// Initialize token definitions with dynamic mnemonics on first use
+	// Token definitions MUST be initialized by JSON loading before any lexer creation
 	if len(tokenDefs) == 0 {
-		initTokenDefs()
+		log.Error("FATAL: tokenDefs not initialized - JSON files must be loaded first")
+		log.Error("Call initTokenDefs() after loading all JSON files from $HOME/.config/6510lsp")
+		os.Exit(1)
 	}
 	l := &Lexer{input: input, line: 1, column: 1}
 	return l

@@ -1,0 +1,153 @@
+{
+  "name": "Diagnostics Tests",
+  "description": "Test error detection, warnings, and hints for various assembly issues",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
+    "files": {
+      "errors.asm": "start:\n    lda undefined_symbol\n    sta $INVALID\n    bne too_far_branch\n    xyz #$00\n\ntoo_far_branch:",
+      "warnings.asm": "unused_label:\n    lda #$00\n    sta $01FF\n    nop\n    nop\n    lax #$00\n\nstart:\n    jmp start",
+      "valid.asm": ".const BORDER = $D020\n\nstart:\n    lda #$0F\n    sta BORDER\n    rts"
+    }
+  },
+  "testCases": [
+    {
+      "name": "Error - Undefined Symbol",
+      "description": "Test error detection for undefined symbol reference",
+      "type": "diagnostics",
+      "input": {
+        "file": "errors.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 1,
+            "column": 4,
+            "severity": 1,
+            "message": "Undefined symbol"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Error - Invalid Memory Address",
+      "description": "Test error detection for invalid memory address format",
+      "type": "diagnostics",
+      "input": {
+        "file": "errors.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 2,
+            "column": 8,
+            "severity": 1,
+            "message": "Invalid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Error - Invalid Opcode",
+      "description": "Test error detection for non-existent opcode",
+      "type": "diagnostics",
+      "input": {
+        "file": "errors.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 4,
+            "column": 4,
+            "severity": 1,
+            "message": "Unknown"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Warning - Unused Label",
+      "description": "Test warning for unused label detection",
+      "type": "diagnostics",
+      "input": {
+        "file": "warnings.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 0,
+            "column": 0,
+            "severity": 2,
+            "message": "Unused label"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Warning - Stack Area Write",
+      "description": "Test warning for writing to stack area",
+      "type": "diagnostics",
+      "input": {
+        "file": "warnings.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 2,
+            "column": 8,
+            "severity": 2,
+            "message": "stack"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Warning - Illegal Opcode",
+      "description": "Test warning for illegal/undocumented opcode usage",
+      "type": "diagnostics",
+      "input": {
+        "file": "warnings.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 5,
+            "column": 4,
+            "severity": 2,
+            "message": "illegal"
+          }
+        ]
+      }
+    },
+    {
+      "name": "No Diagnostics for Valid Code",
+      "description": "Test that valid assembly produces no diagnostics",
+      "type": "diagnostics",
+      "input": {
+        "file": "valid.asm"
+      },
+      "expected": {
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "Branch Distance Warning",
+      "description": "Test warning for branch distance exceeding 6502 limits",
+      "type": "diagnostics",
+      "input": {
+        "file": "errors.asm"
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 3,
+            "column": 4,
+            "severity": 2,
+            "message": "branch"
+          }
+        ]
+      }
+    }
+  ]
+}
