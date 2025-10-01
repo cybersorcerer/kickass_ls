@@ -52,6 +52,17 @@ const (
 	TOKEN_DIRECTIVE_KICK_DATA
 	TOKEN_DIRECTIVE_KICK_TEXT
 
+	// Flow control keywords
+	TOKEN_ELSE // else keyword for .if directives
+
+	// Bitwise operators
+	TOKEN_LEFT_SHIFT  // <<
+	TOKEN_RIGHT_SHIFT // >>
+	TOKEN_BITWISE_AND // &
+	TOKEN_BITWISE_OR  // |
+	TOKEN_BITWISE_XOR // ^
+	TOKEN_MODULO      // %
+
 	// Built-in Functions
 	TOKEN_BUILTIN_MATH_FUNC
 	TOKEN_BUILTIN_STRING_FUNC
@@ -81,6 +92,7 @@ const (
 	TOKEN_LESS     // <
 	TOKEN_GREATER  // >
 	TOKEN_AT       // @ (program counter reference)
+	TOKEN_SEMICOLON // ; (for .for loops)
 )
 
 var tokenNames = map[TokenType]string{
@@ -104,6 +116,13 @@ var tokenNames = map[TokenType]string{
 	TOKEN_DIRECTIVE_KICK_ASM:  "DIRECTIVE_KICK_ASM",
 	TOKEN_DIRECTIVE_KICK_DATA: "DIRECTIVE_KICK_DATA",
 	TOKEN_DIRECTIVE_KICK_TEXT: "DIRECTIVE_KICK_TEXT",
+	TOKEN_ELSE:                "ELSE",
+	TOKEN_LEFT_SHIFT:          "LEFT_SHIFT",
+	TOKEN_RIGHT_SHIFT:         "RIGHT_SHIFT",
+	TOKEN_BITWISE_AND:         "BITWISE_AND",
+	TOKEN_BITWISE_OR:          "BITWISE_OR",
+	TOKEN_BITWISE_XOR:         "BITWISE_XOR",
+	TOKEN_MODULO:              "MODULO",
 	TOKEN_BUILTIN_MATH_FUNC:   "BUILTIN_MATH_FUNC",
 	TOKEN_BUILTIN_STRING_FUNC: "BUILTIN_STRING_FUNC",
 	TOKEN_BUILTIN_FILE_FUNC:   "BUILTIN_FILE_FUNC",
@@ -128,6 +147,7 @@ var tokenNames = map[TokenType]string{
 	TOKEN_LESS:                "LESS",
 	TOKEN_GREATER:             "GREATER",
 	TOKEN_AT:                  "AT",
+	TOKEN_SEMICOLON:           "SEMICOLON",
 }
 
 func (t TokenType) String() string {
@@ -422,14 +442,25 @@ func initTokenDefs() {
 	directiveRegexes := loadDirectivesFromJSON()
 
 	tokenDefs = []tokenDefinition{
-	{TOKEN_COMMENT, regexp.MustCompile(`^//.*`)},                   // Handle // comments
-	{TOKEN_COMMENT, regexp.MustCompile(`^;.*`)},                    // Handle ; comments
-	{TOKEN_COMMENT, regexp.MustCompile(`^/\*.*?\*/`)},               // Handle /* */ comments
-	{TOKEN_NUMBER_HEX, regexp.MustCompile(`^#?\$[0-9a-zA-Z]+`)},  // Corrected escaping for $
-	{TOKEN_NUMBER_BIN, regexp.MustCompile(`^#?%[0-1]+`)},         // Corrected escaping for %
-	{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+(\.[0-9]+)?`)},
-	{TOKEN_NUMBER_OCT, regexp.MustCompile(`^#?&[0-7]+`)}, // Corrected escaping for &
-	{TOKEN_STRING, regexp.MustCompile(`^"(\\|[^\"])*"`)}, // Corrected escaping for " and "
+		// Comments first - highest priority
+		{TOKEN_COMMENT, regexp.MustCompile(`^//.*`)},
+		{TOKEN_COMMENT, regexp.MustCompile(`^/\*.*?\*/`)},
+
+		// Program counter directive - before asterisk operator
+		{TOKEN_DIRECTIVE_PC, regexp.MustCompile(`^\*=`)},
+
+		// Multi-character operators - must come before single characters
+		{TOKEN_LEFT_SHIFT, regexp.MustCompile(`^<<`)},
+		{TOKEN_RIGHT_SHIFT, regexp.MustCompile(`^>>`)},
+
+		// Numbers with optional # prefix - must have digits after prefix and end with word boundary
+		{TOKEN_NUMBER_HEX, regexp.MustCompile(`^#?\$[0-9a-fA-F]+\b`)},
+		{TOKEN_NUMBER_BIN, regexp.MustCompile(`^#?%[01][01]*`)}, // Must have at least one binary digit
+		{TOKEN_NUMBER_OCT, regexp.MustCompile(`^#?&[0-7][0-7]*`)}, // Must have at least one octal digit
+		{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+(\.[0-9]+)?`)},
+
+		// Strings
+		{TOKEN_STRING, regexp.MustCompile(`^"(\\.|[^"])*"`)},
 	}
 
 	// Add dynamic mnemonic regexes from JSON
@@ -482,29 +513,46 @@ func initTokenDefs() {
 		tokenDefs = append(tokenDefs, tokenDefinition{TOKEN_BUILTIN_COLOR_CONST, regex})
 	}
 
-	// Continue with other token definitions
+	// Continue with remaining token definitions in correct order
 	tokenDefs = append(tokenDefs, []tokenDefinition{
-	{TOKEN_DIRECTIVE_PC, regexp.MustCompile(`^(\*=)`)},              // Corrected escaping for *=
-	{TOKEN_LABEL, regexp.MustCompile(`^([a-zA-Z_][a-zA-Z0-9_]*):`)}, // Corrected escaping for :
-	{TOKEN_IDENTIFIER, regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*`)},
-	{TOKEN_COLON, regexp.MustCompile(`^:`)}, // Corrected escaping for :
-	{TOKEN_HASH, regexp.MustCompile(`^#`)},
-	{TOKEN_DOT, regexp.MustCompile(`^\.`)}, // Corrected escaping for .
-	{TOKEN_COMMA, regexp.MustCompile(`^,`)},
-	{TOKEN_PLUS, regexp.MustCompile(`^\+`)}, // Corrected escaping for +
-	{TOKEN_MINUS, regexp.MustCompile(`^-`)},
-	{TOKEN_ASTERISK, regexp.MustCompile(`^\*`)}, // Corrected escaping for *
-	{TOKEN_SLASH, regexp.MustCompile(`^/`)},
-	{TOKEN_LPAREN, regexp.MustCompile(`^\(`)},   // Corrected escaping for (
-	{TOKEN_RPAREN, regexp.MustCompile(`^\)`)},   // Corrected escaping for )
-	{TOKEN_LBRACKET, regexp.MustCompile(`^\[`)}, // Corrected escaping for [
-	{TOKEN_RBRACKET, regexp.MustCompile(`^\]`)}, // Corrected escaping for ]
-	{TOKEN_LBRACE, regexp.MustCompile(`^\{`)},   // Corrected escaping for {
-	{TOKEN_RBRACE, regexp.MustCompile(`^\}`)},   // Corrected escaping for }
-	{TOKEN_EQUAL, regexp.MustCompile(`^=`)},
-	{TOKEN_LESS, regexp.MustCompile(`^<`)},
-	{TOKEN_GREATER, regexp.MustCompile(`^>`)},
-	{TOKEN_AT, regexp.MustCompile(`^@`)},
+		// Labels - must come before identifier
+		{TOKEN_LABEL, regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*:`)},
+
+		// else keyword - must come before identifier
+		{TOKEN_ELSE, regexp.MustCompile(`^else\b`)},
+
+		// Invalid hex numbers - must come before identifier but after valid hex
+		{TOKEN_ILLEGAL, regexp.MustCompile(`^#?\$[0-9a-fA-F]*[G-Zg-z][a-zA-Z0-9]*`)},
+
+		// Single-character bitwise operators - after multi-character ones
+		{TOKEN_BITWISE_AND, regexp.MustCompile(`^&`)},
+		{TOKEN_BITWISE_OR, regexp.MustCompile(`^\|`)},
+		{TOKEN_BITWISE_XOR, regexp.MustCompile(`^\^`)},
+		{TOKEN_MODULO, regexp.MustCompile(`^%`)},
+
+		// Identifiers - after keywords and labels
+		{TOKEN_IDENTIFIER, regexp.MustCompile(`^[a-zA-Z_][a-zA-Z0-9_]*`)},
+
+		// Single character punctuation
+		{TOKEN_COLON, regexp.MustCompile(`^:`)},
+		{TOKEN_HASH, regexp.MustCompile(`^#`)},
+		{TOKEN_DOT, regexp.MustCompile(`^\.`)},
+		{TOKEN_COMMA, regexp.MustCompile(`^,`)},
+		{TOKEN_PLUS, regexp.MustCompile(`^\+`)},
+		{TOKEN_MINUS, regexp.MustCompile(`^-`)},
+		{TOKEN_ASTERISK, regexp.MustCompile(`^\*`)},
+		{TOKEN_SLASH, regexp.MustCompile(`^/`)},
+		{TOKEN_LPAREN, regexp.MustCompile(`^\(`)},
+		{TOKEN_RPAREN, regexp.MustCompile(`^\)`)},
+		{TOKEN_LBRACKET, regexp.MustCompile(`^\[`)},
+		{TOKEN_RBRACKET, regexp.MustCompile(`^\]`)},
+		{TOKEN_LBRACE, regexp.MustCompile(`^\{`)},
+		{TOKEN_RBRACE, regexp.MustCompile(`^\}`)},
+		{TOKEN_EQUAL, regexp.MustCompile(`^=`)},
+		{TOKEN_LESS, regexp.MustCompile(`^<`)},
+		{TOKEN_GREATER, regexp.MustCompile(`^>`)},
+		{TOKEN_AT, regexp.MustCompile(`^@`)},
+		{TOKEN_SEMICOLON, regexp.MustCompile(`^;`)},
 	}...)
 }
 
@@ -542,11 +590,38 @@ func (l *Lexer) NextToken() Token {
 	for _, def := range tokenDefs {
 		match := def.regex.FindString(remainingInput)
 		if match != "" {
+			if strings.HasPrefix(remainingInput, "$") || def.tokenType == TOKEN_HASH {
+				log.Debug("Lexer: Token %s matched '%s' for input starting with '$' at %d:%d", def.tokenType.String(), match, l.line, l.column)
+			}
+			// Special validation for hex numbers - check if followed by invalid hex chars
+			if def.tokenType == TOKEN_NUMBER_HEX {
+				nextPos := len(match)
+				if nextPos < len(remainingInput) {
+					nextChar := remainingInput[nextPos]
+					// If followed by G-Z (invalid hex letters), this is an invalid hex number
+					if (nextChar >= 'G' && nextChar <= 'Z') || (nextChar >= 'g' && nextChar <= 'z') {
+						// This is an invalid hex number like $BU, $G1 - treat as illegal
+						log.Warn("Invalid hex number found at %d:%d: %s%c", l.line, l.column, match, nextChar)
+						tok := Token{
+							Type:    TOKEN_ILLEGAL,
+							Literal: match + string(nextChar),
+							Line:    l.line,
+							Column:  l.column,
+						}
+						l.advance(len(match) + 1)
+						return tok
+					}
+				}
+			}
+
 			tok := Token{
 				Type:    def.tokenType,
 				Literal: match,
 				Line:    l.line,
 				Column:  l.column,
+			}
+			if def.tokenType == TOKEN_NUMBER_HEX {
+				log.Debug("Lexer: Matched TOKEN_NUMBER_HEX '%s' at %d:%d", match, l.line, l.column)
 			}
 			l.advance(len(match))
 			return tok

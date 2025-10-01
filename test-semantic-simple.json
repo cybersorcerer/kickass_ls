@@ -1,0 +1,26 @@
+{
+  "name": "Simple Semantic Test",
+  "description": "Test semantic analysis with actual assembly code",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim",
+    "files": {
+      "simple.asm": ".const valid = $DEAD\n.const invalid = $BUG\nstart:\n    lda undefined_symbol\n    dcp $ff"
+    }
+  },
+  "testCases": [
+    {
+      "name": "Should generate multiple diagnostics",
+      "description": "Should detect undefined symbol, illegal opcode, invalid hex",
+      "type": "diagnostics",
+      "input": {
+        "file": "simple.asm"
+      },
+      "expected": {
+        "minErrors": 1,
+        "minWarnings": 1
+      }
+    }
+  ]
+}

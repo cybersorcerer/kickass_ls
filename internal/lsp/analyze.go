@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+
+	log "c64.nvim/internal/log"
 )
 
 // ForwardReference represents an unresolved symbol reference
@@ -129,6 +131,10 @@ func (a *SemanticAnalyzer) Analyze(program *Program) []Diagnostic {
 	// Pass 1: Address calculation and label collection
 	a.pass1AddressCalculation(program.Statements)
 
+	// Workaround: Token-level analysis for .byte/.word range validation
+	// This bypasses the parser issue where comma-separated data directives don't create AST nodes
+	a.performTokenLevelRangeValidation()
+
 	// Pass 2: Forward reference resolution
 	a.pass2ForwardReferenceResolution()
 
@@ -177,7 +183,8 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 			}
 		case *InstructionStatement:
 			if stmt != nil {
-				a.processInstruction(stmt)
+				// Pass 1: Only calculate address, no enhanced analysis (to avoid duplicate diagnostics)
+				a.calculateInstructionAddress(stmt)
 			}
 		case *DirectiveStatement:
 			if stmt != nil {
@@ -240,6 +247,8 @@ func (a *SemanticAnalyzer) walkStatement(stmt Statement, currentScope *Scope) {
 	}
 	switch node := stmt.(type) {
 	case *InstructionStatement:
+		// Process the instruction for semantic analysis
+		a.processInstruction(node)
 		if node != nil && node.Operand != nil {
 			a.walkExpression(node.Operand, currentScope)
 		}
@@ -248,6 +257,8 @@ func (a *SemanticAnalyzer) walkStatement(stmt Statement, currentScope *Scope) {
 			a.walkExpression(node.Expression, currentScope)
 		}
 	case *DirectiveStatement:
+		// Process the directive for semantic analysis
+		a.processDirective(node)
 		if node != nil {
 			if node.Value != nil {
 				a.walkExpression(node.Value, currentScope)
@@ -330,6 +341,9 @@ func (a *SemanticAnalyzer) walkExpression(expr Expression, currentScope *Scope) 
 						a.diagnostics = append(a.diagnostics, diagnostic)
 					}
 				}
+			} else {
+				// Check if it's a builtin function from kickass.json
+				a.validateBuiltinFunctionCall(symbolName, node.Arguments, node.Token)
 			}
 		}
 
@@ -472,6 +486,24 @@ func (a *SemanticAnalyzer) isJumpInstruction(mnemonic string) bool {
 	return false
 }
 
+// calculateInstructionAddress only calculates instruction length and updates PC (Pass 1)
+func (a *SemanticAnalyzer) calculateInstructionAddress(node *InstructionStatement) {
+	if node == nil || a.context == nil || node.Token.Literal == "" {
+		return
+	}
+
+	mnemonic := strings.ToUpper(node.Token.Literal)
+	length := a.getInstructionLength(mnemonic, node.Operand)
+
+	// Check for zero page optimization opportunities (doesn't create duplicates)
+	if node.Operand != nil {
+		a.checkZeroPageOptimization(mnemonic, node.Operand, node.Token)
+	}
+
+	// Update program counter
+	a.context.CurrentPC += int64(length)
+}
+
 // processInstruction handles instruction processing with PC tracking
 func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	if node == nil || a.context == nil || node.Token.Literal == "" {
@@ -479,6 +511,8 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	}
 
 	mnemonic := strings.ToUpper(node.Token.Literal)
+	// Debug: Log instruction processing to help debug semantic analysis
+	log.Debug("Processing instruction: %s", mnemonic)
 	length := a.getInstructionLength(mnemonic, node.Operand)
 
 	// Update program counter
@@ -502,9 +536,8 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	// Check for illegal opcodes
 	a.checkIllegalOpcode(mnemonic, node.Token)
 
-	// Check for zero page optimization opportunities
+	// Check for magic numbers (Zero Page optimization is handled in Pass 1)
 	if node.Operand != nil {
-		a.checkZeroPageOptimization(mnemonic, node.Operand, node.Token)
 		a.checkMagicNumbers(node.Operand, node.Token)
 	}
 
@@ -611,11 +644,27 @@ func (a *SemanticAnalyzer) validateSymbolsInExpression(expr Expression, token To
 
 // processDirective handles directive processing (.pc, .byte, etc.)
 func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
-	if node == nil || node.Name == nil || a.context == nil {
+	if node == nil {
+		log.Debug("processDirective: node is nil")
+		return
+	}
+	if node.Name == nil {
+		log.Debug("processDirective: node.Name is nil, token=%s", node.Token.Literal)
+		// Special handling for data directives like .byte and .word that don't have names
+		directive := strings.ToLower(node.Token.Literal)
+		if directive == ".byte" || directive == ".word" {
+			log.Debug("processDirective: handling data directive %s without name", directive)
+			a.processDataDirective(node)
+		}
+		return
+	}
+	if a.context == nil {
+		log.Debug("processDirective: context is nil")
 		return
 	}
 
 	directive := strings.ToLower(node.Token.Literal)
+	log.Debug("processDirective: directive=%s, name=%s", directive, node.Name.Value)
 
 	switch directive {
 	case ".pc", "*", "*=":
@@ -635,9 +684,23 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 			}
 
 			// Try to evaluate the constant value
-			if addr := a.evaluateExpression(node.Value); addr != -1 {
+			addr := a.evaluateExpression(node.Value)
+			log.Debug("processDirective .const: name=%s, addr=%d", node.Name.Value, addr)
+			if addr != -1 {
 				symbol.Address = addr
 				symbol.Value = fmt.Sprintf("$%04X", addr)
+
+				// Check for potential range issues based on variable name
+				name := strings.ToLower(node.Name.Value)
+				if strings.Contains(name, "byte") && (addr < 0 || addr > 255) {
+					log.Debug("processDirective .const: ADDING BYTE WARNING for %s, addr=%d", node.Name.Value, addr)
+					a.addWarning(node.Token, "Constant '%s' value $%X out of byte range ($0-$FF)", node.Name.Value, addr)
+				} else if strings.Contains(name, "word") && (addr < 0 || addr > 65535) {
+					log.Debug("processDirective .const: ADDING WORD WARNING for %s, addr=%d", node.Name.Value, addr)
+					a.addWarning(node.Token, "Constant '%s' value $%X out of word range ($0-$FFFF)", node.Name.Value, addr)
+				}
+			} else {
+				log.Debug("processDirective .const: evaluateExpression returned -1 for %s", node.Name.Value)
 			}
 
 			// Add to symbol table
@@ -653,9 +716,23 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 			}
 
 			// Try to evaluate the variable value
-			if addr := a.evaluateExpression(node.Value); addr != -1 {
+			addr := a.evaluateExpression(node.Value)
+			log.Debug("processDirective .const: name=%s, addr=%d", node.Name.Value, addr)
+			if addr != -1 {
 				symbol.Address = addr
 				symbol.Value = fmt.Sprintf("$%04X", addr)
+
+				// Check for potential range issues based on variable name
+				name := strings.ToLower(node.Name.Value)
+				if strings.Contains(name, "byte") && (addr < 0 || addr > 255) {
+					log.Debug("processDirective .const: ADDING BYTE WARNING for %s, addr=%d", node.Name.Value, addr)
+					a.addWarning(node.Token, "Constant '%s' value $%X out of byte range ($0-$FF)", node.Name.Value, addr)
+				} else if strings.Contains(name, "word") && (addr < 0 || addr > 65535) {
+					log.Debug("processDirective .const: ADDING WORD WARNING for %s, addr=%d", node.Name.Value, addr)
+					a.addWarning(node.Token, "Constant '%s' value $%X out of word range ($0-$FFFF)", node.Name.Value, addr)
+				}
+			} else {
+				log.Debug("processDirective .const: evaluateExpression returned -1 for %s", node.Name.Value)
 			}
 
 			// Add to symbol table
@@ -663,9 +740,17 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 		}
 	case ".byte", ".byt":
 		// Single byte data
+		log.Debug("processDirective .byte: node.Value type=%T, value=%+v", node.Value, node.Value)
+		if node.Value != nil {
+			a.checkRangeValidation(node.Value, "byte", 0, 255, node.Token)
+		}
 		a.context.CurrentPC++
 	case ".word", ".wo":
 		// Two byte data
+		log.Debug("processDirective .word: node.Value type=%T, value=%+v", node.Value, node.Value)
+		if node.Value != nil {
+			a.checkRangeValidation(node.Value, "word", 0, 65535, node.Token)
+		}
 		a.context.CurrentPC += 2
 	case ".text", ".tx":
 		// String data - estimate length based on token type
@@ -674,6 +759,15 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 			// This is a simplified estimation since we don't have StringLiteral type
 			a.context.CurrentPC += 8 // Default text size estimate
 		}
+	case ".if":
+		// Conditional compilation directive
+		a.processIfDirective(node)
+	case ".ifdef":
+		// Ifdef directive
+		log.Debug("processDirective: .ifdef not implemented yet")
+	case ".ifndef":
+		// Ifndef directive
+		log.Debug("processDirective: .ifndef not implemented yet")
 	}
 }
 
@@ -961,9 +1055,158 @@ func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
 				}
 			}
 		}
+	case *InfixExpression:
+		if e != nil {
+			left := a.evaluateExpression(e.Left)
+			right := a.evaluateExpression(e.Right)
+			// Only proceed if both operands are evaluable
+			if left != -1 && right != -1 {
+				switch e.Operator {
+				case "+":
+					return left + right
+				case "-":
+					return left - right
+				case "*":
+					return left * right
+				case "/":
+					if right != 0 {
+						return left / right
+					}
+					// Division by zero - return -1 to indicate cannot evaluate
+					return -1
+				case "%":
+					if right != 0 {
+						return left % right
+					}
+					return -1
+				case "<<":
+					return left << right
+				case ">>":
+					return left >> right
+				case "&":
+					return left & right
+				case "|":
+					return left | right
+				case "^":
+					return left ^ right
+				}
+			}
+		}
+	case *GroupedExpression:
+		if e != nil && e.Expression != nil {
+			// Evaluate the grouped expression
+			return a.evaluateExpression(e.Expression)
+		}
+	case *CallExpression:
+		if e != nil {
+			// Basic builtin function evaluation
+			if ident, ok := e.Function.(*Identifier); ok {
+				return a.evaluateBuiltinFunction(ident.Value, e.Arguments)
+			}
+		}
 	}
 	return -1 // Cannot evaluate
 }
+
+// evaluateBuiltinFunction attempts to evaluate a builtin function call
+func (a *SemanticAnalyzer) evaluateBuiltinFunction(name string, args []Expression) int64 {
+	// Phase 1: Basic math function evaluation
+	switch name {
+	case "abs":
+		if len(args) == 1 {
+			val := a.evaluateExpression(args[0])
+			if val != -1 {
+				if val < 0 {
+					return -val
+				}
+				return val
+			}
+		}
+	case "min":
+		if len(args) == 2 {
+			val1 := a.evaluateExpression(args[0])
+			val2 := a.evaluateExpression(args[1])
+			if val1 != -1 && val2 != -1 {
+				if val1 < val2 {
+					return val1
+				}
+				return val2
+			}
+		}
+	case "max":
+		if len(args) == 2 {
+			val1 := a.evaluateExpression(args[0])
+			val2 := a.evaluateExpression(args[1])
+			if val1 != -1 && val2 != -1 {
+				if val1 > val2 {
+					return val1
+				}
+				return val2
+			}
+		}
+	case "floor":
+		if len(args) == 1 {
+			val := a.evaluateExpression(args[0])
+			if val != -1 {
+				// For integer values, floor is identity
+				return val
+			}
+		}
+	// More complex functions like sin, cos, sqrt cannot be evaluated at compile time
+	// without proper floating point support, so return -1 to indicate cannot evaluate
+	}
+	return -1 // Cannot evaluate this function
+}
+
+// validateBuiltinFunctionCall validates a builtin function call against kickass.json
+func (a *SemanticAnalyzer) validateBuiltinFunctionCall(functionName string, args []Expression, token Token) {
+	// Access builtin functions from server.go
+	for _, fn := range GetBuiltinFunctions() {
+		if fn.Name == functionName {
+			// Found the function, now validate parameter count
+			// Parse signature to get expected parameter count
+			expectedParams := a.parseBuiltinFunctionSignature(fn.Signature)
+			actualParams := len(args)
+
+			if actualParams != expectedParams {
+				diagnostic := Diagnostic{
+					Severity: SeverityWarning,
+					Range:    Range{Start: Position{Line: token.Line - 1, Character: token.Column - 1}, End: Position{Line: token.Line - 1, Character: token.Column}},
+					Message:  fmt.Sprintf("Incorrect number of arguments for builtin function '%s'. Expected %d, got %d", functionName, expectedParams, actualParams),
+					Source:   "analyzer",
+				}
+				a.diagnostics = append(a.diagnostics, diagnostic)
+			}
+			return // Function found and validated
+		}
+	}
+	// Function not found in builtins - this will be handled as undefined symbol elsewhere
+}
+
+// parseBuiltinFunctionSignature extracts parameter count from function signature
+func (a *SemanticAnalyzer) parseBuiltinFunctionSignature(signature string) int {
+	// Simple parsing for signatures like "sin(angle)" -> 1 parameter
+	// "min(a, b)" -> 2 parameters, "random()" -> 0 parameters
+	if !strings.Contains(signature, "(") {
+		return 0
+	}
+
+	// Extract content between parentheses
+	start := strings.Index(signature, "(")
+	end := strings.Index(signature, ")")
+	if start == -1 || end == -1 || end <= start {
+		return 0
+	}
+
+	params := strings.TrimSpace(signature[start+1 : end])
+	if params == "" {
+		return 0
+	}
+
+	// Count comma-separated parameters
+	return len(strings.Split(params, ","))
+}
+
 
 // Quick Wins Implementation
 
@@ -995,9 +1238,11 @@ func isIllegalMnemonic(mnemonic string) bool {
 // checkZeroPageOptimization suggests zero page addressing optimizations
 func (a *SemanticAnalyzer) checkZeroPageOptimization(mnemonic string, operand Expression, token Token) {
 	config := GetLSPConfig()
+	log.Debug("checkZeroPageOptimization: mnemonic=%s, token=%s", mnemonic, token.Literal)
 
 	// Check if zero page optimization is enabled
 	if !config.ZeroPageOptimization.Enabled || !config.ZeroPageOptimization.ShowHints {
+		log.Debug("Zero page optimization disabled: enabled=%v, showHints=%v", config.ZeroPageOptimization.Enabled, config.ZeroPageOptimization.ShowHints)
 		return
 	}
 
@@ -1428,6 +1673,258 @@ func (a *SemanticAnalyzer) detectUnusedCodeBlocks(statements []Statement) {
 			if !labelUsage[labelName] {
 				// This label is never referenced - potential dead code block
 				a.addHint(labelStmt.Token, "Label '%s' is never referenced - potential dead code block", labelName)
+			}
+		}
+	}
+}
+
+// processDataDirective handles .byte and .word directives with potential multiple values
+func (a *SemanticAnalyzer) processDataDirective(node *DirectiveStatement) {
+	if node == nil || a.context == nil {
+		return
+	}
+
+	directive := strings.ToLower(node.Token.Literal)
+	log.Debug("processDataDirective: processing %s", directive)
+
+	// For .byte and .word, we need to validate all values in the list
+	// Since the parser might give us different Expression types, we'll need to handle them
+
+	if node.Value != nil {
+		log.Debug("processDataDirective: node.Value type=%T, value=%+v", node.Value, node.Value)
+
+		switch directive {
+		case ".byte":
+			a.validateDataValues(node.Value, "byte", 0, 255, node.Token)
+		case ".word":
+			a.validateDataValues(node.Value, "word", 0, 65535, node.Token)
+		}
+	}
+
+	// Update PC for size estimation
+	switch directive {
+	case ".byte":
+		a.context.CurrentPC++
+	case ".word":
+		a.context.CurrentPC += 2
+	}
+}
+
+// validateDataValues validates single or multiple values in data directives
+func (a *SemanticAnalyzer) validateDataValues(expr Expression, dataType string, minVal, maxVal int64, token Token) {
+	if expr == nil {
+		return
+	}
+
+	// Try to evaluate as single expression first
+	value := a.evaluateExpression(expr)
+	if value != -1 {
+		if value < minVal || value > maxVal {
+			log.Debug("validateDataValues: ADDING WARNING for value %d out of range", value)
+			a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
+		}
+	} else {
+		log.Debug("validateDataValues: Could not evaluate expression as single value, type=%T", expr)
+		// TODO: Handle array/list expressions when we understand the AST better
+	}
+}
+
+// checkRangeValidation validates that values are within specified ranges for directives
+func (a *SemanticAnalyzer) checkRangeValidation(expr Expression, dataType string, minVal, maxVal int64, token Token) {
+	if expr == nil {
+		log.Debug("checkRangeValidation: expr is nil")
+		return
+	}
+
+	value := a.evaluateExpression(expr)
+	log.Debug("checkRangeValidation: dataType=%s, value=%d, range=%d-%d", dataType, value, minVal, maxVal)
+	if value != -1 && (value < minVal || value > maxVal) {
+		log.Debug("checkRangeValidation: ADDING WARNING for value %d out of range", value)
+		a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
+	}
+}
+
+// performTokenLevelRangeValidation is a workaround for the parser issue where
+// .byte and .word directives with comma-separated values don't create DirectiveStatements.
+// This function analyzes the source text directly to find and validate these directives.
+func (a *SemanticAnalyzer) performTokenLevelRangeValidation() {
+	if len(a.documentLines) == 0 {
+		log.Debug("performTokenLevelRangeValidation: no source text available")
+		return
+	}
+
+	log.Debug("performTokenLevelRangeValidation: starting token-level analysis")
+
+	for lineNum, line := range a.documentLines {
+		line = strings.TrimSpace(line)
+
+		// Skip empty lines and comments
+		if line == "" || strings.HasPrefix(line, "//") || strings.HasPrefix(line, ";") {
+			continue
+		}
+
+		// Check for .byte directives
+		if strings.HasPrefix(strings.ToLower(line), ".byte") {
+			a.validateTokenLevelDataDirective(line, lineNum, "byte", 0, 255)
+		}
+
+		// Check for .word directives
+		if strings.HasPrefix(strings.ToLower(line), ".word") {
+			a.validateTokenLevelDataDirective(line, lineNum, "word", 0, 65535)
+		}
+	}
+}
+
+// validateTokenLevelDataDirective validates range for a single .byte or .word line
+func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum int, dataType string, minVal, maxVal int64) {
+	log.Debug("validateTokenLevelDataDirective: processing %s line %d: %s", dataType, lineNum+1, line)
+
+	// Extract the values part after the directive
+	parts := strings.SplitN(line, " ", 2)
+	if len(parts) < 2 {
+		return // No values
+	}
+
+	valuesStr := strings.TrimSpace(parts[1])
+
+	// Remove comment part if present
+	if commentIdx := strings.Index(valuesStr, "//"); commentIdx != -1 {
+		valuesStr = strings.TrimSpace(valuesStr[:commentIdx])
+	}
+	if commentIdx := strings.Index(valuesStr, ";"); commentIdx != -1 {
+		valuesStr = strings.TrimSpace(valuesStr[:commentIdx])
+	}
+
+	// Split by comma to get individual values
+	values := strings.Split(valuesStr, ",")
+
+	for _, valueStr := range values {
+		valueStr = strings.TrimSpace(valueStr)
+		if valueStr == "" {
+			continue
+		}
+
+		log.Debug("validateTokenLevelDataDirective: checking value '%s' in %s directive", valueStr, dataType)
+
+		// Parse the value
+		value := a.parseTokenLevelValue(valueStr)
+		if value == -1 {
+			log.Debug("validateTokenLevelDataDirective: could not parse value '%s'", valueStr)
+			continue
+		}
+
+		// Check range
+		if value < minVal || value > maxVal {
+			log.Debug("validateTokenLevelDataDirective: ADDING WARNING for value %d out of range", value)
+
+			// Create a token for the warning (approximate position)
+			token := Token{
+				Type:    TOKEN_NUMBER_HEX,
+				Literal: valueStr,
+				Line:    lineNum + 1,
+				Column:  strings.Index(line, valueStr) + 1,
+			}
+
+			a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
+		}
+	}
+}
+
+// parseTokenLevelValue parses hex, decimal, binary numbers in token-level analysis
+func (a *SemanticAnalyzer) parseTokenLevelValue(valueStr string) int64 {
+	valueStr = strings.TrimSpace(valueStr)
+
+	// Hex numbers ($FF, $100, etc.)
+	if strings.HasPrefix(valueStr, "$") {
+		hexStr := valueStr[1:]
+		if value, err := strconv.ParseInt(hexStr, 16, 64); err == nil {
+			return value
+		}
+	}
+
+	// Binary numbers (%10101010, etc.)
+	if strings.HasPrefix(valueStr, "%") {
+		binStr := valueStr[1:]
+		if value, err := strconv.ParseInt(binStr, 2, 64); err == nil {
+			return value
+		}
+	}
+
+	// Decimal numbers (123, etc.)
+	if value, err := strconv.ParseInt(valueStr, 10, 64); err == nil {
+		return value
+	}
+
+	// Could not parse
+	return -1
+}
+
+// processIfDirective handles .if conditional compilation directives with dead code detection
+func (a *SemanticAnalyzer) processIfDirective(node *DirectiveStatement) {
+	if node == nil || node.Value == nil {
+		log.Debug("processIfDirective: node or value is nil")
+		return
+	}
+
+	log.Debug("processIfDirective: evaluating .if condition")
+
+	// Evaluate the condition expression
+	conditionValue := a.evaluateExpression(node.Value)
+	log.Debug("processIfDirective: condition value=%d", conditionValue)
+
+	// Check for dead code: .if (0) or .if (false)
+	if conditionValue == 0 {
+		log.Debug("processIfDirective: detected dead code block (.if condition is false)")
+		a.addDeadCodeWarningsForIfBlock(node)
+	}
+
+	// For other condition values, we could add additional analysis
+	// For example, .if (1) is always true, .if (variable) depends on runtime
+}
+
+// addDeadCodeWarningsForIfBlock adds warnings for statements inside a dead .if block
+func (a *SemanticAnalyzer) addDeadCodeWarningsForIfBlock(node *DirectiveStatement) {
+	if node == nil || node.Block == nil || node.Block.Statements == nil {
+		log.Debug("addDeadCodeWarningsForIfBlock: no block or statements")
+		return
+	}
+
+	log.Debug("addDeadCodeWarningsForIfBlock: processing %d statements in dead block", len(node.Block.Statements))
+
+	// Warn about each statement in the dead code block
+	for _, stmt := range node.Block.Statements {
+		if stmt == nil {
+			continue
+		}
+
+		switch statement := stmt.(type) {
+		case *InstructionStatement:
+			if statement != nil && statement.Token.Literal != "" {
+				log.Debug("addDeadCodeWarningsForIfBlock: adding warning for instruction %s", statement.Token.Literal)
+				a.addWarning(statement.Token, "Dead code: instruction '%s' will never be executed (.if condition is always false)", statement.Token.Literal)
+			}
+		case *DirectiveStatement:
+			if statement != nil && statement.Token.Literal != "" {
+				log.Debug("addDeadCodeWarningsForIfBlock: adding warning for directive %s", statement.Token.Literal)
+				a.addWarning(statement.Token, "Dead code: directive '%s' will never be executed (.if condition is always false)", statement.Token.Literal)
+			}
+		case *LabelStatement:
+			if statement != nil && statement.Name != nil {
+				log.Debug("addDeadCodeWarningsForIfBlock: adding warning for label %s", statement.Name.Value)
+				a.addWarning(statement.Token, "Dead code: label '%s' is in unreachable block (.if condition is always false)", statement.Name.Value)
+			}
+		default:
+			// For other statement types, add a generic warning
+			if statement != nil {
+				log.Debug("addDeadCodeWarningsForIfBlock: adding generic warning for statement type %T", statement)
+				// Create a generic token for the warning
+				token := Token{
+					Type:    TOKEN_COMMENT,  // Generic type for unidentified statements
+					Literal: "unknown",
+					Line:    1,              // We'll use a default position
+					Column:  1,
+				}
+				a.addWarning(token, "Dead code: statement will never be executed (.if condition is always false)")
 			}
 		}
 	}

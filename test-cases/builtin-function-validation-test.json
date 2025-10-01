@@ -1,0 +1,71 @@
+{
+  "name": "Builtin Function Validation Test",
+  "description": "Test builtin function parameter validation using kickass.json (Phase 1.2)",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
+    "files": {
+      "builtin_validation_test.asm": "@comprehensive-test.asm"
+    }
+  },
+  "testCases": [
+    {
+      "name": "Valid builtin function calls produce no errors",
+      "description": "Functions with correct parameter count should not generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "builtin_validation_test.asm"
+      },
+      "expected": {
+        "maxErrors": 10,
+        "maxWarnings": 15
+      }
+    },
+    {
+      "name": "Invalid parameter count generates warnings",
+      "description": "Functions with wrong parameter count should generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "builtin_validation_test.asm"
+      },
+      "expected": {
+        "containsMessages": [
+          "invalid_abs",
+          "invalid_min",
+          "invalid_max"
+        ]
+      }
+    },
+    {
+      "name": "Unknown functions generate errors",
+      "description": "Unknown function calls should generate undefined symbol errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "builtin_validation_test.asm"
+      },
+      "expected": {
+        "containsMessages": ["undefined_symbol", "dcp"]
+      }
+    },
+    {
+      "name": "Builtin functions appear in completion",
+      "description": "Builtin functions should be available in completion",
+      "type": "completion",
+      "input": {
+        "file": "builtin_validation_test.asm",
+        "line": 10,
+        "character": 8
+      },
+      "expected": {
+        "containsItems": [
+          {"label": "sin"},
+          {"label": "abs"},
+          {"label": "min"},
+          {"label": "max"}
+        ],
+        "minItems": 10
+      }
+    }
+  ]
+}

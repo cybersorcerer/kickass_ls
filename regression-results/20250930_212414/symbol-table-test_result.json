@@ -1,0 +1,70 @@
+[
+  {
+    "testCase": {
+      "name": "Global symbols accessible",
+      "description": "Verify global labels can be referenced",
+      "type": "completion",
+      "input": {
+        "file": "symbols.asm",
+        "line": 172,
+        "character": 8
+      },
+      "expected": {
+        "minItems": 1
+      }
+    },
+    "status": "FAIL",
+    "message": "expected at least 1 items, got 0",
+    "duration": 0,
+    "details": []
+  },
+  {
+    "testCase": {
+      "name": "Macro definitions processed",
+      "description": "Verify macros are recognized as symbols",
+      "type": "documentSymbol",
+      "input": {
+        "file": "symbols.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Label definition lookup works",
+      "description": "Verify go-to-definition for labels",
+      "type": "definition",
+      "input": {
+        "file": "symbols.asm",
+        "line": 172,
+        "character": 8
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Macro usage detected",
+      "description": "Verify macro calls are recognized",
+      "type": "completion",
+      "input": {
+        "file": "symbols.asm",
+        "line": 213,
+        "character": 5
+      },
+      "expected": {
+        "minItems": 1
+      }
+    },
+    "status": "FAIL",
+    "message": "expected at least 1 items, got 0",
+    "duration": 0,
+    "details": []
+  }
+]

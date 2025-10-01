@@ -1,0 +1,64 @@
+[
+  {
+    "testCase": {
+      "name": "Basic arithmetic operations work",
+      "description": "Test addition, multiplication, shift, and mask operations",
+      "type": "diagnostics",
+      "input": {
+        "file": "arithmetic_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Builtin function calls are recognized",
+      "description": "Test abs, min functions are recognized and not flagged as errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "arithmetic_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Complex expression completion works",
+      "description": "Test completion in complex arithmetic expressions",
+      "type": "completion",
+      "input": {
+        "file": "arithmetic_test.asm",
+        "line": 10,
+        "character": 8
+      },
+      "expected": {
+        "minItems": 5
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Hover shows calculated values",
+      "description": "Test hover information for constants with arithmetic expressions",
+      "type": "hover",
+      "input": {
+        "file": "arithmetic_test.asm",
+        "line": 2,
+        "character": 15
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

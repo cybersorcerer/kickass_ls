@@ -592,10 +592,29 @@ func (p *Parser) ParseProgram() *Program {
 	program.Statements = make([]Statement, 0)
 
 	for p.curToken.Type != TOKEN_EOF {
+		log.Debug("Parser: Processing token %s '%s' at %d:%d", p.curToken.Type.String(), p.curToken.Literal, p.curToken.Line, p.curToken.Column)
+
 		if p.curToken.Type == TOKEN_COMMENT {
 			p.nextToken()
 			continue
 		}
+
+		// Handle illegal tokens from lexer and convert to parser diagnostics
+		if p.curToken.Type == TOKEN_ILLEGAL {
+			log.Debug("Parser: Processing TOKEN_ILLEGAL '%s' at %d:%d", p.curToken.Literal, p.curToken.Line, p.curToken.Column)
+			p.diagnostics = append(p.diagnostics, Diagnostic{
+				Severity: SeverityError,
+				Range: Range{
+					Start: Position{Line: p.curToken.Line - 1, Character: p.curToken.Column - 1},
+					End:   Position{Line: p.curToken.Line - 1, Character: p.curToken.Column},
+				},
+				Message: fmt.Sprintf("Illegal character '%s'", p.curToken.Literal),
+				Source:  "parser",
+			})
+			p.nextToken()
+			continue
+		}
+
 		stmt := p.parseStatement()
 		if stmt != nil {
 			program.Statements = append(program.Statements, stmt)
@@ -614,11 +633,16 @@ func (p *Parser) parseStatement() Statement {
 		return p.parseLabelStatement()
 	case TOKEN_DOT, TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_PRE, TOKEN_DIRECTIVE_KICK_FLOW, TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
 		return p.parseDirectiveStatement()
+	case TOKEN_ELSE:
+		return p.parseElseStatement()
 	case TOKEN_PLUS:
 		return p.parseExpressionStatement()
 	case TOKEN_IDENTIFIER:
 		// Check if this identifier at the start of a line looks like an invalid mnemonic
 		return p.parseIdentifierStatement()
+	case TOKEN_SEMICOLON:
+		// Treat semicolon at start of line as comment
+		return p.parseSemicolonComment()
 	default:
 		return nil
 	}
@@ -723,6 +747,11 @@ func (p *Parser) parseDirectiveStatement() *DirectiveStatement {
 	if p.curToken.Type == TOKEN_DIRECTIVE_KICK_PRE || p.curToken.Type == TOKEN_DIRECTIVE_KICK_FLOW ||
 		p.curToken.Type == TOKEN_DIRECTIVE_KICK_ASM || p.curToken.Type == TOKEN_DIRECTIVE_KICK_DATA ||
 		p.curToken.Type == TOKEN_DIRECTIVE_KICK_TEXT {
+		// Special handling for flow control directives
+		if p.curToken.Type == TOKEN_DIRECTIVE_KICK_FLOW {
+			return p.parseFlowControlDirective(stmt)
+		}
+
 		// Parse arguments/value/block based on what follows
 		if p.peekTokenIs(TOKEN_IDENTIFIER) {
 			// Handle directives with values like .const name = value
@@ -916,7 +945,19 @@ func (p *Parser) parseBlockStatement() *BlockStatement {
 
 	block.EndToken = p.curToken
 
+	// If we found the closing brace, advance past it
+	// This ensures the parser is positioned correctly for the next statement
+	if p.curToken.Type == TOKEN_RBRACE {
+		p.nextToken()
+	}
+
 	return block
+}
+
+// parseSemicolonComment treats semicolon at start of line as a comment
+func (p *Parser) parseSemicolonComment() Statement {
+	// Skip the entire line as a comment
+	return nil // Comment statements are usually ignored
 }
 
 func (p *Parser) expectPeek(t TokenType) bool {
@@ -952,8 +993,14 @@ func (p *Parser) parseExpression(precedence int) Expression {
 	}
 	prefix := p.prefixParseFns[p.curToken.Type]
 	if prefix == nil {
+		var message string
+		if p.curToken.Type == TOKEN_ILLEGAL {
+			message = fmt.Sprintf("Illegal character sequence '%s'", p.curToken.Literal)
+		} else {
+			message = fmt.Sprintf("Unexpected token '%s' in this context", p.curToken.Literal)
+		}
 		p.diagnostics = append(p.diagnostics, Diagnostic{
-			Message: fmt.Sprintf("Unexpected token '%s' in this context", p.curToken.Literal),
+			Message: message,
 			Range: Range{
 				Start: Position{
 					Line:      p.curToken.Line - 1,
@@ -1132,4 +1179,136 @@ func (p *Parser) parseExpressionList(end TokenType) []Expression {
 	}
 
 	return list
+}
+
+// parseFlowControlDirective handles modern Kick Assembler flow control syntax
+func (p *Parser) parseFlowControlDirective(stmt *DirectiveStatement) *DirectiveStatement {
+	directiveName := strings.ToLower(stmt.Token.Literal)
+	stmt.Name = &Identifier{Token: p.curToken, Value: directiveName}
+
+	switch directiveName {
+	case ".for":
+		return p.parseForDirective(stmt)
+	case ".if":
+		return p.parseIfDirective(stmt)
+	case ".while":
+		return p.parseWhileDirective(stmt)
+	case ".return":
+		return p.parseReturnDirective(stmt)
+	default:
+		// Generic handling for unknown flow directives
+		stmt.Name = &Identifier{Token: p.curToken, Value: directiveName}
+		// Try to parse the rest as expression or block
+		if p.peekTokenIs(TOKEN_LBRACE) {
+			p.nextToken()
+			stmt.Block = p.parseBlockStatement()
+		} else if !p.peekTokenIs(TOKEN_EOF) && p.peekToken.Line == p.curToken.Line {
+			p.nextToken()
+			stmt.Value = p.parseExpression(LOWEST)
+		}
+		return stmt
+	}
+}
+
+// parseForDirective handles .for (var i = 0; i < 8; i++) { ... } syntax
+func (p *Parser) parseForDirective(stmt *DirectiveStatement) *DirectiveStatement {
+	// Expect: .for (var varname = init; varname < limit; varname++) { ... }
+	if !p.expectPeek(TOKEN_LPAREN) {
+		return stmt
+	}
+
+	// Parse the var declaration: var i = 0
+	if p.expectPeek(TOKEN_IDENTIFIER) && strings.ToLower(p.curToken.Literal) == "var" {
+		// Found "var" keyword, parse variable declaration
+		if p.expectPeek(TOKEN_IDENTIFIER) {
+			varName := p.curToken.Literal
+			// Create a for-specific parameter to store the loop variable
+			stmt.Parameters = []*Identifier{{Token: p.curToken, Value: varName}}
+
+			// Skip the rest of the for loop syntax for now - just consume until closing paren
+			parenDepth := 1
+			for parenDepth > 0 && p.curToken.Type != TOKEN_EOF {
+				p.nextToken()
+				if p.curToken.Type == TOKEN_LPAREN {
+					parenDepth++
+				} else if p.curToken.Type == TOKEN_RPAREN {
+					parenDepth--
+				}
+			}
+		}
+	}
+
+	// Parse the block
+	if p.expectPeek(TOKEN_LBRACE) {
+		stmt.Block = p.parseBlockStatement()
+	}
+
+	return stmt
+}
+
+// parseIfDirective handles .if (condition) { ... } else { ... } syntax
+func (p *Parser) parseIfDirective(stmt *DirectiveStatement) *DirectiveStatement {
+	// Parse condition
+	if p.expectPeek(TOKEN_LPAREN) {
+		p.nextToken()
+		stmt.Value = p.parseExpression(LOWEST)
+		if !p.expectPeek(TOKEN_RPAREN) {
+			return stmt
+		}
+	}
+
+	// Parse the if block
+	if p.expectPeek(TOKEN_LBRACE) {
+		stmt.Block = p.parseBlockStatement()
+	}
+
+	// Check for else clause - this is handled separately in the statement parser
+	// We just parse the primary if block here
+
+	return stmt
+}
+
+// parseWhileDirective handles .while (condition) { ... } syntax
+func (p *Parser) parseWhileDirective(stmt *DirectiveStatement) *DirectiveStatement {
+	// Parse condition
+	if p.expectPeek(TOKEN_LPAREN) {
+		p.nextToken()
+		stmt.Value = p.parseExpression(LOWEST)
+		if !p.expectPeek(TOKEN_RPAREN) {
+			return stmt
+		}
+	}
+
+	// Parse the while block
+	if p.expectPeek(TOKEN_LBRACE) {
+		stmt.Block = p.parseBlockStatement()
+	}
+
+	return stmt
+}
+
+// parseReturnDirective handles .return [expression] syntax
+func (p *Parser) parseReturnDirective(stmt *DirectiveStatement) *DirectiveStatement {
+	// Parse optional return value
+	if !p.peekTokenIs(TOKEN_EOF) && p.peekToken.Line == p.curToken.Line {
+		p.nextToken()
+		stmt.Value = p.parseExpression(LOWEST)
+	}
+
+	return stmt
+}
+
+// parseElseStatement handles standalone 'else' statements that follow .if blocks
+func (p *Parser) parseElseStatement() *DirectiveStatement {
+	stmt := &DirectiveStatement{
+		Token: p.curToken,
+		Name:  &Identifier{Token: p.curToken, Value: "else"},
+	}
+
+	// Parse the else block
+	if p.expectPeek(TOKEN_LBRACE) {
+		stmt.Block = p.parseBlockStatement()
+	}
+
+	return stmt
 }

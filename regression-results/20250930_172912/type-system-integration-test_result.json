@@ -1,0 +1,92 @@
+[
+  {
+    "testCase": {
+      "name": "Byte range validation",
+      "description": "Values assigned to byte contexts should be validated for 0-255 range",
+      "type": "diagnostics",
+      "input": {
+        "file": "type_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Word range validation",
+      "description": "Values assigned to word contexts should be validated for 0-65535 range",
+      "type": "diagnostics",
+      "input": {
+        "file": "type_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Memory address range validation",
+      "description": "Memory addresses should be validated for 16-bit range",
+      "type": "diagnostics",
+      "input": {
+        "file": "type_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Zero-page optimization hints",
+      "description": "Zero-page addresses should generate optimization hints",
+      "type": "diagnostics",
+      "input": {
+        "file": "type_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Function parameter type validation",
+      "description": "Builtin functions should validate parameter types",
+      "type": "diagnostics",
+      "input": {
+        "file": "type_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "String escape sequence validation",
+      "description": "String literals should validate escape sequences",
+      "type": "diagnostics",
+      "input": {
+        "file": "type_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

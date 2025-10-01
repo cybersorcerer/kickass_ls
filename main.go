@@ -48,19 +48,19 @@ func main() {
 		os.Exit(11)
 	}
 
-	log.Info("6510 Language Server started.")
+	log.Info("C64 Language Server started.")
 
-	// Get executable directory for config files
-	exePath, err := os.Executable()
+	// Get user home directory for config files
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
-		log.Error("Failed to get executable path: %v", err)
+		log.Error("Failed to get user home directory: %v", err)
 		os.Exit(1)
 	}
-	exeDir := filepath.Dir(exePath)
+	configDir := filepath.Join(homeDir, ".config", "6510lsp")
 
 	// Set paths for configuration files
-	mnemonicPath := filepath.Join(exeDir, "mnemonic.json")
-	kickassDir := exeDir
+	mnemonicPath := filepath.Join(configDir, "mnemonic.json")
+	kickassDir := configDir
 
 	// Check if test mode is requested
 	if *testFile != "" {

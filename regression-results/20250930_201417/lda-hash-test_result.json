@@ -1,0 +1,19 @@
+[
+  {
+    "testCase": {
+      "name": "Completion after lda # (ohne $)",
+      "description": "What happens after 'lda #' without the $ symbol",
+      "type": "completion",
+      "input": {
+        "file": "ldahash.asm",
+        "line": 1,
+        "character": 9
+      },
+      "expected": {
+        "minItems": 15
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

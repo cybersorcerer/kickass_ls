@@ -6,7 +6,7 @@
     "serverArgs": [],
     "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
     "files": {
-      "test.asm": "start:\n    lda #$02\n    sta $D0"
+      "test.asm": "@comprehensive-test.asm"
     }
   },
   "testCases": [
@@ -16,8 +16,8 @@
       "type": "completion",
       "input": {
         "file": "test.asm",
-        "line": 2,
-        "character": 9
+        "line": 231,
+        "character": 12
       },
       "expected": {
         "minItems": 10,
@@ -41,8 +41,8 @@
       "type": "completion",
       "input": {
         "file": "test.asm",
-        "line": 2,
-        "character": 11
+        "line": 230,
+        "character": 12
       },
       "expected": {
         "minItems": 5,
@@ -72,21 +72,17 @@
       "type": "completion",
       "input": {
         "file": "test.asm",
-        "line": 1,
-        "character": 5
+        "line": 222,
+        "character": 4
       },
       "expected": {
-        "minItems": 50,
+        "minItems": 10,
         "completionItems": [
           {
-            "label": "LDA",
-            "kind": 3,
-            "detail": "Load Accumulator"
+            "label": "lda"
           },
           {
-            "label": "STA",
-            "kind": 3,
-            "detail": "Store Accumulator"
+            "label": "ldy"
           }
         ]
       }

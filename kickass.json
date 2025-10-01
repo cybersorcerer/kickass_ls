@@ -258,6 +258,43 @@
 				"    .error 'Error!! I is too high!'",
 				"}"
 			]
+		},
+		{
+			"directive": "else",
+			"description": "The else keyword is used with .if directives to specify code that should be executed when the if condition is false. It must follow an .if block.",
+			"signature": "} else {",
+			"examples": [
+				".if (debug_mode) {",
+				"    lda #$ff",
+				"    sta $d020",
+				"} else {",
+				"    lda #$00",
+				"    sta $d020",
+				"}"
+			]
+		},
+		{
+			"directive": ".for",
+			"description": "For-loops in Kick Assembler work similar to for-loops in C/Java. The .for directive allows you to repeat a block of code with a loop variable that changes on each iteration.",
+			"signature": ".for (var variable = start; variable < end; variable++) {...}",
+			"examples": [
+				"// Simple for loop",
+				".for (var i = 0; i < 8; i++) {",
+				"    .byte i",
+				"}",
+				"",
+				"// Nested for loops",
+				".for (var x = 0; x < 4; x++) {",
+				"    .for (var y = 0; y < 3; y++) {",
+				"        .byte x, y",
+				"    }",
+				"}",
+				"",
+				"// For loop with complex expressions",
+				".for (var addr = $1000; addr < $1100; addr += $10) {",
+				"    .byte <addr, >addr",
+				"}"
+			]
 		}
 	],
 	"builtinFunctions": [

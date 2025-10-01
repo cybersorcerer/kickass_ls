@@ -698,7 +698,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "6510lsp_server",
-						"version": "0.9.4", // Version updated
+						"version": "0.9.5", // Version updated
 					},
 				},
 			}
@@ -1777,7 +1777,12 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 		shouldOfferMnemonics := true
 		if len(lineContent) > 0 && cursorPos > 0 {
 			// Look at the line content before cursor to see if there's already a mnemonic
-			beforeCursor := lineContent[:cursorPos]
+			// Ensure cursor position doesn't exceed line length
+			actualCursorPos := cursorPos
+			if actualCursorPos > len(lineContent) {
+				actualCursorPos = len(lineContent)
+			}
+			beforeCursor := lineContent[:actualCursorPos]
 			trimmed := strings.TrimSpace(beforeCursor)
 			if trimmed != "" {
 				parts := strings.Fields(trimmed)
@@ -2235,6 +2240,11 @@ func addSymbolsFromScope(scope *Scope, symbols *[]map[string]interface{}) {
 // GetBuiltins returns the current built-in functions and constants
 func GetBuiltins() ([]BuiltinFunction, []BuiltinConstant) {
 	return builtinFunctions, builtinConstants
+}
+
+// GetBuiltinFunctions returns the global builtin functions for validation
+func GetBuiltinFunctions() []BuiltinFunction {
+	return builtinFunctions
 }
 
 // FindReferences finds all references to a symbol at a specific position

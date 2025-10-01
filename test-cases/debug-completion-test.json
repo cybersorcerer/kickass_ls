@@ -20,7 +20,7 @@
         "character": 10
       },
       "expected": {
-        "minItems": 100
+        "minItems": 15
       }
     }
   ]

@@ -1,0 +1,64 @@
+[
+  {
+    "testCase": {
+      "name": "Parser fails on modern .for syntax",
+      "description": "Parser cannot handle .for (var i = 0; i \u003c 8; i++) syntax and should show errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Parser cannot handle loop variable declarations",
+      "description": "Parser fails on var declarations in .for loops",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Nested .for loops cause multiple parser errors",
+      "description": "Nested loops with var declarations should generate multiple parsing errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Completion fails in malformed .for blocks",
+      "description": "Since .for parsing fails, completion cannot work properly",
+      "type": "completion",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 4,
+        "character": 12
+      },
+      "expected": {
+        "maxItems": 50
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

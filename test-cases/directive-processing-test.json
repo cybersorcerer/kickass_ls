@@ -1,0 +1,68 @@
+{
+  "name": "Directive Processing Regression Test",
+  "description": "Verify existing directive processing remains functional",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
+    "files": {
+      "directives.asm": "@comprehensive-test.asm"
+    }
+  },
+  "testCases": [
+    {
+      "name": "PC directive sets program counter",
+      "description": "Verify * = directive affects program counter tracking",
+      "type": "hover",
+      "input": {
+        "file": "directives.asm",
+        "line": 147,
+        "character": 0
+      },
+      "expected": {
+        "containsText": "1000",
+        "addressInfo": true
+      }
+    },
+    {
+      "name": "Constants defined in symbol table",
+      "description": "Verify .const directive creates accessible constants",
+      "type": "definition",
+      "input": {
+        "file": "directives.asm",
+        "line": 158,
+        "character": 12
+      },
+      "expected": {
+        "definitionFound": true,
+        "targetLine": 14
+      }
+    },
+    {
+      "name": "Variables accessible",
+      "description": "Verify .var directive creates accessible variables",
+      "type": "completion",
+      "input": {
+        "file": "directives.asm",
+        "line": 233,
+        "character": 30
+      },
+      "expected": {
+        "containsItems": [{"label": "total"}, {"label": "base_addr"}],
+        "minItems": 1
+      }
+    },
+    {
+      "name": "Data directives processed",
+      "description": "Verify .byte/.word/.text directives are handled",
+      "type": "diagnostics",
+      "input": {
+        "file": "directives.asm"
+      },
+      "expected": {
+        "maxErrors": 10,
+        "maxWarnings": 15
+      }
+    }
+  ]
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "testCase": {
+      "name": "Parser successfully handles modern .for syntax",
+      "description": "Parser can now handle .for (var i = 0; i \u003c 8; i++) syntax without Unknown opcode errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Loop variable declarations parse correctly",
+      "description": "Parser can now handle var declarations in .for loops without major errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Nested .for loops parse successfully",
+      "description": "Nested loops with var declarations should parse without Unknown opcode errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Completion works in .for blocks",
+      "description": "Since .for parsing now works, completion should provide basic symbols",
+      "type": "completion",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 4,
+        "character": 12
+      },
+      "expected": {
+        "minItems": 10,
+        "maxItems": 50
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

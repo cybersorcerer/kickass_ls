@@ -1,0 +1,66 @@
+[
+  {
+    "testCase": {
+      "name": "Global symbols accessible",
+      "description": "Verify global labels can be referenced",
+      "type": "completion",
+      "input": {
+        "file": "symbols.asm",
+        "line": 7,
+        "character": 8
+      },
+      "expected": {
+        "minItems": 1
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Macro definitions processed",
+      "description": "Verify macros are recognized as symbols",
+      "type": "documentSymbol",
+      "input": {
+        "file": "symbols.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Label definition lookup works",
+      "description": "Verify go-to-definition for labels",
+      "type": "definition",
+      "input": {
+        "file": "symbols.asm",
+        "line": 7,
+        "character": 8
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Macro usage detected",
+      "description": "Verify macro calls are recognized",
+      "type": "completion",
+      "input": {
+        "file": "symbols.asm",
+        "line": 8,
+        "character": 5
+      },
+      "expected": {
+        "minItems": 1
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "testCase": {
+      "name": "Debug semantic analysis output",
+      "description": "Show exactly what diagnostics are generated",
+      "type": "diagnostics",
+      "input": {
+        "file": "debug_semantic.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

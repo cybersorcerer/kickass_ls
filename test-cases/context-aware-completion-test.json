@@ -1,0 +1,102 @@
+{
+  "name": "Context-Aware Completion Regression Test",
+  "description": "Verify completion context detection remains accurate",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/6510lsp_server",
+    "serverArgs": [],
+    "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
+    "files": {
+      "context.asm": "start:\n    l\n    lda \n    lda #\n    lda #$\n    .c\n    sin("
+    }
+  },
+  "testCases": [
+    {
+      "name": "Mnemonic completion at line start",
+      "description": "After typing 'l' at start, should show mnemonics",
+      "type": "completion",
+      "input": {
+        "file": "context.asm",
+        "line": 1,
+        "character": 5
+      },
+      "expected": {
+        "containsItems": [{"label": "lda"}, {"label": "ldy"}],
+        "minItems": 8,
+        "context": "mnemonics"
+      }
+    },
+    {
+      "name": "Address completion after mnemonic",
+      "description": "After 'lda ', should show addresses not mnemonics",
+      "type": "completion",
+      "input": {
+        "file": "context.asm",
+        "line": 2,
+        "character": 8
+      },
+      "expected": {
+        "containsItems": [{"label": "$D020"}],
+        "excludes": ["lda", "inc"],
+        "context": "operand"
+      }
+    },
+    {
+      "name": "Immediate value completion",
+      "description": "After 'lda #', should show immediate values",
+      "type": "completion",
+      "input": {
+        "file": "context.asm",
+        "line": 3,
+        "character": 8
+      },
+      "expected": {
+        "containsItems": [{"label": "$01"}, {"label": "$FF"}],
+        "context": "immediate"
+      }
+    },
+    {
+      "name": "Memory address completion after #$",
+      "description": "After 'lda #$', should show memory addresses only",
+      "type": "completion",
+      "input": {
+        "file": "context.asm",
+        "line": 4,
+        "character": 9
+      },
+      "expected": {
+        "containsItems": [{"label": "$D020"}],
+        "minItems": 15,
+        "maxItems": 30,
+        "context": "memory"
+      }
+    },
+    {
+      "name": "Directive completion",
+      "description": "After '.c', should show directives starting with c",
+      "type": "completion",
+      "input": {
+        "file": "context.asm",
+        "line": 5,
+        "character": 6
+      },
+      "expected": {
+        "containsItems": [{"label": ".const"}],
+        "context": "directive"
+      }
+    },
+    {
+      "name": "Function completion",
+      "description": "After 'sin(', should provide function context",
+      "type": "completion",
+      "input": {
+        "file": "context.asm",
+        "line": 6,
+        "character": 7
+      },
+      "expected": {
+        "containsItems": [{"label": "sin"}],
+        "context": "function"
+      }
+    }
+  ]
+}

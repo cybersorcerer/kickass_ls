@@ -1,0 +1,64 @@
+[
+  {
+    "testCase": {
+      "name": "Valid builtin function calls produce no errors",
+      "description": "Functions with correct parameter count should not generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "builtin_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Invalid parameter count generates warnings",
+      "description": "Functions with wrong parameter count should generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "builtin_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Unknown functions generate errors",
+      "description": "Unknown function calls should generate undefined symbol errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "builtin_validation_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Builtin functions appear in completion",
+      "description": "Builtin functions should be available in completion",
+      "type": "completion",
+      "input": {
+        "file": "builtin_validation_test.asm",
+        "line": 10,
+        "character": 8
+      },
+      "expected": {
+        "minItems": 10
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

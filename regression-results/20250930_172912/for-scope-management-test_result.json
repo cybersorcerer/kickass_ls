@@ -1,0 +1,49 @@
+[
+  {
+    "testCase": {
+      "name": "Loop variable accessible inside loop",
+      "description": "Loop variables should be accessible within the loop scope",
+      "type": "completion",
+      "input": {
+        "file": "scope_test.asm",
+        "line": 4,
+        "character": 11
+      },
+      "expected": {
+        "minItems": 3
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Loop variable not accessible outside loop",
+      "description": "Loop variables should not be accessible outside the loop scope",
+      "type": "diagnostics",
+      "input": {
+        "file": "scope_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Hover shows loop variable scope information",
+      "description": "Hovering over loop variable should show scope information",
+      "type": "hover",
+      "input": {
+        "file": "scope_test.asm",
+        "line": 4,
+        "character": 11
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

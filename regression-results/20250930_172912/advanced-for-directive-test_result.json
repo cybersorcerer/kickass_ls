@@ -1,0 +1,96 @@
+[
+  {
+    "testCase": {
+      "name": "Basic .for directive processing works",
+      "description": "Simple .for loops should be processed without errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Loop variable scope is properly managed",
+      "description": "Loop variables should be scoped correctly and not leak outside loops",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Nested .for loops work correctly",
+      "description": "Nested loops should have proper scope isolation",
+      "type": "diagnostics",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Loop variables appear in completion within scope",
+      "description": "Loop variables should be available for completion inside the loop",
+      "type": "completion",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 4,
+        "character": 12
+      },
+      "expected": {
+        "minItems": 3
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Complex .for expressions are evaluated",
+      "description": "Complex expressions in .for loops should be processed correctly",
+      "type": "completion",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 15,
+        "character": 15
+      },
+      "expected": {
+        "minItems": 5
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Hover shows loop variable information",
+      "description": "Hovering over loop variables should show scope and type information",
+      "type": "hover",
+      "input": {
+        "file": "for_directive_test.asm",
+        "line": 4,
+        "character": 12
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

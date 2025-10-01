@@ -1,0 +1,79 @@
+[
+  {
+    "testCase": {
+      "name": "Parser handles .if/.else syntax correctly",
+      "description": "Parser should successfully parse .if/.else constructs without 'Unknown opcode' errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "conditional_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Parser fails on conditional constructs",
+      "description": "Parser currently cannot handle .if/.else syntax and should show parsing errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "conditional_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Parser does not support nested conditionals",
+      "description": "Parser should show errors for nested .if statements",
+      "type": "diagnostics",
+      "input": {
+        "file": "conditional_test.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Symbol completion works in conditional blocks",
+      "description": "Symbols should be available for completion inside conditional blocks",
+      "type": "completion",
+      "input": {
+        "file": "conditional_test.asm",
+        "line": 5,
+        "character": 8
+      },
+      "expected": {
+        "minItems": 3
+      }
+    },
+    "status": "PASS",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Hover information for conditional symbols",
+      "description": "Hovering over symbols in conditionals should show information",
+      "type": "hover",
+      "input": {
+        "file": "conditional_test.asm",
+        "line": 4,
+        "character": 5
+      },
+      "expected": {}
+    },
+    "status": "PASS",
+    "duration": 0
+  }
+]

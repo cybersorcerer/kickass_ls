@@ -6,7 +6,7 @@
     "serverArgs": [],
     "rootPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/test-cases",
     "files": {
-      "memory.asm": "start:\n    lda #$"
+      "memory.asm": "@comprehensive-test.asm"
     }
   },
   "testCases": [
@@ -16,8 +16,8 @@
       "type": "completion",
       "input": {
         "file": "memory.asm",
-        "line": 1,
-        "character": 10
+        "line": 230,
+        "character": 12
       },
       "expected": {
         "completionItems": [

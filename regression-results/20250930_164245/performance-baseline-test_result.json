@@ -1,0 +1,72 @@
+[
+  {
+    "testCase": {
+      "name": "File parsing performance",
+      "description": "Measure time to parse and analyze file",
+      "type": "performance",
+      "input": {
+        "file": "large_file.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {},
+      "action": "textDocument/didOpen"
+    },
+    "status": "PASS",
+    "message": "Performance test completed in 2.771417ms",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Completion response time",
+      "description": "Measure completion request performance",
+      "type": "performance",
+      "input": {
+        "file": "large_file.asm",
+        "line": 8,
+        "character": 5
+      },
+      "expected": {
+        "minItems": 5
+      },
+      "action": "textDocument/completion"
+    },
+    "status": "PASS",
+    "message": "Performance test completed in 308.417µs",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Hover response time",
+      "description": "Measure hover request performance",
+      "type": "performance",
+      "input": {
+        "file": "large_file.asm",
+        "line": 2,
+        "character": 8
+      },
+      "expected": {},
+      "action": "textDocument/hover"
+    },
+    "status": "PASS",
+    "message": "Performance test completed in 197.584µs",
+    "duration": 0
+  },
+  {
+    "testCase": {
+      "name": "Symbol lookup performance",
+      "description": "Measure symbol resolution performance",
+      "type": "performance",
+      "input": {
+        "file": "large_file.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {},
+      "action": "textDocument/documentSymbol"
+    },
+    "status": "PASS",
+    "message": "Performance test completed in 1.571791ms",
+    "duration": 0
+  }
+]
