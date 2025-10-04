@@ -10,16 +10,56 @@
 .var list = $00, $19, $11
 lda
 lda  
-*= $0801
+lda $DC01
+lda $d020
+*=$0801
 // BASIC SYS 2064
 .byte $0c, $08, $0a, $00, $9e, $20, $32, $30, $36, $34, $00, $00, $00
-
-*= $0810
+*=$1000
 start:
+    // ============================================================================
+    // Issue #1 Fix: Completion after mnemonic with space trigger (v0.9.7)
+    // ============================================================================
+    // Position cursor after these mnemonics and type space - should offer addressing hints
+    lda              // Cursor after 'lda' + space → should offer #, $, (
+    sta              // Cursor after 'sta' + space → should offer $, (
+    ldx              // Cursor after 'ldx' + space → should offer #, $
+    nop              // Cursor after 'nop' + space → should offer nothing (Implied only)
+    lda start
+    sta $a000
+
+    // ============================================================================
+    // Issue #2 Fix: Indexed Indirect addressing mode parsing (v0.9.7)
+    // ============================================================================
+    // All these should parse without errors
+    lda ($80, x)     // ✅ Indexed Indirect - standard spacing
+    sta ($90, x)     // ✅ Indexed Indirect
+    cmp ($a0, x)     // ✅ Indexed Indirect
+    adc ($b0, x)     // ✅ Indexed Indirect
+    sbc ($c0, x)     // ✅ Indexed Indirect
+
+    // Edge cases with different spacing
+    lda ($80,x)      // ✅ No spaces
+    lda ($80 ,x)     // ✅ Space before comma
+    lda ($80, x )    // ✅ Space after comma
+    lda ($00, x)     // ✅ Zero page $00
+    lda ($ff, x)     // ✅ Zero page $FF
+
+    // Indirect Indexed - should still work (no regression)
+    lda ($80), y     // ✅ Indirect Indexed
+    sta ($90), y     // ✅ Indirect Indexed
+    adc ($a0), y     // ✅ Indirect Indexed
+
+    // Regular Indirect - should still work (no regression)
+    jmp ($fffe)      // ✅ Indirect jump
+
+    // ============================================================================
+    // Original tests continue below
+    // ============================================================================
+
     // Zero page optimization hints
     lda $80          // Should suggest zp addressing
     sta $81          // Should suggest zp addressing
-    lda
 
     // Range validation tests
     .const valid_byte = $FF

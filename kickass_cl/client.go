@@ -338,6 +338,13 @@ func (c *LSPClient) Initialize(rootPath string) (*InitializeResult, error) {
 
 // Document Methods
 
+func (c *LSPClient) IsDocumentOpen(uri string) bool {
+	c.docMutex.RLock()
+	defer c.docMutex.RUnlock()
+	_, exists := c.documents[uri]
+	return exists
+}
+
 func (c *LSPClient) OpenDocument(uri, languageID, content string) error {
 	c.docMutex.Lock()
 	doc := &DocumentState{
