@@ -759,6 +759,31 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 			// This is a simplified estimation since we don't have StringLiteral type
 			a.context.CurrentPC += 8 // Default text size estimate
 		}
+	case ".fill":
+		// Fill directive: .fill count, value
+		// Syntax: .fill <count>, <value>
+		// Updates PC by count bytes
+		if node.Value != nil {
+			// node.Value should be an expression or array with count and value
+			// For now, try to evaluate it as count
+			if arrayExpr, ok := node.Value.(*ArrayExpression); ok && len(arrayExpr.Elements) > 0 {
+				// First element is the count
+				count := a.evaluateExpression(arrayExpr.Elements[0])
+				if count > 0 {
+					log.Debug("processDirective .fill: count=%d, updating PC from %d to %d",
+						count, a.context.CurrentPC, a.context.CurrentPC+count)
+					a.context.CurrentPC += count
+				}
+			} else {
+				// Try to evaluate as single expression (count only)
+				count := a.evaluateExpression(node.Value)
+				if count > 0 {
+					log.Debug("processDirective .fill: count=%d, updating PC from %d to %d",
+						count, a.context.CurrentPC, a.context.CurrentPC+count)
+					a.context.CurrentPC += count
+				}
+			}
+		}
 	case ".if":
 		// Conditional compilation directive
 		a.processIfDirective(node)

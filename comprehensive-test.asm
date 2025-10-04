@@ -5,7 +5,11 @@
 .const zero_page_addr = $80
 .const release_build = 0
 .const debug_mode = 1
-
+.var valid_var = $FF
+.var invalid_var = $UU
+.var list = $00, $19, $11
+lda
+lda  
 *= $0801
 // BASIC SYS 2064
 .byte $0c, $08, $0a, $00, $9e, $20, $32, $30, $36, $34, $00, $00, $00
@@ -15,6 +19,7 @@ start:
     // Zero page optimization hints
     lda $80          // Should suggest zp addressing
     sta $81          // Should suggest zp addressing
+    lda
 
     // Range validation tests
     .const valid_byte = $FF

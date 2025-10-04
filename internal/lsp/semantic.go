@@ -69,9 +69,12 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 	case TOKEN_MNEMONIC_STD, TOKEN_MNEMONIC_CTRL, TOKEN_MNEMONIC_ILL, TOKEN_MNEMONIC_65C02:
 		return SemanticTokenKeyword, 0 // Opcodes as keywords
 		
-	case TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_PRE, TOKEN_DIRECTIVE_KICK_FLOW, 
+	case TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_PRE, TOKEN_DIRECTIVE_KICK_FLOW,
 		 TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
 		return SemanticTokenKeyword, SemanticTokenModifierDeclaration // Directives
+
+	case TOKEN_ELSE:
+		return SemanticTokenKeyword, 0 // else keyword for .if directives
 		
 	case TOKEN_NUMBER_HEX, TOKEN_NUMBER_BIN, TOKEN_NUMBER_DEC, TOKEN_NUMBER_OCT:
 		return SemanticTokenNumber, 0 // Numbers

@@ -10,10 +10,37 @@ import (
 
 // ParseDocument is the entry point for parsing a document.
 func ParseDocument(uri string, text string) (*Scope, []Diagnostic) {
-	l := NewLexer(text)
-	p := NewParser(l)
-	program := p.ParseProgram()
-	parserDiagnostics := p.Errors()
+	var program *Program
+	var parserDiagnostics []Diagnostic
+
+	// Check if context-aware parser is enabled
+	if IsContextAwareLexerEnabled() && IsContextAwareParserEnabled() {
+		// Use Context-Aware Lexer and Parser
+		log.Debug("ParseDocument: Using Context-Aware Lexer and Parser")
+
+		processorCtx := GetProcessorContext()
+		if processorCtx == nil {
+			log.Warn("ParseDocument: ProcessorContext is nil, falling back to old parser")
+			// Fall back to old parser
+			l := NewLexer(text)
+			p := NewParser(l)
+			program = p.ParseProgram()
+			parserDiagnostics = p.Errors()
+		} else {
+			// Create context-aware lexer and parser
+			lexer := NewContextAwareLexer(text, processorCtx)
+			parser := NewContextAwareParser(lexer, processorCtx)
+			program = parser.ParseProgram()
+			parserDiagnostics = parser.Errors()
+		}
+	} else {
+		// Use old lexer and parser (default)
+		log.Debug("ParseDocument: Using legacy Lexer and Parser")
+		l := NewLexer(text)
+		p := NewParser(l)
+		program = p.ParseProgram()
+		parserDiagnostics = p.Errors()
+	}
 
 	// Pass 1: Build the symbol table from the AST
 	scope, definitionDiagnostics := buildScopeFromAST(program, uri)
@@ -434,6 +461,15 @@ type CallExpression struct {
 
 func (ce *CallExpression) expressionNode()      {}
 func (ce *CallExpression) TokenLiteral() string { return ce.Token.Literal }
+
+// ArrayExpression represents an array of expressions (for comma-separated values)
+type ArrayExpression struct {
+	Token    Token // The first token
+	Elements []Expression
+}
+
+func (ae *ArrayExpression) expressionNode()      {}
+func (ae *ArrayExpression) TokenLiteral() string { return ae.Token.Literal }
 
 // --- Parser --- //
 

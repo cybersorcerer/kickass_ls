@@ -1,1 +1,0 @@
-start:\n    inc $d020\n    rts

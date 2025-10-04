@@ -50,12 +50,12 @@ func InitLogger() error {
 	}
 
 	// Create log directory in user's home
-	logDir := filepath.Join(homeDir, ".local", "share", "6510lsp", "log")
+	logDir := filepath.Join(homeDir, ".local", "share", "kickass_ls", "log")
 	if err := os.MkdirAll(logDir, 0755); err != nil {
 		return fmt.Errorf("failed to create log directory %s: %v", logDir, err)
 	}
 
-	logFilePath := filepath.Join(logDir, "6510lsp.log")
+	logFilePath := filepath.Join(logDir, "kickass_ls.log")
 
 	// Truncate existing log file on startup for clean logs
 	file, err := os.OpenFile(logFilePath, os.O_TRUNC|os.O_CREATE|os.O_WRONLY, 0644)

@@ -295,6 +295,18 @@
 				"    .byte <addr, >addr",
 				"}"
 			]
+		},
+		{
+			"directive": ".while",
+			"description": "The .while directive executes as long as a given expressions is true. That is, it works like a .for-loop but without the init and iteration parameters.",
+			"signature": ".while (expression) {...}",
+			"examples": [
+				".var i=0",
+				".while(i<10) {",
+    			"    .print i;",
+    			"    .eval i++;",
+				"}"
+			]
 		}
 	],
 	"builtinFunctions": [

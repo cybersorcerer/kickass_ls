@@ -1,5 +1,5 @@
 {
-  "6510lsp": {
+  "kickass_ls": {
     "warnUnusedLabels": false,
 
     "zeroPageOptimization": {

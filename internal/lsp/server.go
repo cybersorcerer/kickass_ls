@@ -163,6 +163,21 @@ type LSPConfiguration struct {
 		UpperCaseConstants bool `json:"upperCaseConstants"`
 		DescriptiveLabels  bool `json:"descriptiveLabels"`
 	} `json:"styleGuideEnforcement"`
+
+	// Parser Feature Flags for Context-Aware Redesign
+	ParserFeatureFlags struct {
+		UseContextAware     bool `json:"useContextAware"`     // Enable new context-aware parser
+		FallbackToOld       bool `json:"fallbackToOld"`       // Fallback to old parser on errors
+		DebugMode           bool `json:"debugMode"`           // Enable parser debug logging
+		EnableExperimental  bool `json:"enableExperimental"`  // Enable experimental features
+
+		// Feature-specific flags
+		ContextAwareLexer   bool `json:"contextAwareLexer"`   // Use new lexer with state management
+		EnhancedAST         bool `json:"enhancedAST"`         // Use enhanced AST nodes
+		SmartCompletion     bool `json:"smartCompletion"`     // Context-aware completion
+		SemanticValidation  bool `json:"semanticValidation"`  // Enhanced semantic validation
+		PerformanceMode     bool `json:"performanceMode"`     // Optimize for performance
+	} `json:"parserFeatureFlags"`
 }
 
 // lspConfig holds the current LSP configuration
@@ -235,6 +250,29 @@ var lspConfig = &LSPConfiguration{
 		ShowHints:          true,
 		UpperCaseConstants: true,
 		DescriptiveLabels:  true,
+	},
+
+	// Parser Feature Flags - Start with old parser for safety
+	ParserFeatureFlags: struct {
+		UseContextAware     bool `json:"useContextAware"`
+		FallbackToOld       bool `json:"fallbackToOld"`
+		DebugMode           bool `json:"debugMode"`
+		EnableExperimental  bool `json:"enableExperimental"`
+		ContextAwareLexer   bool `json:"contextAwareLexer"`
+		EnhancedAST         bool `json:"enhancedAST"`
+		SmartCompletion     bool `json:"smartCompletion"`
+		SemanticValidation  bool `json:"semanticValidation"`
+		PerformanceMode     bool `json:"performanceMode"`
+	}{
+		UseContextAware:     false, // Start with old parser
+		FallbackToOld:       true,  // Always enable fallback initially
+		DebugMode:           false, // Disable debug by default
+		EnableExperimental:  false, // Disable experimental features
+		ContextAwareLexer:   false, // Use old lexer initially
+		EnhancedAST:         false, // Use old AST initially
+		SmartCompletion:     false, // Use old completion initially
+		SemanticValidation:  false, // Use old validation initially
+		PerformanceMode:     true,  // Optimize for performance
 	},
 }
 
@@ -330,7 +368,95 @@ func UpdateLSPConfig(settings map[string]interface{}) {
 		lspConfig.StyleGuideEnforcement.DescriptiveLabels = getBool(sge, "descriptiveLabels", lspConfig.StyleGuideEnforcement.DescriptiveLabels)
 	}
 
+	// Update parser feature flags
+	if pff := getObject(settings, "parserFeatureFlags"); len(pff) > 0 {
+		// Main feature flags
+		oldUseContextAware := lspConfig.ParserFeatureFlags.UseContextAware
+		lspConfig.ParserFeatureFlags.UseContextAware = getBool(pff, "useContextAware", lspConfig.ParserFeatureFlags.UseContextAware)
+		lspConfig.ParserFeatureFlags.FallbackToOld = getBool(pff, "fallbackToOld", lspConfig.ParserFeatureFlags.FallbackToOld)
+		lspConfig.ParserFeatureFlags.DebugMode = getBool(pff, "debugMode", lspConfig.ParserFeatureFlags.DebugMode)
+		lspConfig.ParserFeatureFlags.EnableExperimental = getBool(pff, "enableExperimental", lspConfig.ParserFeatureFlags.EnableExperimental)
+
+		// Feature-specific flags
+		lspConfig.ParserFeatureFlags.ContextAwareLexer = getBool(pff, "contextAwareLexer", lspConfig.ParserFeatureFlags.ContextAwareLexer)
+		lspConfig.ParserFeatureFlags.EnhancedAST = getBool(pff, "enhancedAST", lspConfig.ParserFeatureFlags.EnhancedAST)
+		lspConfig.ParserFeatureFlags.SmartCompletion = getBool(pff, "smartCompletion", lspConfig.ParserFeatureFlags.SmartCompletion)
+		lspConfig.ParserFeatureFlags.SemanticValidation = getBool(pff, "semanticValidation", lspConfig.ParserFeatureFlags.SemanticValidation)
+		lspConfig.ParserFeatureFlags.PerformanceMode = getBool(pff, "performanceMode", lspConfig.ParserFeatureFlags.PerformanceMode)
+
+		// Log significant parser mode changes
+		if oldUseContextAware != lspConfig.ParserFeatureFlags.UseContextAware {
+			if lspConfig.ParserFeatureFlags.UseContextAware {
+				log.Info("Switched to context-aware parser (experimental)")
+			} else {
+				log.Info("Switched to legacy parser")
+			}
+		}
+
+		if lspConfig.ParserFeatureFlags.DebugMode {
+			log.Debug("Parser debug mode enabled")
+		}
+	}
+
 	log.Debug("LSP Configuration updated")
+}
+
+// Feature flag helper functions for context-aware parser
+func IsContextAwareParserEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.UseContextAware
+}
+
+func ShouldFallbackToOldParser() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.FallbackToOld
+}
+
+func IsParserDebugModeEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.DebugMode
+}
+
+func IsContextAwareLexerEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.ContextAwareLexer
+}
+
+func IsEnhancedASTEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.EnhancedAST
+}
+
+func IsSmartCompletionEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.SmartCompletion
+}
+
+func IsSemanticValidationEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.SemanticValidation
+}
+
+func IsPerformanceModeEnabled() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.PerformanceMode
+}
+
+// Combined function to check if we should use the new parser infrastructure
+func ShouldUseNewParser() bool {
+	configMutex.RLock()
+	defer configMutex.RUnlock()
+	return lspConfig.ParserFeatureFlags.UseContextAware ||
+		   lspConfig.ParserFeatureFlags.ContextAwareLexer ||
+		   lspConfig.ParserFeatureFlags.EnhancedAST
 }
 
 // documentStore holds the content of opened text documents.
@@ -539,7 +665,7 @@ func Start() {
 		os.Exit(1)
 	}
 
-	configDir := filepath.Join(homeDir, ".config", "6510lsp")
+	configDir := filepath.Join(homeDir, ".config", "kickass_ls")
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
 		log.Error("Configuration directory %s does not exist. Please create it and install the required JSON files.", configDir)
 		os.Exit(1)
@@ -606,6 +732,19 @@ func Start() {
 
 	// Initialize lexer token definitions AFTER all JSON files are loaded
 	InitTokenDefs()
+
+	// Initialize ProcessorContext (used by completion and context-aware parser)
+	mnemonicPath := filepath.Join(configDir, "mnemonic.json")
+	kickassPath := filepath.Join(configDir, "kickass.json")
+	c64MemoryPath := filepath.Join(configDir, "c64memory.json")
+
+	err = InitializeProcessorContext(configDir)
+	if err != nil {
+		log.Error("Failed to initialize ProcessorContext: %v", err)
+		log.Error("Context-aware features (completion, parsing) will fall back to legacy mode")
+	} else {
+		log.Info("Successfully initialized ProcessorContext from %s, %s, %s", mnemonicPath, kickassPath, c64MemoryPath)
+	}
 
 	reader := bufio.NewReader(os.Stdin)
 	writer := bufio.NewWriter(os.Stdout)
@@ -697,7 +836,7 @@ func Start() {
 						},
 					},
 					"serverInfo": map[string]interface{}{
-						"name":    "6510lsp_server",
+						"name":    "kickass_ls",
 						"version": "0.9.5", // Version updated
 					},
 				},
@@ -723,9 +862,23 @@ func Start() {
 			if params, ok := message["params"].(map[string]interface{}); ok {
 				if settings, ok := params["settings"].(map[string]interface{}); ok {
 					// Look for our specific LSP settings
-					if lspSettings, ok := settings["6510lsp"].(map[string]interface{}); ok {
+					if lspSettings, ok := settings["kickass_ls"].(map[string]interface{}); ok {
 						log.Debug("Updating LSP configuration")
 						UpdateLSPConfig(lspSettings)
+
+						// Initialize ProcessorContext if context-aware lexer is now enabled and not yet loaded
+						if IsContextAwareLexerEnabled() && GetProcessorContext() == nil {
+							homeDir, err := os.UserHomeDir()
+							if err == nil {
+								configDir := filepath.Join(homeDir, ".config", "kickass_ls")
+								err = InitializeProcessorContext(configDir)
+								if err != nil {
+									log.Error("Failed to initialize ProcessorContext: %v", err)
+								} else {
+									log.Info("Successfully initialized ProcessorContext after config update")
+								}
+							}
+						}
 
 						// Invalidate all parse caches to trigger re-analysis with new settings
 						parseCache.Lock()
@@ -744,7 +897,7 @@ func Start() {
 
 						log.Info("Configuration updated and documents re-analyzed")
 					} else {
-						log.Debug("No 6510lsp settings found in configuration update")
+						log.Debug("No kickass_ls settings found in configuration update")
 					}
 				}
 			}
@@ -952,7 +1105,7 @@ func Start() {
 											lineContent := lines[int(lineNum)]
 											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
 											log.Debug("Completion context: isOperand=%v, wordToComplete='%s'", isOperand, wordToComplete)
-											completionItems = generateCompletions(symbolTree, int(lineNum), isOperand, wordToComplete, lineContent, int(charNum))
+											completionItems = generateCompletions(symbolTree, int(lineNum), isOperand, wordToComplete, lineContent, int(charNum), text)
 										}
 									}
 								}
@@ -1225,12 +1378,12 @@ func GetCompletionContext(line string, char int) (isOperand bool, word string) {
 
 // GenerateCompletions is the exported version of generateCompletions for test mode
 func GenerateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
-	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, "", 0)
+	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, "", 0, "")
 }
 
 // GenerateCompletionsWithContext is the extended version for test mode with line context
 func GenerateCompletionsWithContext(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int) []map[string]interface{} {
-	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, lineContent, cursorPos)
+	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, lineContent, cursorPos, "")
 }
 
 func getOpcodeDescription(mnemonic string) string {
@@ -1289,6 +1442,40 @@ func getOpcodeDescription(mnemonic string) string {
 }
 
 func getDirectiveDescription(directive string) string {
+	// Try ProcessorContext first (Context-Aware Parser)
+	if ctx := GetProcessorContext(); ctx != nil {
+		if info := ctx.GetDirectiveInfo(directive); info != nil {
+			var builder strings.Builder
+
+			// Header with directive name and signature
+			builder.WriteString(fmt.Sprintf("**%s**\n\n", strings.ToUpper(info.Name)))
+
+			// Signature in code block
+			if info.Signature != "" {
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(info.Signature)
+				builder.WriteString("\n```\n\n")
+			}
+
+			// Description
+			if info.Description != "" {
+				builder.WriteString(info.Description)
+				builder.WriteString("\n\n")
+			}
+
+			// Examples
+			if len(info.Examples) > 0 {
+				builder.WriteString("**Examples:**\n\n")
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(strings.Join(info.Examples, "\n"))
+				builder.WriteString("\n```")
+			}
+
+			return builder.String()
+		}
+	}
+
+	// Fallback to old kickassDirectives array (legacy parser)
 	for _, d := range kickassDirectives {
 		if d.Directive == directive {
 			var builder strings.Builder
@@ -1325,6 +1512,44 @@ func getDirectiveDescription(directive string) string {
 
 // getBuiltinFunctionDescription returns markdown description for built-in functions
 func getBuiltinFunctionDescription(function string) string {
+	// Try ProcessorContext first (Context-Aware Parser)
+	if ctx := GetProcessorContext(); ctx != nil {
+		if info := ctx.GetFunctionInfo(function); info != nil {
+			var builder strings.Builder
+
+			// Header with function name and category
+			category := info.Category
+			if category == "" {
+				category = "builtin"
+			}
+			builder.WriteString(fmt.Sprintf("**%s** (%s function)\n\n", info.Name, category))
+
+			// Signature in code block
+			if info.Signature != "" {
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(info.Signature)
+				builder.WriteString("\n```\n\n")
+			}
+
+			// Description
+			if info.Description != "" {
+				builder.WriteString(info.Description)
+				builder.WriteString("\n\n")
+			}
+
+			// Examples
+			if len(info.Examples) > 0 {
+				builder.WriteString("**Examples:**\n\n")
+				builder.WriteString("```kickassembler\n")
+				builder.WriteString(strings.Join(info.Examples, "\n"))
+				builder.WriteString("\n```")
+			}
+
+			return builder.String()
+		}
+	}
+
+	// Fallback to old builtinFunctions array (legacy parser)
 	for _, f := range builtinFunctions {
 		if strings.EqualFold(f.Name, function) {
 			var builder strings.Builder
@@ -1361,6 +1586,34 @@ func getBuiltinFunctionDescription(function string) string {
 
 // getBuiltinConstantDescription returns markdown description for built-in constants
 func getBuiltinConstantDescription(constant string) string {
+	// Try ProcessorContext first (Context-Aware Parser)
+	if ctx := GetProcessorContext(); ctx != nil {
+		if info := ctx.GetConstantInfo(constant); info != nil {
+			var builder strings.Builder
+
+			// Header with constant name and category
+			category := info.Category
+			if category == "" {
+				category = "builtin"
+			}
+			builder.WriteString(fmt.Sprintf("**%s** (%s constant)\n\n", info.Name, category))
+
+			// Value in code block
+			if info.Value != "" {
+				builder.WriteString(fmt.Sprintf("**Value:** `%s`\n\n", info.Value))
+			}
+
+			// Description
+			if info.Description != "" {
+				builder.WriteString(info.Description)
+				builder.WriteString("\n")
+			}
+
+			return builder.String()
+		}
+	}
+
+	// Fallback to old builtinConstants array (legacy parser)
 	for _, c := range builtinConstants {
 		if strings.EqualFold(c.Name, constant) {
 			var builder strings.Builder
@@ -1562,8 +1815,218 @@ func getMemoryAddressAtPosition(line string, char int) string {
 	return ""
 }
 
-func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int) []map[string]interface{} {
+// getUsedOperandsForMnemonic scans the document and collects operands that were already used with a specific mnemonic/directive
+func getUsedOperandsForMnemonic(text string, mnemonicOrDirective string) []string {
+	lines := strings.Split(text, "\n")
+	usedOperands := make(map[string]bool) // Use map to avoid duplicates
+	result := []string{}
+
+	targetUpper := strings.ToUpper(mnemonicOrDirective)
+
+	for _, line := range lines {
+		// Remove comments
+		if idx := strings.Index(line, ";"); idx != -1 {
+			line = line[:idx]
+		}
+		if idx := strings.Index(line, "//"); idx != -1 {
+			line = line[:idx]
+		}
+
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+
+		// Split into fields
+		fields := strings.Fields(trimmed)
+		if len(fields) < 2 {
+			continue
+		}
+
+		// Skip label if present
+		firstWord := fields[0]
+		if strings.HasSuffix(firstWord, ":") {
+			if len(fields) < 3 {
+				continue
+			}
+			// Check if second word matches our mnemonic/directive
+			if strings.ToUpper(fields[1]) == targetUpper || fields[1] == mnemonicOrDirective {
+				// Operand is everything after the mnemonic/directive
+				operand := strings.Join(fields[2:], " ")
+				if operand != "" && !usedOperands[operand] {
+					usedOperands[operand] = true
+					result = append(result, operand)
+				}
+			}
+		} else {
+			// No label - check if first word matches
+			if strings.ToUpper(firstWord) == targetUpper || firstWord == mnemonicOrDirective {
+				// Operand is everything after the mnemonic/directive
+				operand := strings.Join(fields[1:], " ")
+
+				// Special handling for .var and .const: extract only the value after "="
+				if mnemonicOrDirective == ".var" || mnemonicOrDirective == ".const" {
+					// Format: .var name = value
+					// or: .const name = value
+					// We want only "value"
+					if eqIdx := strings.Index(operand, "="); eqIdx != -1 {
+						// Extract everything after "="
+						operand = strings.TrimSpace(operand[eqIdx+1:])
+					} else {
+						// No "=" found, skip this line
+						continue
+					}
+				}
+
+				if operand != "" && !usedOperands[operand] {
+					usedOperands[operand] = true
+					result = append(result, operand)
+				}
+			}
+		}
+	}
+
+	return result
+}
+
+// getPrecedingMnemonicOrDirective extracts the mnemonic or directive that precedes the cursor
+// Returns (name, isMnemonic, isDirective)
+func getPrecedingMnemonicOrDirective(lineContent string, cursorPos int) (string, bool, bool) {
+	if cursorPos > len(lineContent) {
+		cursorPos = len(lineContent)
+	}
+
+	// Get text before cursor
+	before := lineContent[:cursorPos]
+
+	// Remove comments
+	if idx := strings.Index(before, ";"); idx != -1 {
+		before = before[:idx]
+	}
+	if idx := strings.Index(before, "//"); idx != -1 {
+		before = before[:idx]
+	}
+
+	// Split into words
+	fields := strings.Fields(before)
+	if len(fields) == 0 {
+		return "", false, false
+	}
+
+	// Find the first word (after optional label)
+	firstWord := fields[0]
+	if strings.HasSuffix(firstWord, ":") {
+		// Has label, take second word
+		if len(fields) < 2 {
+			return "", false, false
+		}
+		firstWord = fields[1]
+	}
+
+	// Check if it's a directive
+	if strings.HasPrefix(firstWord, ".") {
+		return firstWord, false, true
+	}
+
+	// Check if it's a mnemonic
+	if isMnemonic(firstWord) {
+		return strings.ToUpper(firstWord), true, false
+	}
+
+	return "", false, false
+}
+
+func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int, documentText string) []map[string]interface{} {
 	items := []map[string]interface{}{}
+
+	// Determine context: are we after a mnemonic or directive?
+	precedingName, isMnem, isDir := getPrecedingMnemonicOrDirective(lineContent, cursorPos)
+	log.Debug("Preceding context: name='%s', isMnemonic=%v, isDirective=%v", precedingName, isMnem, isDir)
+
+	// Check if we're after a directive that expects a NAME (declaration), not a value
+	// For these directives, we should NOT offer completions until after the "="
+	declarationDirectives := map[string]bool{
+		".var":           true,
+		".const":         true,
+		".label":         true,
+		".macro":         true,
+		".function":      true,
+		".namespace":     true,
+		".pseudocommand": true,
+		".enum":          true,
+	}
+
+	// If after a declaration directive and no "=" yet, don't offer completions
+	if isOperand && isDir && declarationDirectives[precedingName] {
+		// Check if there's already a "=" in the line - if so, we're past the name part
+		if !strings.Contains(lineContent[:cursorPos], "=") {
+			// We're at the name part - don't offer completions (user should type new name)
+			log.Debug("After declaration directive '%s' before '=' - no completions offered", precedingName)
+			return items // Return empty list
+		}
+	}
+
+	// If we're completing an operand, offer context-specific hints
+	if isOperand && precedingName != "" {
+		// Offer addressing mode hints for mnemonics
+		if isMnem && wordToComplete == "" {
+			// User just typed "lda " with cursor after space - offer addressing mode hints
+			if ctx := GetProcessorContext(); ctx != nil {
+				mnemonicInfo := ctx.GetMnemonicInfo(precedingName)
+				if mnemonicInfo != nil && len(mnemonicInfo.AddressingModes) > 0 {
+					// Build unique set of addressing mode prefixes
+					addedModes := make(map[string]bool)
+
+					for _, mode := range mnemonicInfo.AddressingModes {
+						var prefix, doc string
+						switch mode.Mode {
+						case "Immediate":
+							prefix = "#"
+							doc = fmt.Sprintf("Immediate addressing - %s", mode.AssemblerFormat)
+						case "Absolute", "Absolute,X", "Absolute,Y", "Zeropage", "Zeropage,X", "Zeropage,Y":
+							if !addedModes["$"] {
+								prefix = "$"
+								doc = "Memory address (absolute or zero page)"
+							}
+						case "Indexed-indirect", "Indirect-indexed", "Indirect":
+							if !addedModes["("] {
+								prefix = "("
+								doc = "Indirect addressing"
+							}
+						}
+
+						if prefix != "" && !addedModes[prefix] {
+							items = append(items, map[string]interface{}{
+								"label":         prefix,
+								"kind":          float64(14), // Keyword
+								"detail":        "Addressing Mode",
+								"documentation": doc,
+								"sortText":      "0_" + prefix, // Sort first
+							})
+							addedModes[prefix] = true
+						}
+					}
+				}
+			}
+		}
+
+		// Offer previously used operands for this mnemonic/directive (both mnemonics and directives)
+		if documentText != "" {
+			usedOperands := getUsedOperandsForMnemonic(documentText, precedingName)
+			for _, operand := range usedOperands {
+				// Only add if it matches what user is typing
+				if wordToComplete == "" || strings.HasPrefix(strings.ToLower(operand), strings.ToLower(wordToComplete)) {
+					items = append(items, map[string]interface{}{
+						"label":         operand,
+						"kind":          float64(12), // Value
+						"detail":        "Recently used",
+						"documentation": fmt.Sprintf("Previously used with %s", precedingName),
+						"sortText":      "1_" + operand, // Sort after addressing mode hints
+					})
+				}
+			}
+		}
+	}
 
 	// Special case: check for memory address completion even if isOperand=false
 	// This handles cases where cursor is on or near $ symbol
@@ -1653,7 +2116,8 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 		}
 
 		wordToComplete = strings.TrimPrefix(wordToComplete, "#")
-		if strings.Contains(wordToComplete, ".") {
+		// Check for namespace access (e.g. "foo.bar"), but NOT directives starting with "."
+		if strings.Contains(wordToComplete, ".") && !strings.HasPrefix(wordToComplete, ".") {
 			parts := strings.Split(wordToComplete, ".")
 			namespaceName := parts[0]
 			partialSymbol := ""
@@ -1677,51 +2141,57 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 				}
 			}
 		} else {
+			// Only offer built-in functions and constants if we're NOT after a mnemonic
+			// (Mnemonics expect addresses, symbols, or immediate values - not function calls)
+			offerBuiltins := !isMnem
+
 			// Check if we should use relaxed matching for built-ins
 			useRelaxedMatching := len(wordToComplete) <= 2 ||
 				(len(wordToComplete) <= 3 && strings.TrimSpace(wordToComplete) != "" &&
 					strings.ContainsAny(wordToComplete, "0123456789"))
 
-			// Add built-in functions
-			for _, fn := range builtinFunctions {
-				shouldInclude := useRelaxedMatching ||
-					strings.HasPrefix(strings.ToLower(fn.Name), strings.ToLower(wordToComplete))
-				if shouldInclude {
-					item := map[string]interface{}{
-						"label":            fn.Name,
-						"kind":             float64(3), // Function
-						"detail":           fn.Signature,
-						"documentation":    fmt.Sprintf("**%s**\n\n%s", fn.Category, fn.Description),
-						"insertText":       fn.Name + "(${1})",
-						"insertTextFormat": 2, // Snippet
+			// Add built-in functions (only if appropriate for context)
+			if offerBuiltins {
+				for _, fn := range builtinFunctions {
+					shouldInclude := useRelaxedMatching ||
+						strings.HasPrefix(strings.ToLower(fn.Name), strings.ToLower(wordToComplete))
+					if shouldInclude {
+						item := map[string]interface{}{
+							"label":            fn.Name,
+							"kind":             float64(3), // Function
+							"detail":           fn.Signature,
+							"documentation":    fmt.Sprintf("**%s**\n\n%s", fn.Category, fn.Description),
+							"insertText":       fn.Name + "(${1})",
+							"insertTextFormat": 2, // Snippet
+						}
+						if len(fn.Examples) > 0 {
+							item["documentation"] = fmt.Sprintf("**%s**\n\n%s\n\n**Example:** `%s`",
+								fn.Category, fn.Description, fn.Examples[0])
+						}
+						items = append(items, item)
 					}
-					if len(fn.Examples) > 0 {
-						item["documentation"] = fmt.Sprintf("**%s**\n\n%s\n\n**Example:** `%s`",
-							fn.Category, fn.Description, fn.Examples[0])
-					}
-					items = append(items, item)
 				}
-			}
 
-			// Add built-in constants
-			for _, const_ := range builtinConstants {
-				shouldInclude := useRelaxedMatching ||
-					strings.HasPrefix(strings.ToLower(const_.Name), strings.ToLower(wordToComplete))
-				if shouldInclude {
-					item := map[string]interface{}{
-						"label":         const_.Name,
-						"kind":          float64(21), // Constant
-						"detail":        fmt.Sprintf("%s constant", const_.Category),
-						"documentation": const_.Description,
+				// Add built-in constants
+				for _, const_ := range builtinConstants {
+					shouldInclude := useRelaxedMatching ||
+						strings.HasPrefix(strings.ToLower(const_.Name), strings.ToLower(wordToComplete))
+					if shouldInclude {
+						item := map[string]interface{}{
+							"label":         const_.Name,
+							"kind":          float64(21), // Constant
+							"detail":        fmt.Sprintf("%s constant", const_.Category),
+							"documentation": const_.Description,
+						}
+						if const_.Value != "" {
+							item["detail"] = fmt.Sprintf("%s = %s", const_.Name, const_.Value)
+						}
+						if len(const_.Examples) > 0 {
+							item["documentation"] = fmt.Sprintf("%s\n\n**Example:** `%s`",
+								const_.Description, const_.Examples[0])
+						}
+						items = append(items, item)
 					}
-					if const_.Value != "" {
-						item["detail"] = fmt.Sprintf("%s = %s", const_.Name, const_.Value)
-					}
-					if len(const_.Examples) > 0 {
-						item["documentation"] = fmt.Sprintf("%s\n\n**Example:** `%s`",
-							const_.Description, const_.Examples[0])
-					}
-					items = append(items, item)
 				}
 			}
 
@@ -1742,14 +2212,40 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 		}
 	} else {
 		// Offer directives
-		for _, d := range kickassDirectives {
-			if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
-				items = append(items, map[string]interface{}{
-					"label":         applyCase(wordToComplete, d.Directive),
-					"kind":          float64(14), // Keyword
-					"detail":        "Kick Assembler Directive",
-					"documentation": d.Description,
-				})
+		// Strip leading dot from wordToComplete for matching (user types "." or ".by" etc.)
+		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
+
+		// Try ProcessorContext first (Context-Aware Parser)
+		if ctx := GetProcessorContext(); ctx != nil {
+			for _, directiveName := range ctx.DirectiveNames {
+				// Remove the dot prefix for matching (directives stored as ".byte" etc.)
+				displayName := strings.TrimPrefix(directiveName, ".")
+				if strings.HasPrefix(strings.ToLower(displayName), strings.ToLower(wordWithoutDot)) {
+					directiveInfo := ctx.GetDirectiveInfo(directiveName)
+					documentation := ""
+					if directiveInfo != nil {
+						documentation = directiveInfo.Description
+					}
+					// Always include the dot in the label
+					items = append(items, map[string]interface{}{
+						"label":         "." + displayName,
+						"kind":          float64(14), // Keyword
+						"detail":        "Kick Assembler Directive",
+						"documentation": documentation,
+					})
+				}
+			}
+		} else {
+			// Fallback to old kickassDirectives array (legacy parser)
+			for _, d := range kickassDirectives {
+				if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+					items = append(items, map[string]interface{}{
+						"label":         applyCase(wordToComplete, d.Directive),
+						"kind":          float64(14), // Keyword
+						"detail":        "Kick Assembler Directive",
+						"documentation": d.Description,
+					})
+				}
 			}
 		}
 
@@ -1799,14 +2295,38 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 
 		// Offer mnemonics only if appropriate
 		if shouldOfferMnemonics {
-			for _, m := range mnemonics {
-				if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
-					items = append(items, map[string]interface{}{
-						"label":         applyCase(wordToComplete, m.Mnemonic),
-						"kind":          float64(14), // Keyword
-						"detail":        "6502/6510 Opcode",
-						"documentation": m.Description,
-					})
+			// Try ProcessorContext first (Context-Aware Parser)
+			if ctx := GetProcessorContext(); ctx != nil {
+				for mnemonicName := range ctx.AllMnemonics {
+					if strings.HasPrefix(strings.ToUpper(mnemonicName), strings.ToUpper(wordToComplete)) {
+						mnemonicInfo := ctx.GetMnemonicInfo(mnemonicName)
+						detail := "6502/6510 Opcode"
+						documentation := ""
+						if mnemonicInfo != nil {
+							documentation = mnemonicInfo.Description
+							if mnemonicInfo.Type == "Illegal" {
+								detail = "6502/6510 Illegal Opcode"
+							}
+						}
+						items = append(items, map[string]interface{}{
+							"label":         applyCase(wordToComplete, mnemonicName),
+							"kind":          float64(14), // Keyword
+							"detail":        detail,
+							"documentation": documentation,
+						})
+					}
+				}
+			} else {
+				// Fallback to old mnemonics array (legacy parser)
+				for _, m := range mnemonics {
+					if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+						items = append(items, map[string]interface{}{
+							"label":         applyCase(wordToComplete, m.Mnemonic),
+							"kind":          float64(14), // Keyword
+							"detail":        "6502/6510 Opcode",
+							"documentation": m.Description,
+						})
+					}
 				}
 			}
 		}
@@ -1824,6 +2344,19 @@ func isMnemonic(word string) bool {
 }
 
 func isDirective(word string) bool {
+	// Try ProcessorContext first (Context-Aware Parser)
+	if ctx := GetProcessorContext(); ctx != nil {
+		// ProcessorContext stores directives with dot prefix, so add it if missing
+		directive := word
+		if !strings.HasPrefix(directive, ".") {
+			directive = "." + directive
+		}
+		if ctx.IsValidDirective(directive) {
+			return true
+		}
+	}
+
+	// Fallback to old kickassDirectives array (legacy parser)
 	for _, d := range kickassDirectives {
 		if strings.EqualFold(d.Directive, word) {
 			return true
@@ -1840,8 +2373,9 @@ func extractWordAtPosition(text string, pos int) string {
 	}
 
 	// Define word character set for assembly language identifiers
+	// Include '.' for directive names like .byte, .const, .macro
 	isWordChar := func(r rune) bool {
-		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_'
+		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.'
 	}
 
 	// Find start of word by going backwards
@@ -1924,6 +2458,12 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	// the actual word being typed at the cursor position.
 	wordToComplete := extractWordAtPosition(context, len(context))
 	log.Debug("Word to complete: '%s'", wordToComplete)
+
+	// Special case: if word starts with '.', it's definitely a directive (not an operand)
+	if strings.HasPrefix(wordToComplete, ".") {
+		log.Debug("Word starts with '.', definitely a directive context.")
+		return false, wordToComplete
+	}
 
 	// Is this word the "verb" (mnemonic/directive) or an operand?
 	verbIndex := 0
