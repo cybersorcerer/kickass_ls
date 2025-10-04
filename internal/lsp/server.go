@@ -166,17 +166,17 @@ type LSPConfiguration struct {
 
 	// Parser Feature Flags for Context-Aware Redesign
 	ParserFeatureFlags struct {
-		UseContextAware     bool `json:"useContextAware"`     // Enable new context-aware parser
-		FallbackToOld       bool `json:"fallbackToOld"`       // Fallback to old parser on errors
-		DebugMode           bool `json:"debugMode"`           // Enable parser debug logging
-		EnableExperimental  bool `json:"enableExperimental"`  // Enable experimental features
+		UseContextAware    bool `json:"useContextAware"`    // Enable new context-aware parser
+		FallbackToOld      bool `json:"fallbackToOld"`      // Fallback to old parser on errors
+		DebugMode          bool `json:"debugMode"`          // Enable parser debug logging
+		EnableExperimental bool `json:"enableExperimental"` // Enable experimental features
 
 		// Feature-specific flags
-		ContextAwareLexer   bool `json:"contextAwareLexer"`   // Use new lexer with state management
-		EnhancedAST         bool `json:"enhancedAST"`         // Use enhanced AST nodes
-		SmartCompletion     bool `json:"smartCompletion"`     // Context-aware completion
-		SemanticValidation  bool `json:"semanticValidation"`  // Enhanced semantic validation
-		PerformanceMode     bool `json:"performanceMode"`     // Optimize for performance
+		ContextAwareLexer  bool `json:"contextAwareLexer"`  // Use new lexer with state management
+		EnhancedAST        bool `json:"enhancedAST"`        // Use enhanced AST nodes
+		SmartCompletion    bool `json:"smartCompletion"`    // Context-aware completion
+		SemanticValidation bool `json:"semanticValidation"` // Enhanced semantic validation
+		PerformanceMode    bool `json:"performanceMode"`    // Optimize for performance
 	} `json:"parserFeatureFlags"`
 }
 
@@ -252,27 +252,27 @@ var lspConfig = &LSPConfiguration{
 		DescriptiveLabels:  true,
 	},
 
-	// Parser Feature Flags - Start with old parser for safety
+	// Parser Feature Flags - Use context-aware parser by default
 	ParserFeatureFlags: struct {
-		UseContextAware     bool `json:"useContextAware"`
-		FallbackToOld       bool `json:"fallbackToOld"`
-		DebugMode           bool `json:"debugMode"`
-		EnableExperimental  bool `json:"enableExperimental"`
-		ContextAwareLexer   bool `json:"contextAwareLexer"`
-		EnhancedAST         bool `json:"enhancedAST"`
-		SmartCompletion     bool `json:"smartCompletion"`
-		SemanticValidation  bool `json:"semanticValidation"`
-		PerformanceMode     bool `json:"performanceMode"`
+		UseContextAware    bool `json:"useContextAware"`
+		FallbackToOld      bool `json:"fallbackToOld"`
+		DebugMode          bool `json:"debugMode"`
+		EnableExperimental bool `json:"enableExperimental"`
+		ContextAwareLexer  bool `json:"contextAwareLexer"`
+		EnhancedAST        bool `json:"enhancedAST"`
+		SmartCompletion    bool `json:"smartCompletion"`
+		SemanticValidation bool `json:"semanticValidation"`
+		PerformanceMode    bool `json:"performanceMode"`
 	}{
-		UseContextAware:     false, // Start with old parser
-		FallbackToOld:       true,  // Always enable fallback initially
-		DebugMode:           false, // Disable debug by default
-		EnableExperimental:  false, // Disable experimental features
-		ContextAwareLexer:   false, // Use old lexer initially
-		EnhancedAST:         false, // Use old AST initially
-		SmartCompletion:     false, // Use old completion initially
-		SemanticValidation:  false, // Use old validation initially
-		PerformanceMode:     true,  // Optimize for performance
+		UseContextAware:    true,  // Use context-aware parser by default
+		FallbackToOld:      false, // No fallback to old parser
+		DebugMode:          false, // Disable debug by default
+		EnableExperimental: true,  // Enable experimental features
+		ContextAwareLexer:  true,  // Use context-aware lexer by default
+		EnhancedAST:        true,  // Use enhanced AST by default
+		SmartCompletion:    true,  // Use smart completion by default
+		SemanticValidation: true,  // Use semantic validation by default
+		PerformanceMode:    false, // Disable performance mode for better features
 	},
 }
 
@@ -455,8 +455,8 @@ func ShouldUseNewParser() bool {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
 	return lspConfig.ParserFeatureFlags.UseContextAware ||
-		   lspConfig.ParserFeatureFlags.ContextAwareLexer ||
-		   lspConfig.ParserFeatureFlags.EnhancedAST
+		lspConfig.ParserFeatureFlags.ContextAwareLexer ||
+		lspConfig.ParserFeatureFlags.EnhancedAST
 }
 
 // documentStore holds the content of opened text documents.
@@ -837,7 +837,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "0.9.5", // Version updated
+						"version": "0.9.6", // Version updated
 					},
 				},
 			}
@@ -1939,6 +1939,9 @@ func getPrecedingMnemonicOrDirective(lineContent string, cursorPos int) (string,
 func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int, documentText string) []map[string]interface{} {
 	items := []map[string]interface{}{}
 
+	log.Debug("generateCompletions called: lineNum=%d, isOperand=%v, wordToComplete='%s', lineContent='%s', cursorPos=%d",
+		lineNum, isOperand, wordToComplete, lineContent, cursorPos)
+
 	// Determine context: are we after a mnemonic or directive?
 	precedingName, isMnem, isDir := getPrecedingMnemonicOrDirective(lineContent, cursorPos)
 	log.Debug("Preceding context: name='%s', isMnemonic=%v, isDirective=%v", precedingName, isMnem, isDir)
@@ -1966,51 +1969,82 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 		}
 	}
 
-	// If we're completing an operand, offer context-specific hints
-	if isOperand && precedingName != "" {
-		// Offer addressing mode hints for mnemonics
-		if isMnem && wordToComplete == "" {
-			// User just typed "lda " with cursor after space - offer addressing mode hints
-			if ctx := GetProcessorContext(); ctx != nil {
-				mnemonicInfo := ctx.GetMnemonicInfo(precedingName)
-				if mnemonicInfo != nil && len(mnemonicInfo.AddressingModes) > 0 {
-					// Build unique set of addressing mode prefixes
-					addedModes := make(map[string]bool)
+	// CRITICAL FIX: Handle space trigger character case
+	// When user types "lda<space>", LSP sends completion request BEFORE space is in buffer
+	// So we get: isOperand=false, wordToComplete='lda', cursor at end of 'lda'
+	// We need to detect this and offer addressing mode hints anyway
+	offerAddressingHints := false
+	targetMnemonic := ""
 
-					for _, mode := range mnemonicInfo.AddressingModes {
-						var prefix, doc string
-						switch mode.Mode {
-						case "Immediate":
-							prefix = "#"
-							doc = fmt.Sprintf("Immediate addressing - %s", mode.AssemblerFormat)
-						case "Absolute", "Absolute,X", "Absolute,Y", "Zeropage", "Zeropage,X", "Zeropage,Y":
-							if !addedModes["$"] {
-								prefix = "$"
-								doc = "Memory address (absolute or zero page)"
-							}
-						case "Indexed-indirect", "Indirect-indexed", "Indirect":
-							if !addedModes["("] {
-								prefix = "("
-								doc = "Indirect addressing"
-							}
+	// Case 1: Normal - "lda " with space already in buffer
+	if isOperand && precedingName != "" && isMnem {
+		offerAddressingHints = true
+		targetMnemonic = precedingName
+		log.Debug("Case 1: offering hints for mnemonic %s (isOperand=true, after space)", targetMnemonic)
+	}
+	// Case 2: Space trigger - user typed "lda<space>", space not yet in buffer
+	if !isOperand && isMnemonic(wordToComplete) && cursorPos == len(strings.TrimRight(lineContent, " \t")) {
+		offerAddressingHints = true
+		targetMnemonic = strings.ToUpper(wordToComplete)
+		log.Debug("Case 2: offering hints for mnemonic %s (isOperand=false, space trigger)", targetMnemonic)
+	}
+
+	// Offer addressing mode hints if applicable
+	if offerAddressingHints && targetMnemonic != "" {
+		if ctx := GetProcessorContext(); ctx != nil {
+			log.Debug("ProcessorContext is available")
+			mnemonicInfo := ctx.GetMnemonicInfo(targetMnemonic)
+			log.Debug("MnemonicInfo for %s: %+v", targetMnemonic, mnemonicInfo)
+			if mnemonicInfo != nil && len(mnemonicInfo.AddressingModes) > 0 {
+				log.Debug("Found %d addressing modes for %s", len(mnemonicInfo.AddressingModes), targetMnemonic)
+				// Build unique set of addressing mode prefixes
+				addedModes := make(map[string]bool)
+
+				for _, mode := range mnemonicInfo.AddressingModes {
+					var prefix, doc string
+					switch mode.Mode {
+					case "Immediate":
+						prefix = "#"
+						doc = fmt.Sprintf("Immediate addressing - %s", mode.AssemblerFormat)
+					case "Absolute", "Absolute,X", "Absolute,Y", "Zeropage", "Zeropage,X", "Zeropage,Y":
+						if !addedModes["$"] {
+							prefix = "$"
+							doc = "Memory address (absolute or zero page)"
 						}
-
-						if prefix != "" && !addedModes[prefix] {
-							items = append(items, map[string]interface{}{
-								"label":         prefix,
-								"kind":          float64(14), // Keyword
-								"detail":        "Addressing Mode",
-								"documentation": doc,
-								"sortText":      "0_" + prefix, // Sort first
-							})
-							addedModes[prefix] = true
+					case "Indexed-indirect", "Indirect-indexed", "Indirect":
+						if !addedModes["("] {
+							prefix = "("
+							doc = "Indirect addressing"
 						}
 					}
+
+					if prefix != "" && !addedModes[prefix] {
+						items = append(items, map[string]interface{}{
+							"label":         prefix,
+							"kind":          float64(14), // Keyword
+							"detail":        "Addressing Mode",
+							"documentation": doc,
+							"sortText":      "0_" + prefix, // Sort first
+						})
+						addedModes[prefix] = true
+					}
+				}
+				log.Debug("Added %d addressing mode completion items", len(addedModes))
+			} else {
+				if mnemonicInfo == nil {
+					log.Debug("MnemonicInfo is nil for %s", targetMnemonic)
+				} else {
+					log.Debug("No addressing modes found for %s", targetMnemonic)
 				}
 			}
+		} else {
+			log.Warn("ProcessorContext is nil - cannot offer addressing mode hints")
 		}
+	}
 
-		// Offer previously used operands for this mnemonic/directive (both mnemonics and directives)
+	// If we're completing an operand, offer context-specific hints
+	if isOperand && precedingName != "" {
+		// Offer previously used operands for this mnemonic/directive
 		if documentText != "" {
 			usedOperands := getUsedOperandsForMnemonic(documentText, precedingName)
 			for _, operand := range usedOperands {

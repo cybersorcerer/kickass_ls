@@ -248,10 +248,48 @@ func (sb *scopeBuilder) validateInstruction(stmt *InstructionStatement) {
 	}
 
 	if !isAddressingModeValid(stmt.Token.Literal, mode) {
+		var message string
+		mnemonic := strings.ToUpper(stmt.Token.Literal)
+
+		// Special case: if mode is "Implied" but instruction doesn't support it,
+		// it means the user forgot to add an operand
+		if mode == "Implied" {
+			message = fmt.Sprintf("Instruction '%s' requires an operand", mnemonic)
+
+			// Get valid addressing modes for helpful hint
+			if ctx := GetProcessorContext(); ctx != nil {
+				if mnemonicInfo := ctx.GetMnemonicInfo(mnemonic); mnemonicInfo != nil && len(mnemonicInfo.AddressingModes) > 0 {
+					// Show examples of valid addressing modes
+					examples := []string{}
+					for _, am := range mnemonicInfo.AddressingModes {
+						switch am.Mode {
+						case "Immediate":
+							examples = append(examples, "#$00")
+						case "Absolute":
+							examples = append(examples, "$0000")
+						case "Zeropage":
+							examples = append(examples, "$00")
+						case "Indirect":
+							examples = append(examples, "($0000)")
+						}
+						if len(examples) >= 3 {
+							break
+						}
+					}
+					if len(examples) > 0 {
+						message += fmt.Sprintf(" (e.g., %s)", strings.Join(examples, ", "))
+					}
+				}
+			}
+		} else {
+			// For other invalid addressing modes, show the original message
+			message = fmt.Sprintf("Invalid addressing mode '%s' for instruction '%s'", mode, mnemonic)
+		}
+
 		diagnostic := Diagnostic{
 			Severity: SeverityError,
 			Range:    Range{Start: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column - 1}, End: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column + len(stmt.Token.Literal)}},
-			Message:  fmt.Sprintf("Invalid addressing mode '%s' for instruction '%s'", mode, strings.ToUpper(stmt.Token.Literal)),
+			Message:  message,
 			Source:   "parser",
 		}
 		sb.diagnostics = append(sb.diagnostics, diagnostic)

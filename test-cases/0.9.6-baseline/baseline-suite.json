@@ -1,0 +1,168 @@
+{
+  "name": "Kick Assembler LSP v0.9.6 Baseline Test Suite",
+  "description": "Comprehensive baseline tests for LSP server version 0.9.6",
+  "version": "0.9.6",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {
+      "test_indirect.asm": "    lda ($80, x)\n"
+    }
+  },
+  "testCases": [
+    {
+      "name": "Basic Syntax - No Errors",
+      "description": "01-basic-syntax.asm should have no diagnostics",
+      "type": "diagnostics",
+      "input": {
+        "file": "01-basic-syntax.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    },
+    {
+      "name": "Directives - Reduced Errors",
+      "description": "02-directives.asm with fixes from v0.9.5",
+      "type": "diagnostics",
+      "input": {
+        "file": "02-directives.asm"
+      },
+      "expected": {
+        "maxErrors": 4
+      }
+    },
+    {
+      "name": "Addressing Modes - Known Issues",
+      "description": "03-addressing-modes.asm with Indexed Indirect known issue",
+      "type": "diagnostics",
+      "input": {
+        "file": "03-addressing-modes.asm"
+      },
+      "expected": {
+        "maxErrors": 5
+      }
+    },
+    {
+      "name": "Illegal Opcodes - Recognition",
+      "description": "04-illegal-opcodes.asm should recognize all illegal opcodes",
+      "type": "diagnostics",
+      "input": {
+        "file": "04-illegal-opcodes.asm"
+      },
+      "expected": {
+        "maxErrors": 8,
+        "minWarnings": 10
+      }
+    },
+    {
+      "name": "C64 Memory Map - Complete Recognition",
+      "description": "05-c64-memory.asm should recognize all C64 addresses",
+      "type": "diagnostics",
+      "input": {
+        "file": "05-c64-memory.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    },
+    {
+      "name": "Completion - Directive Trigger",
+      "description": "Typing '.' should show directive completions",
+      "type": "completion",
+      "input": {
+        "file": "06-completion-context.asm",
+        "line": 27,
+        "character": 0
+      },
+      "expected": {
+        "minItems": 25,
+        "completionItems": [
+          {
+            "label": ".var",
+            "kind": 14
+          },
+          {
+            "label": ".const",
+            "kind": 14
+          },
+          {
+            "label": ".byte",
+            "kind": 14
+          }
+        ]
+      }
+    },
+    {
+      "name": "Diagnostics - Error Detection",
+      "description": "07-diagnostics.asm should detect intentional errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "07-diagnostics.asm"
+      },
+      "expected": {
+        "minErrors": 10,
+        "diagnostics": [
+          {
+            "line": 11,
+            "severity": 1,
+            "message": ""
+          },
+          {
+            "line": 15,
+            "severity": 1,
+            "message": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "Hover - LDA Mnemonic",
+      "description": "Hovering over LDA should show documentation",
+      "type": "hover",
+      "input": {
+        "file": "03-addressing-modes.asm",
+        "line": 6,
+        "character": 5
+      },
+      "expected": {
+        "hoverContent": "LDA"
+      }
+    },
+    {
+      "name": "Hover - $d020 Address",
+      "description": "Hovering over $d020 should show 'Border Color'",
+      "type": "hover",
+      "input": {
+        "file": "05-c64-memory.asm",
+        "line": 12,
+        "character": 9
+      },
+      "expected": {
+        "hoverContent": "Border"
+      }
+    },
+    {
+      "name": "Symbols - Extract Labels",
+      "description": "Should extract all labels from file",
+      "type": "symbols",
+      "input": {
+        "file": "01-basic-syntax.asm"
+      },
+      "expected": {
+        "minSymbols": 3,
+        "symbols": [
+          {
+            "name": "start",
+            "kind": 13
+          },
+          {
+            "name": "loop",
+            "kind": 13
+          }
+        ]
+      }
+    }
+  ]
+}

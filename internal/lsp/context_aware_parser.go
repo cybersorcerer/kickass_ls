@@ -559,6 +559,7 @@ func (p *ContextAwareParser) isStatementTerminator() bool {
 		p.currentToken.Type == TOKEN_MNEMONIC_STD ||
 		p.currentToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.currentToken.Type == TOKEN_MNEMONIC_ILL ||
+		p.currentToken.Type == TOKEN_DIRECTIVE_PC ||
 		strings.HasPrefix(p.currentToken.Literal, ".")
 }
 
@@ -568,6 +569,7 @@ func (p *ContextAwareParser) isNextTokenStatementTerminator() bool {
 		p.peekToken.Type == TOKEN_MNEMONIC_STD ||
 		p.peekToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.peekToken.Type == TOKEN_MNEMONIC_ILL ||
+		p.peekToken.Type == TOKEN_DIRECTIVE_PC ||
 		strings.HasPrefix(p.peekToken.Literal, ".")
 }
 
@@ -779,11 +781,72 @@ func (p *ContextAwareParser) parsePrefixExpression() Expression {
 }
 
 // parseGroupedExpression parses expressions in parentheses
+// Also handles 6502 indirect addressing modes: ($80, x) and ($80), y
 func (p *ContextAwareParser) parseGroupedExpression() Expression {
+	openParenLine := p.currentToken.Line
+
 	p.nextToken() // skip (
 
 	exp := p.parseExpression(LOWEST)
 
+	// Check for Indexed Indirect addressing: ($80, x)
+	// If we see a comma here, it could be ($addr, x) addressing mode
+	if p.peekToken != nil && p.peekToken.Type == TOKEN_COMMA {
+		p.nextToken() // move to comma
+
+		// Check if next token is X or Y register
+		if p.peekToken != nil && p.peekToken.Type == TOKEN_IDENTIFIER {
+			p.nextToken() // move to identifier
+			indexReg := strings.ToUpper(p.currentToken.Literal)
+
+			if indexReg == "X" || indexReg == "Y" {
+				// This is Indexed Indirect addressing: ($addr, X)
+				// Construct an InfixExpression with the address and register
+				indirectExp := &InfixExpression{
+					Token: Token{
+						Type:    TOKEN_COMMA,
+						Literal: ",",
+						Line:    p.currentToken.Line,
+						Column:  p.currentToken.Column,
+					},
+					Left:     exp,
+					Operator: ",",
+					Right: &Identifier{
+						Token: Token{
+							Type:    TOKEN_IDENTIFIER,
+							Literal: indexReg,
+							Line:    p.currentToken.Line,
+							Column:  p.currentToken.Column,
+						},
+						Value: indexReg,
+					},
+				}
+
+				// Now expect the closing )
+				if p.peekToken == nil || p.peekToken.Type != TOKEN_RPAREN {
+					p.addError("Expected ')' after indexed indirect addressing",
+						p.currentToken.Line, p.currentToken.Column)
+					return nil
+				}
+
+				p.nextToken() // consume )
+
+				if p.debugMode {
+					log.Debug("Parser: Parsed Indexed Indirect addressing (addr, %s) at Line %d",
+						indexReg, openParenLine)
+				}
+
+				return indirectExp
+			}
+		}
+
+		// Not a valid indexed indirect - report error
+		p.addError(fmt.Sprintf("Expected 'X' or 'Y' after ',' in indirect addressing, got '%s'",
+			p.currentToken.Literal), p.currentToken.Line, p.currentToken.Column)
+		return nil
+	}
+
+	// Normal grouped expression or regular indirect: ($addr) or ($addr), y
 	if p.peekToken == nil || p.peekToken.Type != TOKEN_RPAREN {
 		p.addError("Expected ')' after expression", p.currentToken.Line, p.currentToken.Column)
 		return nil
