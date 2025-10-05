@@ -1,0 +1,46 @@
+{
+  "name": "Function/Macro/Pseudocommand Call Validation",
+  "description": "Test argument count validation for all callable types",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Function Call - Argument Count",
+      "description": "Should error on wrong function argument count",
+      "type": "diagnostics",
+      "input": {
+        "file": "test-function-call-validation.asm"
+      },
+      "expected": {
+        "minErrors": 4
+      }
+    },
+    {
+      "name": "Macro Call - Argument Count",
+      "description": "Should error on wrong macro argument count",
+      "type": "diagnostics",
+      "input": {
+        "file": "test-macro-call-validation.asm"
+      },
+      "expected": {
+        "minErrors": 2
+      }
+    },
+    {
+      "name": "Pseudocommand Call - Argument Count",
+      "description": "Should error on wrong pseudocommand argument count",
+      "type": "diagnostics",
+      "input": {
+        "file": "test-pseudocommand-call-validation.asm"
+      },
+      "expected": {
+        "minErrors": 3
+      }
+    }
+  ]
+}

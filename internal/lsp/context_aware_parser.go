@@ -107,6 +107,26 @@ func (p *ContextAwareParser) parseStatement() Statement {
 		TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
 		return p.parseDirectiveStatement()
 
+	case TOKEN_IDENTIFIER:
+		// Check if this is a macro/function call (followed by '(')
+		if p.peekToken != nil && p.peekToken.Type == TOKEN_LPAREN {
+			return p.parseMacroOrFunctionCallStatement()
+		}
+		// Check if this is a pseudocommand call (followed by expressions with ':')
+		// Pseudocommands have syntax like: mov #$05 : $80
+		if p.peekToken != nil && p.peekToken.Type != TOKEN_EOF && p.peekToken.Type != TOKEN_COMMENT {
+			// Check if there's content on the same line (could be pseudocommand arguments)
+			if p.peekToken.Line == p.currentToken.Line {
+				return p.parsePseudocommandCallStatement()
+			}
+		}
+		// Otherwise, it's an unknown statement
+		if p.debugMode {
+			log.Debug("ContextAwareParser: Unknown identifier statement '%s' at Line %d",
+				p.currentToken.Literal, p.currentToken.Line)
+		}
+		return nil
+
 	default:
 		// Unknown statement
 		if p.debugMode {
@@ -249,6 +269,26 @@ func (p *ContextAwareParser) parseProgramCounterDirective() *DirectiveStatement 
 // parseDirectiveStatement parses a Kick Assembler directive
 func (p *ContextAwareParser) parseDirectiveStatement() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
+
+	// Special handling for new directive types (v0.9.7)
+	switch directiveName {
+	case ".encoding":
+		return p.parseEncodingDirective()
+	case ".define", ".undef":
+		return p.parseDefineDirective()
+	case ".import":
+		return p.parseImportDirective()
+	case ".function":
+		return p.parseFunctionDirective()
+	case ".macro":
+		return p.parseMacroDirective()
+	case ".pseudocommand":
+		return p.parsePseudocommandDirective()
+	case ".namespace":
+		return p.parseNamespaceDirective()
+	case ".enum":
+		return p.parseEnumDirective()
+	}
 
 	// Special handling for data directives with comma-separated values
 	if isDataDirective(directiveName) {
@@ -978,6 +1018,693 @@ func (p *ContextAwareParser) curPrecedence() int {
 		return LOWEST
 	}
 	return precedences[p.currentToken.Type]
+}
+
+// parseEncodingDirective handles .encoding "string"
+// Format: .encoding "petscii_upper"
+func (p *ContextAwareParser) parseEncodingDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+		Name: &Identifier{
+			Token: Token{
+				Type:    directiveToken.Type,
+				Literal: directiveName,
+				Line:    directiveToken.Line,
+				Column:  directiveToken.Column,
+			},
+			Value: directiveName,
+		},
+	}
+
+	// Move to next token (should be string)
+	p.nextToken()
+
+	// Expect string literal
+	if p.currentToken.Type == TOKEN_STRING {
+		// Remove quotes from string value
+		value := p.currentToken.Literal
+		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+			value = value[1 : len(value)-1]
+		}
+
+		stmt.Value = &StringLiteral{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: value,
+		}
+	} else {
+		// Error: expected string
+		p.addError("Expected string literal after .encoding directive", p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .encoding directive with value '%s' at Line %d",
+			p.currentToken.Literal, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseDefineDirective handles .define and .undef (symbol-only, no value)
+// Format: .define DEBUG
+func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+	}
+
+	// Move to next token (should be identifier)
+	p.nextToken()
+
+	// Expect identifier (the symbol name)
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		// No value for .define/.undef - just the symbol name
+		stmt.Value = nil
+	} else {
+		// Error: expected identifier
+		p.addError(fmt.Sprintf("Expected identifier after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+		// Use directive name as fallback
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    directiveToken.Type,
+				Literal: directiveName,
+				Line:    directiveToken.Line,
+				Column:  directiveToken.Column,
+			},
+			Value: directiveName,
+		}
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed %s directive for symbol '%s' at Line %d",
+			directiveName, stmt.Name.Value, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseImportDirective handles .import source "file.asm"
+// Format: .import source "file.asm"
+//         .import binary "data.bin"
+//         .import c64 "music.sid"
+func (p *ContextAwareParser) parseImportDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+		Name: &Identifier{
+			Token: Token{
+				Type:    directiveToken.Type,
+				Literal: directiveName,
+				Line:    directiveToken.Line,
+				Column:  directiveToken.Column,
+			},
+			Value: directiveName,
+		},
+	}
+
+	// Move to next token (should be keyword: source, binary, c64)
+	p.nextToken()
+
+	var importType string
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		importType = strings.ToLower(p.currentToken.Literal)
+		// Valid import types
+		if importType != "source" && importType != "binary" && importType != "c64" {
+			p.addError(fmt.Sprintf("Invalid import type '%s', expected 'source', 'binary', or 'c64'", importType), p.currentToken.Line, p.currentToken.Column)
+		}
+		p.nextToken() // Move to string
+	}
+
+	// Expect string literal (filename)
+	if p.currentToken.Type == TOKEN_STRING {
+		// Create an array expression to store both import type and filename
+		elements := []Expression{}
+
+		// Add import type as first element (if present)
+		if importType != "" {
+			elements = append(elements, &Identifier{
+				Token: Token{
+					Type:    TOKEN_IDENTIFIER,
+					Literal: importType,
+					Line:    p.currentToken.Line,
+					Column:  p.currentToken.Column,
+				},
+				Value: importType,
+			})
+		}
+
+		// Add filename as second element
+		// Remove quotes from string value
+		value := p.currentToken.Literal
+		if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
+			value = value[1 : len(value)-1]
+		}
+
+		elements = append(elements, &StringLiteral{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: value,
+		})
+
+		stmt.Value = &ArrayExpression{
+			Token: Token{
+				Type:    directiveToken.Type,
+				Literal: directiveToken.Literal,
+				Line:    directiveToken.Line,
+				Column:  directiveToken.Column,
+			},
+			Elements: elements,
+		}
+	} else {
+		// Error: expected string
+		p.addError("Expected string literal (filename) in .import directive", p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .import directive at Line %d", stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseFunctionDirective handles .function name(params) { ... }
+// Format: .function getColor(x) { .return Colors.RED }
+func (p *ContextAwareParser) parseFunctionDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+	}
+
+	// Move to next token (should be function name)
+	p.nextToken()
+
+	// Expect identifier (function name)
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		p.nextToken() // Move to parameter list or block
+	} else {
+		p.addError(fmt.Sprintf("Expected function name after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+		return stmt
+	}
+
+	// Parse parameter list if present: (param1, param2, ...)
+	if p.currentToken.Type == TOKEN_LPAREN {
+		stmt.Parameters = p.parseParameterList()
+		// parseParameterList leaves us at the closing ), so move to next token
+		p.nextToken()
+	}
+
+	// Parse block if present: { ... }
+	if p.currentToken.Type == TOKEN_LBRACE {
+		stmt.Block = p.parseBlockStatement()
+	} else {
+		p.addError(fmt.Sprintf("Expected '{' after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .function directive '%s' at Line %d", stmt.Name.Value, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseMacroDirective handles .macro name(params) { ... }
+// Format: .macro clearScreen() { lda #$20 }
+func (p *ContextAwareParser) parseMacroDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+	}
+
+	// Move to next token (should be macro name)
+	p.nextToken()
+
+	// Expect identifier (macro name)
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		p.nextToken() // Move to parameter list or block
+	} else {
+		p.addError(fmt.Sprintf("Expected macro name after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+		return stmt
+	}
+
+	// Parse parameter list if present: (param1, param2, ...)
+	if p.currentToken.Type == TOKEN_LPAREN {
+		stmt.Parameters = p.parseParameterList()
+		// parseParameterList leaves us at the closing ), so move to next token
+		p.nextToken()
+	}
+
+	// Parse block if present: { ... }
+	if p.currentToken.Type == TOKEN_LBRACE {
+		stmt.Block = p.parseBlockStatement()
+	} else {
+		p.addError(fmt.Sprintf("Expected '{' after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .macro directive '%s' at Line %d", stmt.Name.Value, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parsePseudocommandDirective handles .pseudocommand name param1 : param2 : param3 { ... }
+// Format: .pseudocommand mov src : dst { lda src; sta dst }
+// Pseudocommands use colon-separated parameters instead of parenthesized comma-separated
+func (p *ContextAwareParser) parsePseudocommandDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+	}
+
+	// Move to next token (should be pseudocommand name)
+	p.nextToken()
+
+	// Expect identifier (pseudocommand name)
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		p.nextToken() // Move to parameter list or block
+	} else {
+		p.addError(fmt.Sprintf("Expected pseudocommand name after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+		return stmt
+	}
+
+	// Parse colon-separated parameter list: param1 : param2 : param3
+	// Stop when we hit '{'
+	if p.currentToken.Type != TOKEN_LBRACE {
+		stmt.Parameters = p.parseColonSeparatedParameterList()
+	}
+
+	// Parse block if present: { ... }
+	if p.currentToken.Type == TOKEN_LBRACE {
+		stmt.Block = p.parseBlockStatement()
+	} else {
+		p.addError(fmt.Sprintf("Expected '{' after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .pseudocommand directive '%s' with %d parameters at Line %d",
+			stmt.Name.Value, len(stmt.Parameters), stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseNamespaceDirective handles .namespace name { ... }
+// Format: .namespace utils { ... }
+// Namespaces have no parameters, just a name and a block
+func (p *ContextAwareParser) parseNamespaceDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+	}
+
+	// Move to next token (should be namespace name)
+	p.nextToken()
+
+	// Expect identifier (namespace name)
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		p.nextToken() // Move to block
+	} else {
+		p.addError(fmt.Sprintf("Expected namespace name after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+		return stmt
+	}
+
+	// Parse block: { ... }
+	if p.currentToken.Type == TOKEN_LBRACE {
+		stmt.Block = p.parseBlockStatement()
+	} else {
+		p.addError(fmt.Sprintf("Expected '{' after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .namespace directive '%s' at Line %d", stmt.Name.Value, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseEnumDirective handles .enum name { members }
+// Format: .enum Colors { BLACK = 0, WHITE = 1 }
+func (p *ContextAwareParser) parseEnumDirective() *DirectiveStatement {
+	directiveName := strings.ToLower(p.currentToken.Literal)
+	directiveToken := p.currentToken
+
+	stmt := &DirectiveStatement{
+		Token: Token{
+			Type:    directiveToken.Type,
+			Literal: directiveToken.Literal,
+			Line:    directiveToken.Line,
+			Column:  directiveToken.Column,
+		},
+	}
+
+	// Move to next token (should be enum name)
+	p.nextToken()
+
+	// Expect identifier (enum name)
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		p.nextToken() // Move to block
+	} else {
+		p.addError(fmt.Sprintf("Expected enum name after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+		return stmt
+	}
+
+	// Parse block: { ... }
+	if p.currentToken.Type == TOKEN_LBRACE {
+		stmt.Block = p.parseBlockStatement()
+	} else {
+		p.addError(fmt.Sprintf("Expected '{' after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed .enum directive '%s' at Line %d", stmt.Name.Value, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseParameterList parses (param1, param2, ...)
+// Returns the parameter list and leaves the parser at the closing )
+func (p *ContextAwareParser) parseParameterList() []*Identifier {
+	params := []*Identifier{}
+
+	p.nextToken() // Skip opening (
+
+	// Empty parameter list
+	if p.currentToken.Type == TOKEN_RPAREN {
+		return params
+	}
+
+	// Parse first parameter
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		params = append(params, &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		})
+		p.nextToken()
+	}
+
+	// Parse remaining parameters: , param2, param3, ...
+	for p.currentToken.Type == TOKEN_COMMA {
+		p.nextToken() // Skip comma
+
+		if p.currentToken.Type == TOKEN_IDENTIFIER {
+			params = append(params, &Identifier{
+				Token: Token{
+					Type:    p.currentToken.Type,
+					Literal: p.currentToken.Literal,
+					Line:    p.currentToken.Line,
+					Column:  p.currentToken.Column,
+				},
+				Value: p.currentToken.Literal,
+			})
+			p.nextToken()
+		} else {
+			p.addError("Expected parameter name after ','", p.currentToken.Line, p.currentToken.Column)
+			break
+		}
+	}
+
+	// Expect closing )
+	if p.currentToken.Type != TOKEN_RPAREN {
+		p.addError("Expected ')' after parameter list", p.currentToken.Line, p.currentToken.Column)
+	}
+
+	return params
+}
+
+// parseColonSeparatedParameterList parses param1 : param2 : param3
+// Used by .pseudocommand directive
+// Returns the parameter list and leaves the parser at the '{'
+func (p *ContextAwareParser) parseColonSeparatedParameterList() []*Identifier {
+	params := []*Identifier{}
+
+	// Empty parameter list (directly followed by '{')
+	if p.currentToken.Type == TOKEN_LBRACE {
+		return params
+	}
+
+	// Parse first parameter
+	if p.currentToken.Type == TOKEN_IDENTIFIER {
+		params = append(params, &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		})
+		p.nextToken()
+	}
+
+	// Parse remaining parameters: : param2 : param3 ...
+	for p.currentToken.Type == TOKEN_COLON {
+		p.nextToken() // Skip colon
+
+		if p.currentToken.Type == TOKEN_IDENTIFIER {
+			params = append(params, &Identifier{
+				Token: Token{
+					Type:    p.currentToken.Type,
+					Literal: p.currentToken.Literal,
+					Line:    p.currentToken.Line,
+					Column:  p.currentToken.Column,
+				},
+				Value: p.currentToken.Literal,
+			})
+			p.nextToken()
+		} else {
+			p.addError("Expected parameter name after ':'", p.currentToken.Line, p.currentToken.Column)
+			break
+		}
+	}
+
+	// currentToken should now be at '{' or error
+	if p.currentToken.Type != TOKEN_LBRACE {
+		p.addError("Expected '{' after parameter list", p.currentToken.Line, p.currentToken.Column)
+	}
+
+	return params
+}
+
+// parseMacroOrFunctionCallStatement parses macro/function calls as statements
+// Format: macroName(arg1, arg2, ...)
+func (p *ContextAwareParser) parseMacroOrFunctionCallStatement() Statement {
+	// Current token is the identifier (macro/function name)
+	nameToken := Token{
+		Type:    p.currentToken.Type,
+		Literal: p.currentToken.Literal,
+		Line:    p.currentToken.Line,
+		Column:  p.currentToken.Column,
+	}
+
+	functionIdent := &Identifier{
+		Token: nameToken,
+		Value: p.currentToken.Literal,
+	}
+
+	// Move to LPAREN
+	p.nextToken()
+
+	// Parse as CallExpression
+	callExpr := &CallExpression{
+		Token:    nameToken,
+		Function: functionIdent,
+	}
+
+	// Parse arguments
+	callExpr.Arguments = p.parseExpressionList(TOKEN_RPAREN)
+
+	// Wrap in ExpressionStatement
+	stmt := &ExpressionStatement{
+		Token:      nameToken,
+		Expression: callExpr,
+	}
+
+	// Always log macro/function calls for debugging
+	log.Debug("ContextAwareParser: Parsed macro/function call '%s' with %d arguments at Line %d",
+		functionIdent.Value, len(callExpr.Arguments), nameToken.Line)
+
+	return stmt
+}
+
+// parsePseudocommandCallStatement parses pseudocommand calls as statements
+// Format: pseudocmdName arg1 : arg2 : arg3
+// Pseudocommands use colon-separated arguments instead of comma-separated
+func (p *ContextAwareParser) parsePseudocommandCallStatement() Statement {
+	// Current token is the identifier (pseudocommand name)
+	nameToken := Token{
+		Type:    p.currentToken.Type,
+		Literal: p.currentToken.Literal,
+		Line:    p.currentToken.Line,
+		Column:  p.currentToken.Column,
+	}
+
+	pseudocmdIdent := &Identifier{
+		Token: nameToken,
+		Value: p.currentToken.Literal,
+	}
+
+	// Move to first argument
+	p.nextToken()
+
+	// Parse colon-separated arguments
+	arguments := []Expression{}
+
+	// Parse first argument
+	if p.currentToken.Type != TOKEN_EOF && p.currentToken.Type != TOKEN_COMMENT {
+		arg := p.parseExpression(LOWEST)
+		if arg != nil {
+			arguments = append(arguments, arg)
+		}
+	}
+
+	// Parse remaining arguments separated by ':'
+	for p.peekToken != nil && p.peekToken.Type == TOKEN_COLON {
+		p.nextToken() // Move to COLON
+		p.nextToken() // Move to next argument
+
+		if p.currentToken.Type != TOKEN_EOF && p.currentToken.Type != TOKEN_COMMENT {
+			arg := p.parseExpression(LOWEST)
+			if arg != nil {
+				arguments = append(arguments, arg)
+			}
+		}
+	}
+
+	// Create CallExpression for pseudocommand
+	callExpr := &CallExpression{
+		Token:     nameToken,
+		Function:  pseudocmdIdent,
+		Arguments: arguments,
+	}
+
+	// Wrap in ExpressionStatement
+	stmt := &ExpressionStatement{
+		Token:      nameToken,
+		Expression: callExpr,
+	}
+
+	log.Debug("ContextAwareParser: Parsed pseudocommand call '%s' with %d arguments at Line %d",
+		pseudocmdIdent.Value, len(arguments), nameToken.Line)
+
+	return stmt
 }
 
 // Helper functions for parsing

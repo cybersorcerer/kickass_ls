@@ -1,0 +1,62 @@
+{
+  "name": "Check Three Failing Tests",
+  "description": "Test the three reportedly failing regression tests",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Completion - Memory Addresses",
+      "description": "Completion should suggest C64 memory addresses",
+      "type": "completion",
+      "input": {
+        "file": "07-c64-memory-map.asm",
+        "line": 10,
+        "character": 9
+      },
+      "expected": {
+        "minItems": 10,
+        "completionItems": [
+          {
+            "label": "$d020",
+            "detail": "Border"
+          },
+          {
+            "label": "$d021",
+            "detail": "Background"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Hover - Mnemonic Documentation",
+      "description": "Hovering over LDA should show documentation",
+      "type": "hover",
+      "input": {
+        "file": "01-basic-mnemonics.asm",
+        "line": 7,
+        "character": 5
+      },
+      "expected": {
+        "hoverContent": "LDA"
+      }
+    },
+    {
+      "name": "Hover - C64 Memory Address",
+      "description": "Hovering over $d020 should show border color info",
+      "type": "hover",
+      "input": {
+        "file": "07-c64-memory-map.asm",
+        "line": 10,
+        "character": 9
+      },
+      "expected": {
+        "hoverContent": "Border"
+      }
+    }
+  ]
+}

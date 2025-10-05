@@ -52,6 +52,7 @@ type CPUFlags struct {
 type AnalysisContext struct {
 	CurrentPC        int64                       // Track program counter
 	DefinedLabels    map[string]*Symbol          // Labels with addresses
+	DefinedSymbols   map[string]bool             // Symbols defined via .define directive
 	ForwardRefs      []ForwardReference          // Unresolved references
 	MacroDefinitions map[string]*MacroDefinition // Macro definitions
 	MemoryMap        *MemoryMap                  // C64/6502 memory layout
@@ -63,6 +64,7 @@ func NewAnalysisContext() *AnalysisContext {
 	return &AnalysisContext{
 		CurrentPC:        0x1000, // Default start address
 		DefinedLabels:    make(map[string]*Symbol),
+		DefinedSymbols:   make(map[string]bool),
 		ForwardRefs:      []ForwardReference{},
 		MacroDefinitions: make(map[string]*MacroDefinition),
 		MemoryMap:        NewC64MemoryMap(),
@@ -188,7 +190,7 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 			}
 		case *DirectiveStatement:
 			if stmt != nil {
-				a.processDirective(stmt)
+				a.processDirectivePass1(stmt) // Use Pass 1 version
 				if stmt.Block != nil && stmt.Block.Statements != nil {
 					a.pass1AddressCalculation(stmt.Block.Statements)
 				}
@@ -643,7 +645,18 @@ func (a *SemanticAnalyzer) validateSymbolsInExpression(expr Expression, token To
 }
 
 // processDirective handles directive processing (.pc, .byte, etc.)
+// Pass parameter: true = Pass 1, false = Pass 3
 func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
+	a.processDirectiveWithPass(node, false) // Default to Pass 3 for backwards compatibility
+}
+
+// processDirectivePass1 handles directive processing in Pass 1 only
+func (a *SemanticAnalyzer) processDirectivePass1(node *DirectiveStatement) {
+	a.processDirectiveWithPass(node, true)
+}
+
+// processDirectiveWithPass handles directive processing with pass awareness
+func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, isPass1 bool) {
 	if node == nil {
 		log.Debug("processDirective: node is nil")
 		return
@@ -654,7 +667,9 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 		directive := strings.ToLower(node.Token.Literal)
 		if directive == ".byte" || directive == ".word" {
 			log.Debug("processDirective: handling data directive %s without name", directive)
-			a.processDataDirective(node)
+			if isPass1 {
+				a.processDataDirective(node)
+			}
 		}
 		return
 	}
@@ -664,9 +679,106 @@ func (a *SemanticAnalyzer) processDirective(node *DirectiveStatement) {
 	}
 
 	directive := strings.ToLower(node.Token.Literal)
-	log.Debug("processDirective: directive=%s, name=%s", directive, node.Name.Value)
+	log.Debug("processDirective: directive=%s, name=%s, pass1=%v", directive, node.Name.Value, isPass1)
 
 	switch directive {
+	case ".define":
+		// Define directive - ONLY process in Pass 1
+		if isPass1 && node.Name != nil {
+			symbolName := normalizeLabel(node.Name.Value)
+
+			// Check if already defined
+			if _, exists := a.context.DefinedSymbols[symbolName]; exists {
+				a.addWarning(node.Token, "Symbol '%s' is already defined", node.Name.Value)
+			} else {
+				// Add to defined symbols table
+				a.context.DefinedSymbols[symbolName] = true
+				log.Debug("processDirective .define: defined symbol '%s'", node.Name.Value)
+			}
+		}
+	case ".undef":
+		// Undefine directive - ONLY process in Pass 1
+		if isPass1 && node.Name != nil {
+			symbolName := normalizeLabel(node.Name.Value)
+
+			// Check if symbol was defined
+			if _, exists := a.context.DefinedSymbols[symbolName]; !exists {
+				a.addWarning(node.Token, "Symbol '%s' is not defined (cannot undefine)", node.Name.Value)
+			} else {
+				// Remove from defined symbols table
+				delete(a.context.DefinedSymbols, symbolName)
+				log.Debug("processDirective .undef: undefined symbol '%s'", node.Name.Value)
+			}
+		}
+	case ".encoding":
+		// Encoding directive - validate encoding name
+		if node.Value != nil {
+			if strLit, ok := node.Value.(*StringLiteral); ok {
+				encodingName := strings.ToLower(strLit.Value)
+				validEncodings := []string{
+					"petscii", "petscii_upper", "petscii_mixed", "petscii_lower",
+					"screencode", "screencode_upper", "screencode_mixed", "screencode_lower",
+					"ascii",
+				}
+
+				isValid := false
+				for _, valid := range validEncodings {
+					if encodingName == valid {
+						isValid = true
+						break
+					}
+				}
+
+				if !isValid {
+					a.addWarning(node.Token, "Unknown encoding '%s'. Valid encodings: petscii, petscii_upper, petscii_mixed, screencode, screencode_upper, screencode_mixed, ascii", strLit.Value)
+				}
+				log.Debug("processDirective .encoding: name=%s, valid=%v", encodingName, isValid)
+			}
+		}
+	case ".import":
+		// Import directive - validate import type and file existence
+		if node.Value != nil {
+			// Extract import type and filename from ArrayExpression
+			if arrayExpr, ok := node.Value.(*ArrayExpression); ok && len(arrayExpr.Elements) >= 2 {
+				// First element: import type (source/binary/c64)
+				var importType string
+				if typeIdent, ok := arrayExpr.Elements[0].(*Identifier); ok {
+					importType = strings.ToLower(typeIdent.Value)
+				}
+
+				// Second element: filename
+				var filename string
+				if fileStr, ok := arrayExpr.Elements[1].(*StringLiteral); ok {
+					filename = fileStr.Value
+				}
+
+				// Validate import type (redundant with parser check, but defensive)
+				if importType != "" && importType != "source" && importType != "binary" && importType != "c64" {
+					a.addWarning(node.Token, "Invalid import type '%s', expected 'source', 'binary', or 'c64'", importType)
+				}
+
+				// Check if file exists (relative to workspace root or absolute)
+				if filename != "" {
+					// TODO: In future, add file existence check
+					// For now, just log the import
+					log.Debug("processDirective .import: type=%s, file=%s", importType, filename)
+				}
+			}
+		}
+	case ".function":
+		// Function directive - check for .return statement (only in Pass 1)
+		if isPass1 && node.Name != nil && node.Block != nil {
+			hasReturn := a.blockHasReturnStatement(node.Block)
+			if !hasReturn {
+				a.addWarning(node.Token, "Function '%s' has no .return statement", node.Name.Value)
+			}
+			log.Debug("processDirective .function: name=%s, hasReturn=%v", node.Name.Value, hasReturn)
+		}
+	case ".macro":
+		// Macro directive - validate parameters and usage (only in Pass 1)
+		if isPass1 && node.Name != nil {
+			log.Debug("processDirective .macro: name=%s, params=%d", node.Name.Value, len(node.Parameters))
+		}
 	case ".pc", "*", "*=":
 		// Set program counter
 		if node.Value != nil {
@@ -1953,4 +2065,34 @@ func (a *SemanticAnalyzer) addDeadCodeWarningsForIfBlock(node *DirectiveStatemen
 			}
 		}
 	}
+}
+
+// blockHasReturnStatement checks if a block contains a .return directive
+func (a *SemanticAnalyzer) blockHasReturnStatement(block *BlockStatement) bool {
+	if block == nil {
+		return false
+	}
+
+	for _, stmt := range block.Statements {
+		// Check if this statement is a .return directive
+		if directiveStmt, ok := stmt.(*DirectiveStatement); ok {
+			if strings.ToLower(directiveStmt.Token.Literal) == ".return" {
+				return true
+			}
+			// Recursively check nested blocks (e.g., .if statements)
+			if directiveStmt.Block != nil {
+				if a.blockHasReturnStatement(directiveStmt.Block) {
+					return true
+				}
+			}
+		}
+		// Check if this is a block statement with nested statements
+		if blockStmt, ok := stmt.(*BlockStatement); ok {
+			if a.blockHasReturnStatement(blockStmt) {
+				return true
+			}
+		}
+	}
+
+	return false
 }

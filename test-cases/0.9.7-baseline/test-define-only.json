@@ -1,0 +1,32 @@
+{
+  "name": "Define Test Only",
+  "description": "Test .define directive redefinition warning",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": ".define Directive - Symbol Only",
+      "description": "Test .define directive without value (symbol-only)",
+      "type": "diagnostics",
+      "input": {
+        "file": "02-directive-define.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 27,
+            "severity": 2,
+            "message": "Redefinition"
+          }
+        ]
+      }
+    }
+  ]
+}

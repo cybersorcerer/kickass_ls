@@ -1,0 +1,31 @@
+{
+  "name": "Encoding Validation Test",
+  "description": "Test encoding name validation",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Encoding - Invalid Name Warning",
+      "description": "Should warn about unknown encoding",
+      "type": "diagnostics",
+      "input": {
+        "file": "test-encoding-validation.asm"
+      },
+      "expected": {
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 3,
+            "severity": 2,
+            "message": "Unknown encoding"
+          }
+        ]
+      }
+    }
+  ]
+}

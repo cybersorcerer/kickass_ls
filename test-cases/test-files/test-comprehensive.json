@@ -1,0 +1,24 @@
+{
+  "name": "Comprehensive Test Diagnostics",
+  "description": "Check diagnostics in comprehensive-test.asm",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Comprehensive Test - All Diagnostics",
+      "description": "Show all diagnostics from comprehensive-test.asm",
+      "type": "diagnostics",
+      "input": {
+        "file": "comprehensive-test.asm"
+      },
+      "expected": {
+        "maxErrors": 100
+      }
+    }
+  ]
+}

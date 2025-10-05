@@ -1,0 +1,407 @@
+{
+  "name": "Kick Assembler LSP Regression Test Suite",
+  "description": "Comprehensive regression tests to ensure no features are broken during development",
+  "version": "1.0.0",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Basic Mnemonics - All Standard Opcodes",
+      "description": "Ensure all 6510 standard mnemonics are recognized",
+      "type": "diagnostics",
+      "input": {
+        "file": "01-basic-mnemonics.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Addressing Modes - All 13 Modes",
+      "description": "Ensure all addressing modes parse correctly including indexed indirect",
+      "type": "diagnostics",
+      "input": {
+        "file": "02-addressing-modes.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Number Literals - All Formats",
+      "description": "Hex, decimal, binary, and character literals",
+      "type": "diagnostics",
+      "input": {
+        "file": "03-number-literals.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Data Directives - .byte, .word, .text, .fill",
+      "description": "Ensure all data directives work correctly",
+      "type": "diagnostics",
+      "input": {
+        "file": "04-data-directives.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Constants and Variables - .const, .var",
+      "description": "Ensure constant and variable declarations work",
+      "type": "diagnostics",
+      "input": {
+        "file": "05-constants-variables.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Labels and Symbols",
+      "description": "Ensure label definition and usage work correctly",
+      "type": "diagnostics",
+      "input": {
+        "file": "06-labels-symbols.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "C64 Memory Map Recognition",
+      "description": "Ensure all C64 memory addresses are recognized (VIC, SID, CIA)",
+      "type": "diagnostics",
+      "input": {
+        "file": "07-c64-memory-map.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Expressions and Operators",
+      "description": "Arithmetic, bitwise, shift operators and byte extraction",
+      "type": "diagnostics",
+      "input": {
+        "file": "08-expressions.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Comment Support",
+      "description": "All comment styles (line and block comments)",
+      "type": "diagnostics",
+      "input": {
+        "file": "09-comments.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "Illegal Opcodes Recognition",
+      "description": "Illegal opcodes should be recognized with warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "10-illegal-opcodes.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 18
+      }
+    },
+    {
+      "name": "Completion - Mnemonic Suggestions",
+      "description": "Completion should suggest mnemonics",
+      "type": "completion",
+      "input": {
+        "file": "01-basic-mnemonics.asm",
+        "line": 5,
+        "character": 8
+      },
+      "expected": {
+        "minItems": 50,
+        "completionItems": [
+          {
+            "label": "lda"
+          },
+          {
+            "label": "ldx"
+          },
+          {
+            "label": "ldy"
+          },
+          {
+            "label": "sta"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Completion - Memory Addresses",
+      "description": "Completion should suggest C64 memory addresses",
+      "type": "completion",
+      "input": {
+        "file": "07-c64-memory-map.asm",
+        "line": 10,
+        "character": 9
+      },
+      "expected": {
+        "minItems": 10,
+        "completionItems": [
+          {
+            "label": "$d020"
+          },
+          {
+            "label": "$d021"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Hover - Mnemonic Documentation",
+      "description": "Hovering over LDA should show documentation",
+      "type": "hover",
+      "input": {
+        "file": "01-basic-mnemonics.asm",
+        "line": 8,
+        "character": 5
+      },
+      "expected": {
+        "hoverContent": "LDA"
+      }
+    },
+    {
+      "name": "Hover - C64 Memory Address",
+      "description": "Hovering over $d020 should show border color info",
+      "type": "hover",
+      "input": {
+        "file": "07-c64-memory-map.asm",
+        "line": 11,
+        "character": 9
+      },
+      "expected": {
+        "hoverContent": "Border"
+      }
+    },
+    {
+      "name": "Symbols - Label Extraction",
+      "description": "Should extract all labels from document",
+      "type": "symbols",
+      "input": {
+        "file": "06-labels-symbols.asm"
+      },
+      "expected": {
+        "minSymbols": 5,
+        "symbols": [
+          {
+            "name": "start",
+            "kind": 13
+          },
+          {
+            "name": "init",
+            "kind": 13
+          },
+          {
+            "name": "clear_screen",
+            "kind": 13
+          },
+          {
+            "name": "main",
+            "kind": 13
+          },
+          {
+            "name": "end",
+            "kind": 13
+          }
+        ]
+      }
+    },
+    {
+      "name": "Symbols - Constants Extraction",
+      "description": "Should extract constants from document",
+      "type": "symbols",
+      "input": {
+        "file": "05-constants-variables.asm"
+      },
+      "expected": {
+        "minSymbols": 4,
+        "symbols": [
+          {
+            "name": "SCREEN",
+            "kind": 14
+          },
+          {
+            "name": "BORDER",
+            "kind": 14
+          }
+        ]
+      }
+    },
+    {
+      "name": "Performance - Large File Completion",
+      "description": "Completion should respond quickly on larger files",
+      "type": "performance",
+      "action": "textDocument/completion",
+      "input": {
+        "file": "07-c64-memory-map.asm",
+        "line": 10,
+        "character": 9
+      },
+      "expected": {}
+    },
+    {
+      "name": "Memory - Repeated Operations",
+      "description": "No memory leaks on repeated operations",
+      "type": "memory",
+      "input": {
+        "file": "01-basic-mnemonics.asm",
+        "line": 5,
+        "character": 8
+      },
+      "expected": {},
+      "operations": [
+        {
+          "type": "textDocument/completion",
+          "iterations": 50
+        },
+        {
+          "type": "textDocument/hover",
+          "iterations": 50
+        }
+      ]
+    },
+    {
+      "name": "v0.9.7 - Macro Call Validation",
+      "description": "Macro calls with wrong argument count should generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-macro-call-validation.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 2,
+        "diagnostics": [
+          {
+            "line": 18,
+            "severity": 2,
+            "message": "arguments"
+          },
+          {
+            "line": 20,
+            "severity": 2,
+            "message": "arguments"
+          }
+        ]
+      }
+    },
+    {
+      "name": "v0.9.7 - Function Missing Return",
+      "description": "Functions without .return statement should generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-function-return.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 6,
+            "severity": 2,
+            "message": "no .return"
+          }
+        ]
+      }
+    },
+    {
+      "name": "v0.9.7 - Encoding Validation",
+      "description": "Invalid encoding names should generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-encoding-validation.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 3,
+            "severity": 2,
+            "message": "encoding"
+          }
+        ]
+      }
+    },
+    {
+      "name": "v0.9.7 - Pseudocommand Call Validation",
+      "description": "Pseudocommand calls with wrong argument count should generate warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-pseudocommand-call-validation.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 3,
+        "diagnostics": [
+          {
+            "line": 18,
+            "severity": 2,
+            "message": "arguments"
+          },
+          {
+            "line": 19,
+            "severity": 2,
+            "message": "arguments"
+          },
+          {
+            "line": 22,
+            "severity": 2,
+            "message": "arguments"
+          }
+        ]
+      }
+    },
+    {
+      "name": "v0.9.7 - Namespace Parsing",
+      "description": "Namespace directives should parse without errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-namespace.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    },
+    {
+      "name": "v0.9.7 - Enum Parsing",
+      "description": "Enum directives should parse without errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-enum.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    }
+  ]
+}

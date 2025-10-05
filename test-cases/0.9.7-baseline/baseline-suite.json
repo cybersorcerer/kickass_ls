@@ -1,0 +1,243 @@
+{
+  "name": "Kick Assembler LSP v0.9.7 Baseline Test Suite",
+  "description": "Directive parsing and program counter expression tests for version 0.9.7",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": ".encoding Directive - String Parameter",
+      "description": "Test .encoding directive with string parameter parsing",
+      "type": "diagnostics",
+      "input": {
+        "file": "01-directive-encoding.asm"
+      },
+      "expected": {
+        "maxErrors": 1,
+        "diagnostics": [
+          {
+            "line": 22,
+            "severity": 2,
+            "message": "invalid_encoding"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".define Directive - Symbol Only",
+      "description": "Test .define directive without value (symbol-only)",
+      "type": "diagnostics",
+      "input": {
+        "file": "02-directive-define.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 27,
+            "severity": 2,
+            "message": "Redefinition"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".function Directive - Parameter Lists",
+      "description": "Test .function directive with parameter list parsing",
+      "type": "diagnostics",
+      "input": {
+        "file": "03-directive-function.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 2,
+        "diagnostics": [
+          {
+            "line": 40,
+            "severity": 2,
+            "message": "no .return"
+          },
+          {
+            "line": 46,
+            "severity": 4,
+            "message": "never used"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".macro Directive - Parameter Lists",
+      "description": "Test .macro directive with parameter list parsing",
+      "type": "diagnostics",
+      "input": {
+        "file": "04-directive-macro.asm"
+      },
+      "expected": {
+        "maxErrors": 1,
+        "diagnostics": [
+          {
+            "line": 54,
+            "severity": 1,
+            "message": "arguments"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".namespace Directive - Scope Management",
+      "description": "Test .namespace directive with scope management",
+      "type": "diagnostics",
+      "input": {
+        "file": "05-directive-namespace.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 56,
+            "severity": 2,
+            "message": "Duplicate"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".pseudocommand Directive - Colon Syntax",
+      "description": "Test .pseudocommand directive with colon-separated parameters",
+      "type": "diagnostics",
+      "input": {
+        "file": "06-directive-pseudocommand.asm"
+      },
+      "expected": {
+        "maxErrors": 1,
+        "diagnostics": [
+          {
+            "line": 50,
+            "severity": 1,
+            "message": "parameters"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".enum Directive - Member Values",
+      "description": "Test .enum directive with member value parsing",
+      "type": "diagnostics",
+      "input": {
+        "file": "07-directive-enum.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 1,
+        "diagnostics": [
+          {
+            "line": 44,
+            "severity": 2,
+            "message": "Duplicate value"
+          }
+        ]
+      }
+    },
+    {
+      "name": ".import Directive - Keyword + String",
+      "description": "Test .import directive with keyword and string parameter",
+      "type": "diagnostics",
+      "input": {
+        "file": "08-directive-import.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    },
+    {
+      "name": "Program Counter (*) Expressions",
+      "description": "Test * (PC) in expressions and relative branches",
+      "type": "diagnostics",
+      "input": {
+        "file": "09-pc-expressions.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    },
+    {
+      "name": "Mixed Directive Features",
+      "description": "Test combination of all new directive features",
+      "type": "diagnostics",
+      "input": {
+        "file": "10-mixed-directives.asm"
+      },
+      "expected": {
+        "maxErrors": 0
+      }
+    },
+    {
+      "name": "Completion - .encoding Context",
+      "description": "Test completion after .encoding directive",
+      "type": "completion",
+      "input": {
+        "file": "01-directive-encoding.asm",
+        "line": 7,
+        "character": 11
+      },
+      "expected": {
+        "minItems": 1,
+        "completionItems": [
+          {
+            "label": "petscii_upper"
+          },
+          {
+            "label": "petscii_mixed"
+          },
+          {
+            "label": "screencode_mixed"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Hover - .function Parameter",
+      "description": "Hovering over function parameter should show info",
+      "type": "hover",
+      "input": {
+        "file": "03-directive-function.asm",
+        "line": 8,
+        "character": 15
+      },
+      "expected": {
+        "hoverContent": "parameter"
+      }
+    },
+    {
+      "name": "Symbols - Extract .namespace Members",
+      "description": "Should extract namespace and nested symbols",
+      "type": "symbols",
+      "input": {
+        "file": "05-directive-namespace.asm"
+      },
+      "expected": {
+        "minSymbols": 5,
+        "symbols": [
+          {
+            "name": "graphics",
+            "kind": 3
+          },
+          {
+            "name": "sound",
+            "kind": 3
+          },
+          {
+            "name": "utils",
+            "kind": 3
+          }
+        ]
+      }
+    }
+  ]
+}

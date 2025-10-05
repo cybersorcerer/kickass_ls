@@ -1,0 +1,46 @@
+{
+  "name": "Comprehensive Test Validation",
+  "description": "Test all new v0.9.7 features in comprehensive-test.asm",
+  "version": "0.9.7",
+  "setup": {
+    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Comprehensive Test - All Diagnostics",
+      "description": "Check that all expected warnings are generated",
+      "type": "diagnostics",
+      "input": {
+        "file": "comprehensive-test.asm"
+      },
+      "expected": {
+        "minWarnings": 10,
+        "diagnostics": [
+          {
+            "line": 91,
+            "severity": 2,
+            "message": "no .return"
+          },
+          {
+            "line": 161,
+            "severity": 2,
+            "message": "arguments"
+          },
+          {
+            "line": 162,
+            "severity": 2,
+            "message": "arguments"
+          },
+          {
+            "line": 163,
+            "severity": 2,
+            "message": "arguments"
+          }
+        ]
+      }
+    }
+  ]
+}
