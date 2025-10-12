@@ -64,6 +64,34 @@ func generateSemanticTokens(uri string, text string) []int {
 			continue
 		}
 
+		// Special handling for hex/binary numbers with prefix ($d020, %10101010)
+		// Split into two tokens: prefix (operator) + number
+		if (token.Type == TOKEN_NUMBER_HEX || token.Type == TOKEN_NUMBER_BIN) && len(token.Literal) > 1 {
+			prefix := token.Literal[0]
+			if prefix == '$' || prefix == '%' {
+				// Emit prefix as operator
+				deltaLine := line - lastEmittedLine
+				deltaChar := char
+				if deltaLine == 0 {
+					deltaChar = char - lastEmittedChar
+				}
+				tokens = append(tokens, deltaLine, deltaChar, 1, SemanticTokenOperator, 0)
+				tokenCount++
+				lastEmittedLine = line
+				lastEmittedChar = char
+
+				// Emit number part (without prefix)
+				deltaLine = 0
+				deltaChar = 1 // 1 char after prefix
+				tokenLength := len(token.Literal) - 1
+				tokens = append(tokens, deltaLine, deltaChar, tokenLength, tokenType, modifiers)
+				tokenCount++
+				lastEmittedLine = line
+				lastEmittedChar = char + 1
+				continue
+			}
+		}
+
 		// Calculate delta from last EMITTED token
 		deltaLine := line - lastEmittedLine
 		deltaChar := char
@@ -104,33 +132,33 @@ func generateSemanticTokens(uri string, text string) []int {
 func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 	switch token.Type {
 	case TOKEN_MNEMONIC_STD, TOKEN_MNEMONIC_CTRL, TOKEN_MNEMONIC_ILL, TOKEN_MNEMONIC_65C02:
-		return SemanticTokenKeyword, 0 // Opcodes as keywords
-		
+		return SemanticTokenMnemonic, 0 // Mnemonics (LDA, STA, JMP, etc.)
+
 	case TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_FLOW,
 		 TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
-		return SemanticTokenKeyword, SemanticTokenModifierDeclaration // Directives
+		return SemanticTokenDirective, SemanticTokenModifierDeclaration // Directives (.byte, .const, etc.)
 
 	case TOKEN_DIRECTIVE_KICK_PRE:
-		// Preprocessor directives (#import, #define, etc.) get macro highlighting
+		// Preprocessor directives (#import, #define, etc.)
 		if len(token.Literal) > 0 && token.Literal[0] == '#' {
-			return SemanticTokenMacro, 0
+			return SemanticTokenPreprocessor, 0
 		}
-		return SemanticTokenKeyword, SemanticTokenModifierDeclaration // Other pre directives
+		return SemanticTokenDirective, SemanticTokenModifierDeclaration // Other directives
 
 	case TOKEN_ELSE:
 		return SemanticTokenKeyword, 0 // else keyword for .if directives
-		
+
 	case TOKEN_NUMBER_HEX, TOKEN_NUMBER_BIN, TOKEN_NUMBER_DEC, TOKEN_NUMBER_OCT:
 		return SemanticTokenNumber, 0 // Numbers
-		
+
 	case TOKEN_COMMENT, TOKEN_COMMENT_BLOCK:
 		return SemanticTokenComment, 0 // Comments (line and block)
-		
+
 	case TOKEN_STRING:
 		return SemanticTokenString, 0 // Strings
-		
+
 	case TOKEN_LABEL:
-		return SemanticTokenFunction, 0 // Labels (consistent with symbol-based labels)
+		return SemanticTokenLabel, 0 // Labels
 		
 	case TOKEN_IDENTIFIER:
 		// Check if it's a known symbol
@@ -164,7 +192,7 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 
 // TokenType constants for semantic highlighting
 const (
-	SemanticTokenKeyword = iota        // 0: "keyword"
+	SemanticTokenKeyword = iota        // 0: "keyword" (generic fallback)
 	SemanticTokenVariable              // 1: "variable"
 	SemanticTokenFunction              // 2: "function"
 	SemanticTokenMacro                 // 3: "macro"
@@ -173,6 +201,10 @@ const (
 	SemanticTokenComment               // 6: "comment"
 	SemanticTokenString                // 7: "string"
 	SemanticTokenOperator              // 8: "operator"
+	SemanticTokenMnemonic              // 9: "mnemonic"
+	SemanticTokenDirective             // 10: "directive"
+	SemanticTokenPreprocessor          // 11: "preprocessor"
+	SemanticTokenLabel                 // 12: "label"
 )
 
 // TokenModifier constants
@@ -194,7 +226,7 @@ func getTokenTypeForSymbol(kind SymbolKind) int {
 	case Variable:
 		return SemanticTokenVariable
 	case Label:
-		return SemanticTokenFunction
+		return SemanticTokenLabel
 	case Function:
 		return SemanticTokenFunction
 	case Macro:

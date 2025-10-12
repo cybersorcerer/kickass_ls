@@ -821,7 +821,19 @@ func Start() {
 						"semanticTokensProvider": map[string]interface{}{
 							"legend": map[string]interface{}{
 								"tokenTypes": []string{
-									"keyword", "variable", "function", "macro", "pseudocommand", "number", "comment", "string", "operator",
+									"keyword",       // 0
+									"variable",      // 1
+									"function",      // 2
+									"macro",         // 3
+									"pseudocommand", // 4
+									"number",        // 5
+									"comment",       // 6
+									"string",        // 7
+									"operator",      // 8
+									"mnemonic",      // 9
+									"directive",     // 10
+									"preprocessor",  // 11
+									"label",         // 12
 								},
 								"tokenModifiers": []string{
 									"declaration", "readonly",
