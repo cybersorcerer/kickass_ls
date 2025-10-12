@@ -57,6 +57,8 @@ type AnalysisContext struct {
 	MacroDefinitions map[string]*MacroDefinition // Macro definitions
 	MemoryMap        *MemoryMap                  // C64/6502 memory layout
 	CPUFlags         *CPUFlags                   // Processor flags state
+	CurrentNamespace string                      // Current namespace context for label resolution
+	NamespaceStack   []string                    // Stack for nested namespaces
 }
 
 // NewAnalysisContext creates a new enhanced analysis context
@@ -69,7 +71,35 @@ func NewAnalysisContext() *AnalysisContext {
 		MacroDefinitions: make(map[string]*MacroDefinition),
 		MemoryMap:        NewC64MemoryMap(),
 		CPUFlags:         &CPUFlags{},
+		CurrentNamespace: "",
+		NamespaceStack:   []string{},
 	}
+}
+
+// getQualifiedLabelName returns the fully qualified label name with namespace prefix
+func (ctx *AnalysisContext) getQualifiedLabelName(label string) string {
+	if ctx.CurrentNamespace == "" {
+		return label
+	}
+	return ctx.CurrentNamespace + "." + label
+}
+
+// lookupLabel searches for a label in the current namespace first, then globally
+func (ctx *AnalysisContext) lookupLabel(label string) (*Symbol, bool) {
+	// First try with namespace prefix (current namespace)
+	if ctx.CurrentNamespace != "" {
+		qualifiedName := ctx.CurrentNamespace + "." + label
+		if symbol, found := ctx.DefinedLabels[qualifiedName]; found {
+			return symbol, true
+		}
+	}
+
+	// Then try global scope (no prefix)
+	if symbol, found := ctx.DefinedLabels[label]; found {
+		return symbol, true
+	}
+
+	return nil, false
 }
 
 // NewC64MemoryMap creates the standard C64 memory map for assembler context
@@ -112,6 +142,8 @@ type SemanticAnalyzer struct {
 	documentLines []string
 	// Enhanced analysis context
 	context       *AnalysisContext
+	// Track if we're inside a macro or function template (for skipping PC-based validations)
+	inMacroOrFunction bool
 }
 
 // NewSemanticAnalyzer creates a new analyzer.
@@ -141,6 +173,8 @@ func (a *SemanticAnalyzer) Analyze(program *Program) []Diagnostic {
 	a.pass2ForwardReferenceResolution()
 
 	// Pass 3: Traditional usage analysis (existing)
+	// Reset PC to start address for Pass 3 (PC was modified during Pass 1)
+	a.context.CurrentPC = 0x1000
 	a.walkStatements(program.Statements, a.scope)
 
 	// Pass 4: Dead code detection
@@ -171,17 +205,23 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 		switch stmt := statement.(type) {
 		case *LabelStatement:
 			if stmt != nil && stmt.Name != nil {
-				// Record label with current PC
-				symbol := &Symbol{
-					Name:    stmt.Name.Value,
-					Kind:    Label,
-					Address: a.context.CurrentPC,
-					Position: Position{
-						Line:      stmt.Token.Line - 1,
-						Character: stmt.Token.Column - 1,
-					},
+				// Skip label registration inside macro/function templates
+				// Labels in templates are local to the template, not global
+				if !a.inMacroOrFunction {
+					// Record label with current PC
+					symbol := &Symbol{
+						Name:    stmt.Name.Value,
+						Kind:    Label,
+						Address: a.context.CurrentPC,
+						Position: Position{
+							Line:      stmt.Token.Line - 1,
+							Character: stmt.Token.Column - 1,
+						},
+					}
+					// Store label with namespace prefix if inside a namespace
+					qualifiedName := a.context.getQualifiedLabelName(normalizeLabel(stmt.Name.Value))
+					a.context.DefinedLabels[qualifiedName] = symbol
 				}
-				a.context.DefinedLabels[normalizeLabel(stmt.Name.Value)] = symbol
 			}
 		case *InstructionStatement:
 			if stmt != nil {
@@ -192,7 +232,38 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 			if stmt != nil {
 				a.processDirectivePass1(stmt) // Use Pass 1 version
 				if stmt.Block != nil && stmt.Block.Statements != nil {
+					// Check if this is a macro, function, or pseudocommand (templates, not executable code)
+					directiveName := strings.ToLower(stmt.Token.Literal)
+					isMacroOrFunction := directiveName == ".macro" || directiveName == ".function" || directiveName == ".pseudocommand"
+					isNamespace := directiveName == ".namespace"
+
+					// Set flag to skip PC-based validations in templates
+					if isMacroOrFunction {
+						a.inMacroOrFunction = true
+					}
+
+					// Handle namespace: push namespace context
+					if isNamespace && stmt.Name != nil {
+						a.context.NamespaceStack = append(a.context.NamespaceStack, a.context.CurrentNamespace)
+						if a.context.CurrentNamespace == "" {
+							a.context.CurrentNamespace = stmt.Name.Value
+						} else {
+							a.context.CurrentNamespace = a.context.CurrentNamespace + "." + stmt.Name.Value
+						}
+					}
+
 					a.pass1AddressCalculation(stmt.Block.Statements)
+
+					// Reset flag after processing block
+					if isMacroOrFunction {
+						a.inMacroOrFunction = false
+					}
+
+					// Pop namespace context
+					if isNamespace && len(a.context.NamespaceStack) > 0 {
+						a.context.CurrentNamespace = a.context.NamespaceStack[len(a.context.NamespaceStack)-1]
+						a.context.NamespaceStack = a.context.NamespaceStack[:len(a.context.NamespaceStack)-1]
+					}
 				}
 			}
 		}
@@ -202,7 +273,8 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 // Pass 2: Forward reference resolution
 func (a *SemanticAnalyzer) pass2ForwardReferenceResolution() {
 	for _, ref := range a.context.ForwardRefs {
-		if symbol, found := a.context.DefinedLabels[normalizeLabel(ref.SymbolName)]; found {
+		// Use namespace-aware label lookup
+		if symbol, found := a.context.lookupLabel(normalizeLabel(ref.SymbolName)); found {
 			if ref.Context == "branch" {
 				// Validate branch distance now that we know the label address
 				// Use the stored PC from when the branch instruction was processed
@@ -266,6 +338,15 @@ func (a *SemanticAnalyzer) walkStatement(stmt Statement, currentScope *Scope) {
 				a.walkExpression(node.Value, currentScope)
 			}
 			if node.Block != nil {
+				// Check if this is a macro, function, or pseudocommand (templates, not executable code)
+				directiveName := strings.ToLower(node.Token.Literal)
+				isMacroOrFunction := directiveName == ".macro" || directiveName == ".function" || directiveName == ".pseudocommand"
+
+				// Set flag to skip PC-based validations in templates
+				if isMacroOrFunction {
+					a.inMacroOrFunction = true
+				}
+
 				// Find the child scope that corresponds to this block
 				var newScope *Scope
 				if node.Name != nil {
@@ -276,6 +357,11 @@ func (a *SemanticAnalyzer) walkStatement(stmt Statement, currentScope *Scope) {
 				} else {
 					// Fallback to current scope if a specific child scope isn't found (should not happen for well-formed ASTs)
 					a.walkStatements(node.Block.Statements, currentScope)
+				}
+
+				// Reset flag after processing block
+				if isMacroOrFunction {
+					a.inMacroOrFunction = false
 				}
 			}
 		}
@@ -502,8 +588,10 @@ func (a *SemanticAnalyzer) calculateInstructionAddress(node *InstructionStatemen
 		a.checkZeroPageOptimization(mnemonic, node.Operand, node.Token)
 	}
 
-	// Update program counter
-	a.context.CurrentPC += int64(length)
+	// Update program counter (but not inside templates)
+	if !a.inMacroOrFunction {
+		a.context.CurrentPC += int64(length)
+	}
 }
 
 // processInstruction handles instruction processing with PC tracking
@@ -517,8 +605,10 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	log.Debug("Processing instruction: %s", mnemonic)
 	length := a.getInstructionLength(mnemonic, node.Operand)
 
-	// Update program counter
-	a.context.CurrentPC += int64(length)
+	// Update program counter (but not inside templates)
+	if !a.inMacroOrFunction {
+		a.context.CurrentPC += int64(length)
+	}
 
 	// Check for branch distance validation (relative branches only)
 	if a.isBranchInstruction(mnemonic) && node.Operand != nil {
@@ -561,12 +651,19 @@ func (a *SemanticAnalyzer) validateBranchDistance(operand Expression, token Toke
 		return
 	}
 
+	// Skip branch validation inside macro/function templates
+	// Macros and functions are templates, not executable code
+	if a.inMacroOrFunction {
+		return
+	}
+
 	if operand == nil || a.context == nil {
 		return
 	}
 
 	if ident, ok := operand.(*Identifier); ok {
-		if symbol, found := a.context.DefinedLabels[normalizeLabel(ident.Value)]; found {
+		// Use namespace-aware label lookup
+		if symbol, found := a.context.lookupLabel(normalizeLabel(ident.Value)); found {
 			// Calculate branch distance (branch instruction PC + 2 is the base)
 			distance := symbol.Address - (a.context.CurrentPC + 2)
 			if distance < -128 || distance > 127 {
@@ -587,7 +684,8 @@ func (a *SemanticAnalyzer) validateBranchDistance(operand Expression, token Toke
 // validateJumpTarget checks for undefined symbols in jump/call instructions
 func (a *SemanticAnalyzer) validateJumpTarget(operand Expression, token Token) {
 	if ident, ok := operand.(*Identifier); ok {
-		if _, found := a.context.DefinedLabels[normalizeLabel(ident.Value)]; !found {
+		// Use namespace-aware label lookup
+		if _, found := a.context.lookupLabel(normalizeLabel(ident.Value)); !found {
 			// Symbol not found, check if it might be a forward reference
 			// Add forward reference for later resolution
 			a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
@@ -618,8 +716,8 @@ func (a *SemanticAnalyzer) validateSymbolsInExpression(expr Expression, token To
 			return
 		}
 
-		// Check if symbol is defined
-		if _, found := a.context.DefinedLabels[normalizeLabel(e.Value)]; !found {
+		// Check if symbol is defined - use namespace-aware lookup
+		if _, found := a.context.lookupLabel(normalizeLabel(e.Value)); !found {
 			// Create forward reference for later resolution
 			a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
 				SymbolName: e.Value,
@@ -682,7 +780,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 	log.Debug("processDirective: directive=%s, name=%s, pass1=%v", directive, node.Name.Value, isPass1)
 
 	switch directive {
-	case ".define":
+	case "#define":
 		// Define directive - ONLY process in Pass 1
 		if isPass1 && node.Name != nil {
 			symbolName := normalizeLabel(node.Name.Value)
@@ -693,10 +791,10 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			} else {
 				// Add to defined symbols table
 				a.context.DefinedSymbols[symbolName] = true
-				log.Debug("processDirective .define: defined symbol '%s'", node.Name.Value)
+				log.Debug("processDirective #define: defined symbol '%s'", node.Name.Value)
 			}
 		}
-	case ".undef":
+	case "#undef":
 		// Undefine directive - ONLY process in Pass 1
 		if isPass1 && node.Name != nil {
 			symbolName := normalizeLabel(node.Name.Value)
@@ -707,7 +805,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			} else {
 				// Remove from defined symbols table
 				delete(a.context.DefinedSymbols, symbolName)
-				log.Debug("processDirective .undef: undefined symbol '%s'", node.Name.Value)
+				log.Debug("processDirective #undef: undefined symbol '%s'", node.Name.Value)
 			}
 		}
 	case ".encoding":
@@ -740,7 +838,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		if node.Value != nil {
 			// Extract import type and filename from ArrayExpression
 			if arrayExpr, ok := node.Value.(*ArrayExpression); ok && len(arrayExpr.Elements) >= 2 {
-				// First element: import type (source/binary/c64)
+				// First element: import type (binary/c64/text only for .import)
 				var importType string
 				if typeIdent, ok := arrayExpr.Elements[0].(*Identifier); ok {
 					importType = strings.ToLower(typeIdent.Value)
@@ -752,10 +850,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 					filename = fileStr.Value
 				}
 
-				// Validate import type (redundant with parser check, but defensive)
-				if importType != "" && importType != "source" && importType != "binary" && importType != "c64" {
-					a.addWarning(node.Token, "Invalid import type '%s', expected 'source', 'binary', or 'c64'", importType)
-				}
+				// Import type validation is already done in parser, no need to duplicate here
 
 				// Check if file exists (relative to workspace root or absolute)
 				if filename != "" {
@@ -815,8 +910,9 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 				log.Debug("processDirective .const: evaluateExpression returned -1 for %s", node.Name.Value)
 			}
 
-			// Add to symbol table
-			a.context.DefinedLabels[normalizeLabel(node.Name.Value)] = symbol
+			// Add to symbol table with namespace prefix
+			qualifiedName := a.context.getQualifiedLabelName(normalizeLabel(node.Name.Value))
+			a.context.DefinedLabels[qualifiedName] = symbol
 		}
 	case ".var", "var":
 		// Variable definition - add to symbol table
@@ -847,8 +943,9 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 				log.Debug("processDirective .const: evaluateExpression returned -1 for %s", node.Name.Value)
 			}
 
-			// Add to symbol table
-			a.context.DefinedLabels[normalizeLabel(node.Name.Value)] = symbol
+			// Add to symbol table with namespace prefix
+			qualifiedName := a.context.getQualifiedLabelName(normalizeLabel(node.Name.Value))
+			a.context.DefinedLabels[qualifiedName] = symbol
 		}
 	case ".byte", ".byt":
 		// Single byte data
@@ -856,20 +953,29 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		if node.Value != nil {
 			a.checkRangeValidation(node.Value, "byte", 0, 255, node.Token)
 		}
-		a.context.CurrentPC++
+		// Don't update PC inside templates
+		if !a.inMacroOrFunction {
+			a.context.CurrentPC++
+		}
 	case ".word", ".wo":
 		// Two byte data
 		log.Debug("processDirective .word: node.Value type=%T, value=%+v", node.Value, node.Value)
 		if node.Value != nil {
 			a.checkRangeValidation(node.Value, "word", 0, 65535, node.Token)
 		}
-		a.context.CurrentPC += 2
+		// Don't update PC inside templates
+		if !a.inMacroOrFunction {
+			a.context.CurrentPC += 2
+		}
 	case ".text", ".tx":
 		// String data - estimate length based on token type
 		if node.Value != nil {
 			// For text directives, estimate 1 byte per character
 			// This is a simplified estimation since we don't have StringLiteral type
-			a.context.CurrentPC += 8 // Default text size estimate
+			// Don't update PC inside templates
+			if !a.inMacroOrFunction {
+				a.context.CurrentPC += 8 // Default text size estimate
+			}
 		}
 	case ".fill":
 		// Fill directive: .fill count, value
@@ -881,7 +987,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			if arrayExpr, ok := node.Value.(*ArrayExpression); ok && len(arrayExpr.Elements) > 0 {
 				// First element is the count
 				count := a.evaluateExpression(arrayExpr.Elements[0])
-				if count > 0 {
+				if count > 0 && !a.inMacroOrFunction {
 					log.Debug("processDirective .fill: count=%d, updating PC from %d to %d",
 						count, a.context.CurrentPC, a.context.CurrentPC+count)
 					a.context.CurrentPC += count
@@ -889,7 +995,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			} else {
 				// Try to evaluate as single expression (count only)
 				count := a.evaluateExpression(node.Value)
-				if count > 0 {
+				if count > 0 && !a.inMacroOrFunction {
 					log.Debug("processDirective .fill: count=%d, updating PC from %d to %d",
 						count, a.context.CurrentPC, a.context.CurrentPC+count)
 					a.context.CurrentPC += count
@@ -945,9 +1051,11 @@ func (a *SemanticAnalyzer) processForDirectiveKickAsm(stmt *DirectiveStatement) 
 		blockSize = 1 // Default to 1 byte per iteration (e.g., nop)
 	}
 
-	// Add total loop size to PC
-	totalLoopSize := blockSize * int64(iterationCount)
-	a.context.CurrentPC += totalLoopSize
+	// Add total loop size to PC (but not inside templates)
+	if !a.inMacroOrFunction {
+		totalLoopSize := blockSize * int64(iterationCount)
+		a.context.CurrentPC += totalLoopSize
+	}
 }
 
 // handleUnparsedForDirectives scans document lines for .for directives that weren't parsed correctly
@@ -969,7 +1077,9 @@ func (a *SemanticAnalyzer) handleUnparsedForDirectives() {
 					byteSize = 1 // Default: at least one instruction like nop
 				}
 				totalSize := byteSize * int64(iterCount)
-				a.context.CurrentPC += totalSize
+				if !a.inMacroOrFunction {
+					a.context.CurrentPC += totalSize
+				}
 			}
 		}
 	}
@@ -1069,9 +1179,11 @@ func (a *SemanticAnalyzer) processForDirectiveInPC(stmt *DirectiveStatement) {
 		estimatedSizePerIteration = int64(len(stmt.Block.Statements))
 	}
 
-	// Add the total size to PC
-	totalSize := estimatedSizePerIteration * int64(iterationCount)
-	a.context.CurrentPC += totalSize
+	// Add the total size to PC (but not inside templates)
+	if !a.inMacroOrFunction {
+		totalSize := estimatedSizePerIteration * int64(iterationCount)
+		a.context.CurrentPC += totalSize
+	}
 }
 
 // extractForIterationCount attempts to extract iteration count from .for directive
@@ -1120,8 +1232,12 @@ func (a *SemanticAnalyzer) processForDirective(node *DirectiveStatement) {
 	a.pass1AddressCalculation(node.Block.Statements)
 	sizePerIteration := a.context.CurrentPC - originalPC
 
-	// Restore PC and add the full loop size
-	a.context.CurrentPC = originalPC + (sizePerIteration * int64(iterationCount))
+	// Restore PC and add the full loop size (but not inside templates)
+	if !a.inMacroOrFunction {
+		a.context.CurrentPC = originalPC + (sizePerIteration * int64(iterationCount))
+	} else {
+		a.context.CurrentPC = originalPC
+	}
 }
 
 // parseForIterationCount extracts iteration count from .for directive parameters
@@ -1169,7 +1285,8 @@ func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
 		}
 	case *Identifier:
 		if e != nil && a.context.DefinedLabels != nil {
-			if symbol, found := a.context.DefinedLabels[normalizeLabel(e.Value)]; found {
+			// Use namespace-aware label lookup
+			if symbol, found := a.context.lookupLabel(normalizeLabel(e.Value)); found {
 				return symbol.Address
 			}
 		}
@@ -1838,12 +1955,14 @@ func (a *SemanticAnalyzer) processDataDirective(node *DirectiveStatement) {
 		}
 	}
 
-	// Update PC for size estimation
-	switch directive {
-	case ".byte":
-		a.context.CurrentPC++
-	case ".word":
-		a.context.CurrentPC += 2
+	// Update PC for size estimation (but not inside templates)
+	if !a.inMacroOrFunction {
+		switch directive {
+		case ".byte":
+			a.context.CurrentPC++
+		case ".word":
+			a.context.CurrentPC += 2
+		}
 	}
 }
 

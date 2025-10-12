@@ -8,6 +8,32 @@ import (
 	log "c64.nvim/internal/log"
 )
 
+// Operator precedence constants
+const (
+	_ int = iota
+	LOWEST
+	EQUALS      // ==
+	LESSGREATER // > or <
+	SUM         // +
+	PRODUCT     // *
+	PREFIX      // -X or <X
+	CALL        // myFunction(X)
+	MEMBER      // object.member
+)
+
+// precedences maps token types to their precedence levels
+var precedences = map[TokenType]int{
+	TOKEN_EQUAL:    EQUALS,
+	TOKEN_PLUS:     SUM,
+	TOKEN_MINUS:    SUM,
+	TOKEN_SLASH:    PRODUCT,
+	TOKEN_ASTERISK: PRODUCT,
+	TOKEN_LESS:     PREFIX,
+	TOKEN_GREATER:  PREFIX,
+	TOKEN_LPAREN:   CALL,
+	TOKEN_DOT:      MEMBER,
+}
+
 // Context-Aware Parser for 6510/C64/Kick Assembler
 // Uses ContextAwareLexer and produces Enhanced AST
 
@@ -233,34 +259,47 @@ func (p *ContextAwareParser) parseInstructionStatement() *InstructionStatement {
 	return stmt
 }
 
-// parseProgramCounterDirective parses *= directive
+// parseProgramCounterDirective parses *= and .pc = directives
 func (p *ContextAwareParser) parseProgramCounterDirective() *DirectiveStatement {
+	directiveLiteral := p.currentToken.Literal
+
 	stmt := &DirectiveStatement{
 		Token: Token{
 			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
+			Literal: directiveLiteral,
 			Line:    p.currentToken.Line,
 			Column:  p.currentToken.Column,
 		},
 		Name: &Identifier{
 			Token: Token{
 				Type:    p.currentToken.Type,
-				Literal: "*=",
+				Literal: directiveLiteral,
 				Line:    p.currentToken.Line,
 				Column:  p.currentToken.Column,
 			},
-			Value: "*=",
+			Value: directiveLiteral,
 		},
 	}
 
-	// Parse address expression
+	// Move to next token
 	p.nextToken()
-	if p.currentToken.Type != TOKEN_EOF {
+
+	// For .pc, expect '=' token
+	if directiveLiteral == ".pc" {
+		if p.currentToken.Type == TOKEN_EQUAL {
+			p.nextToken() // skip '='
+		} else {
+			p.addError("Expected '=' after .pc directive", p.currentToken.Line, p.currentToken.Column)
+		}
+	}
+
+	// Parse address expression
+	if p.currentToken.Type != TOKEN_EOF && !p.isStatementTerminator() {
 		stmt.Value = p.parseExpression(LOWEST)
 	}
 
 	if p.debugMode {
-		log.Debug("ContextAwareParser: Parsed program counter directive at Line %d", stmt.Token.Line)
+		log.Debug("ContextAwareParser: Parsed program counter directive '%s' at Line %d", directiveLiteral, stmt.Token.Line)
 	}
 
 	return stmt
@@ -270,12 +309,28 @@ func (p *ContextAwareParser) parseProgramCounterDirective() *DirectiveStatement 
 func (p *ContextAwareParser) parseDirectiveStatement() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
 
-	// Special handling for new directive types (v0.9.7)
+	// Check SourceType from kickass.json to determine parsing strategy
+	var sourceType StatementSourceType = SourceUnknown
+	if p.processorCtx != nil {
+		// Check preprocessor statements first
+		if info, found := p.processorCtx.PreprocessorStatements[directiveName]; found {
+			sourceType = info.SourceType
+		} else if info, found := p.processorCtx.Directives[directiveName]; found {
+			sourceType = info.SourceType
+		}
+	}
+
+	// Route to appropriate parser based on SourceType
+	if sourceType == SourcePreprocessor {
+		return p.parseDefineDirective()
+	}
+
+	// Special handling for specific directive types (v0.9.7)
 	switch directiveName {
+	case ".pc":
+		return p.parseProgramCounterDirective()
 	case ".encoding":
 		return p.parseEncodingDirective()
-	case ".define", ".undef":
-		return p.parseDefineDirective()
 	case ".import":
 		return p.parseImportDirective()
 	case ".function":
@@ -310,7 +365,19 @@ func (p *ContextAwareParser) parseDirectiveStatement() *DirectiveStatement {
 		return p.parseNamedDirective()
 	}
 
-	// Generic directive parsing
+	// Generic directive parsing - check if directive is valid
+	// Validate directive exists in kickass.json (via processorCtx)
+	isValidDirective := false
+	if p.processorCtx != nil {
+		directiveInfo := p.processorCtx.GetDirectiveInfo(directiveName)
+		isValidDirective = (directiveInfo != nil)
+	}
+
+	// If directive is not valid, generate error
+	if !isValidDirective {
+		p.addError(fmt.Sprintf("Unknown directive '%s'", directiveName), p.currentToken.Line, p.currentToken.Column)
+	}
+
 	stmt := &DirectiveStatement{
 		Token: Token{
 			Type:    p.currentToken.Type,
@@ -580,11 +647,126 @@ func (p *ContextAwareParser) parseBlockStatement() *BlockStatement {
 	p.nextToken() // skip {
 
 	for p.currentToken.Type != TOKEN_RBRACE && p.currentToken.Type != TOKEN_EOF {
+		if p.debugMode {
+			log.Debug("parseBlockStatement: currentToken=%s (%s) at line %d",
+				p.currentToken.Literal, p.currentToken.Type.String(), p.currentToken.Line)
+		}
+
+		// Check if we've hit the closing brace before trying to parse
+		if p.currentToken.Type == TOKEN_RBRACE {
+			if p.debugMode {
+				log.Debug("parseBlockStatement: Hit closing brace, breaking")
+			}
+			break
+		}
+
 		stmt := p.parseStatement()
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
 		}
 		p.nextToken()
+	}
+
+	if p.debugMode {
+		log.Debug("parseBlockStatement: Exited loop, currentToken=%s", p.currentToken.Literal)
+	}
+
+	return block
+}
+
+// parseEnumBlock parses an enum block with special handling for enum member syntax
+// Enum members have the format: IDENTIFIER = value [, IDENTIFIER = value]*
+func (p *ContextAwareParser) parseEnumBlock() *BlockStatement {
+	block := &BlockStatement{
+		Token: Token{
+			Type:    p.currentToken.Type,
+			Literal: p.currentToken.Literal,
+			Line:    p.currentToken.Line,
+			Column:  p.currentToken.Column,
+		},
+		Statements: []Statement{},
+	}
+
+	p.nextToken() // skip {
+
+	for p.currentToken.Type != TOKEN_RBRACE && p.currentToken.Type != TOKEN_EOF {
+		// Check if we've hit the closing brace
+		if p.currentToken.Type == TOKEN_RBRACE {
+			break
+		}
+
+		// Skip commas between enum members
+		if p.currentToken.Type == TOKEN_COMMA {
+			p.nextToken()
+			continue
+		}
+
+		// Parse enum member: IDENTIFIER = value
+		if p.currentToken.Type == TOKEN_IDENTIFIER {
+			// Create a simple assignment statement for the enum member
+			memberName := p.currentToken.Literal
+			memberToken := p.currentToken
+
+			p.nextToken() // Move past identifier
+
+			// Expect '=' or ',' (if no value is specified, it auto-increments)
+			if p.currentToken.Type == TOKEN_EQUAL {
+				p.nextToken() // Move past '='
+
+				// Parse the value expression
+				value := p.parseExpression(LOWEST)
+
+				// Move past the value to next token (comma or identifier)
+				p.nextToken()
+
+				// Create a simple statement to represent the enum member
+				// We'll store it as a variable declaration for symbol table purposes
+				stmt := &DirectiveStatement{
+					Token: Token{
+						Type:    TOKEN_DIRECTIVE_KICK_DATA,
+						Literal: ".const",
+						Line:    memberToken.Line,
+						Column:  memberToken.Column,
+					},
+					Name: &Identifier{
+						Token: Token{
+							Type:    TOKEN_IDENTIFIER,
+							Literal: memberName,
+							Line:    memberToken.Line,
+							Column:  memberToken.Column,
+						},
+						Value: memberName,
+					},
+					Value: value,
+				}
+				block.Statements = append(block.Statements, stmt)
+			} else {
+				// No explicit value, enum auto-increments
+				// Still add it to symbol table
+				stmt := &DirectiveStatement{
+					Token: Token{
+						Type:    TOKEN_DIRECTIVE_KICK_DATA,
+						Literal: ".const",
+						Line:    memberToken.Line,
+						Column:  memberToken.Column,
+					},
+					Name: &Identifier{
+						Token: Token{
+							Type:    TOKEN_IDENTIFIER,
+							Literal: memberName,
+							Line:    memberToken.Line,
+							Column:  memberToken.Column,
+						},
+						Value: memberName,
+					},
+				}
+				block.Statements = append(block.Statements, stmt)
+			}
+		} else {
+			// Unexpected token in enum block
+			p.addError(fmt.Sprintf("Expected enum member identifier, got %s", p.currentToken.Literal), p.currentToken.Line, p.currentToken.Column)
+			p.nextToken()
+		}
 	}
 
 	return block
@@ -595,6 +777,7 @@ func (p *ContextAwareParser) parseBlockStatement() *BlockStatement {
 // isStatementTerminator checks if current token terminates a statement
 func (p *ContextAwareParser) isStatementTerminator() bool {
 	return p.currentToken.Type == TOKEN_EOF ||
+		p.currentToken.Type == TOKEN_RBRACE ||
 		p.currentToken.Type == TOKEN_LABEL ||
 		p.currentToken.Type == TOKEN_MNEMONIC_STD ||
 		p.currentToken.Type == TOKEN_MNEMONIC_CTRL ||
@@ -610,6 +793,7 @@ func (p *ContextAwareParser) isNextTokenStatementTerminator() bool {
 		p.peekToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.peekToken.Type == TOKEN_MNEMONIC_ILL ||
 		p.peekToken.Type == TOKEN_DIRECTIVE_PC ||
+		p.peekToken.Type == TOKEN_RBRACE ||
 		strings.HasPrefix(p.peekToken.Literal, ".")
 }
 
@@ -668,6 +852,10 @@ func (p *ContextAwareParser) parseExpression(precedence int) Expression {
 		return nil
 	}
 
+	if p.debugMode && p.currentToken.Type == TOKEN_RBRACE {
+		log.Debug("parseExpression: Called with RBRACE token at Line %d", p.currentToken.Line)
+	}
+
 	// Parse prefix expression
 	var leftExp Expression
 
@@ -678,6 +866,9 @@ func (p *ContextAwareParser) parseExpression(precedence int) Expression {
 		leftExp = p.parseIntegerLiteral()
 	case TOKEN_STRING:
 		leftExp = p.parseStringLiteral()
+	case TOKEN_ASTERISK:
+		// Program Counter expression
+		leftExp = p.parseProgramCounter()
 	case TOKEN_HASH, TOKEN_MINUS, TOKEN_PLUS, TOKEN_LESS, TOKEN_GREATER, TOKEN_DOT, TOKEN_AT:
 		leftExp = p.parsePrefixExpression()
 	case TOKEN_LPAREN:
@@ -781,6 +972,18 @@ func (p *ContextAwareParser) parseIntegerLiteral() Expression {
 
 	lit.Value = val
 	return lit
+}
+
+// parseProgramCounter parses the program counter (*) expression
+func (p *ContextAwareParser) parseProgramCounter() Expression {
+	return &ProgramCounterExpression{
+		Token: Token{
+			Type:    p.currentToken.Type,
+			Literal: p.currentToken.Literal,
+			Line:    p.currentToken.Line,
+			Column:  p.currentToken.Column,
+		},
+	}
 }
 
 // parseStringLiteral parses string literals
@@ -1077,8 +1280,8 @@ func (p *ContextAwareParser) parseEncodingDirective() *DirectiveStatement {
 	return stmt
 }
 
-// parseDefineDirective handles .define and .undef (symbol-only, no value)
-// Format: .define DEBUG
+// parseDefineDirective handles #define and #undef (symbol-only, no value)
+// Format: #define DEBUG
 func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
 	directiveToken := p.currentToken
@@ -1092,49 +1295,91 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 		},
 	}
 
-	// Move to next token (should be identifier)
+	// Check if next token is on the same line using peekToken (don't consume it yet)
+	if p.peekToken == nil || p.peekToken.Line != directiveToken.Line {
+		// No argument on same line - this is an error
+		p.addError(fmt.Sprintf("Expected argument after %s directive", directiveName), directiveToken.Line, directiveToken.Column)
+		stmt.Name = nil
+		stmt.Value = nil
+		// Don't call nextToken() - let ParseProgram() handle it
+		return stmt
+	}
+
+	// Argument is on same line, safe to consume it
 	p.nextToken()
 
-	// Expect identifier (the symbol name)
-	if p.currentToken.Type == TOKEN_IDENTIFIER {
-		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
-			Value: p.currentToken.Literal,
+	// Different preprocessor directives have different requirements:
+	// #import, #importif: expect string (filename)
+	// #define, #undef: expect identifier (symbol name)
+	if directiveName == "#import" || directiveName == "#importif" {
+		// Expect string literal (filename)
+		if p.currentToken.Type == TOKEN_STRING {
+			stmt.Value = &StringLiteral{
+				Token: Token{
+					Type:    p.currentToken.Type,
+					Literal: p.currentToken.Literal,
+					Line:    p.currentToken.Line,
+					Column:  p.currentToken.Column,
+				},
+				Value: p.currentToken.Literal,
+			}
+			stmt.Name = nil // No symbol name for import
+		} else {
+			// Error: expected filename string
+			p.addError(fmt.Sprintf("Expected filename string after %s directive", directiveName), directiveToken.Line, directiveToken.Column)
+			// Use empty string as fallback
+			stmt.Value = &StringLiteral{
+				Token: Token{
+					Type:    TOKEN_STRING,
+					Literal: "",
+					Line:    directiveToken.Line,
+					Column:  directiveToken.Column,
+				},
+				Value: "",
+			}
+			stmt.Name = nil
 		}
-		// No value for .define/.undef - just the symbol name
-		stmt.Value = nil
 	} else {
-		// Error: expected identifier
-		p.addError(fmt.Sprintf("Expected identifier after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
-		// Use directive name as fallback
-		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    directiveToken.Type,
-				Literal: directiveName,
-				Line:    directiveToken.Line,
-				Column:  directiveToken.Column,
-			},
-			Value: directiveName,
+		// #define, #undef: expect identifier (symbol name)
+		if p.currentToken.Type == TOKEN_IDENTIFIER {
+			stmt.Name = &Identifier{
+				Token: Token{
+					Type:    p.currentToken.Type,
+					Literal: p.currentToken.Literal,
+					Line:    p.currentToken.Line,
+					Column:  p.currentToken.Column,
+				},
+				Value: p.currentToken.Literal,
+			}
+			// No value for #define/#undef - just the symbol name
+			stmt.Value = nil
+		} else {
+			// Error: expected identifier
+			p.addError(fmt.Sprintf("Expected identifier after %s directive", directiveName), directiveToken.Line, directiveToken.Column)
+			// Leave Name as nil to skip processing in analyzer
+			stmt.Name = nil
+			stmt.Value = nil
 		}
 	}
 
 	if p.debugMode {
-		log.Debug("ContextAwareParser: Parsed %s directive for symbol '%s' at Line %d",
-			directiveName, stmt.Name.Value, stmt.Token.Line)
+		if stmt.Name != nil {
+			log.Debug("ContextAwareParser: Parsed %s directive for symbol '%s' at Line %d",
+				directiveName, stmt.Name.Value, stmt.Token.Line)
+		} else if stmt.Value != nil {
+			log.Debug("ContextAwareParser: Parsed %s directive for file at Line %d",
+				directiveName, stmt.Token.Line)
+		}
 	}
 
 	return stmt
 }
 
-// parseImportDirective handles .import source "file.asm"
-// Format: .import source "file.asm"
-//         .import binary "data.bin"
+// parseImportDirective handles .import directive for data files
+// Format: .import binary "data.bin"
 //         .import c64 "music.sid"
+//         .import text "file.txt"
+// Note: For source files use #import (preprocessor directive)
 func (p *ContextAwareParser) parseImportDirective() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
 	directiveToken := p.currentToken
@@ -1163,9 +1408,13 @@ func (p *ContextAwareParser) parseImportDirective() *DirectiveStatement {
 	var importType string
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		importType = strings.ToLower(p.currentToken.Literal)
-		// Valid import types
-		if importType != "source" && importType != "binary" && importType != "c64" {
-			p.addError(fmt.Sprintf("Invalid import type '%s', expected 'source', 'binary', or 'c64'", importType), p.currentToken.Line, p.currentToken.Column)
+		// Valid import types for .import (data files only)
+		if importType != "binary" && importType != "c64" && importType != "text" {
+			if importType == "source" {
+				p.addError("Invalid import type 'source' for .import directive. Use #import for source files", p.currentToken.Line, p.currentToken.Column)
+			} else {
+				p.addError(fmt.Sprintf("Invalid import type '%s', expected 'binary', 'c64', or 'text'", importType), p.currentToken.Line, p.currentToken.Column)
+			}
 		}
 		p.nextToken() // Move to string
 	}
@@ -1460,35 +1709,19 @@ func (p *ContextAwareParser) parseEnumDirective() *DirectiveStatement {
 		},
 	}
 
-	// Move to next token (should be enum name)
+	// Move to next token (should be opening brace '{')
+	// NOTE: .enum has NO name in Kick Assembler - format is always .enum { ... }
 	p.nextToken()
 
-	// Expect identifier (enum name)
-	if p.currentToken.Type == TOKEN_IDENTIFIER {
-		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
-			Value: p.currentToken.Literal,
-		}
-		p.nextToken() // Move to block
-	} else {
-		p.addError(fmt.Sprintf("Expected enum name after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
-		return stmt
-	}
-
-	// Parse block: { ... }
+	// Parse enum block: { ... }
 	if p.currentToken.Type == TOKEN_LBRACE {
-		stmt.Block = p.parseBlockStatement()
+		stmt.Block = p.parseEnumBlock()
 	} else {
 		p.addError(fmt.Sprintf("Expected '{' after %s directive", directiveName), p.currentToken.Line, p.currentToken.Column)
 	}
 
 	if p.debugMode {
-		log.Debug("ContextAwareParser: Parsed .enum directive '%s' at Line %d", stmt.Name.Value, stmt.Token.Line)
+		log.Debug("ContextAwareParser: Parsed .enum directive at Line %d", stmt.Token.Line)
 	}
 
 	return stmt
@@ -1715,4 +1948,234 @@ func parseInt(s string, base int) (int64, error) {
 
 func parseFloat(s string) (float64, error) {
 	return strconv.ParseFloat(s, 64)
+}
+
+// ============================================================================
+// SYMBOL TREE BUILDING (from old parser.go - to be refactored)
+// ============================================================================
+
+// scopeBuilder holds the state for the scope construction phase
+type scopeBuilder struct {
+	diagnostics []Diagnostic
+}
+
+// buildScopeFromAST walks the AST and builds the Scope/Symbol tree.
+func buildScopeFromAST(program *Program, uri string) (*Scope, []Diagnostic) {
+	rootScope := NewRootScope(uri)
+	if program == nil {
+		log.Warn("buildScopeFromAST: program is nil")
+		return rootScope, []Diagnostic{}
+	}
+
+	builder := &scopeBuilder{diagnostics: GetPooledDiagnostics()}
+	builder.buildScope(program.Statements, rootScope)
+	return rootScope, builder.diagnostics
+}
+
+func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) {
+	if statements == nil {
+		log.Debug("buildScope: statements is nil")
+		return
+	}
+
+	for _, statement := range statements {
+		if statement == nil {
+			log.Debug("buildScope: Encountered a nil statement, skipping.")
+			continue
+		}
+
+		switch stmt := statement.(type) {
+		case *InstructionStatement:
+			// Skip - instructions don't create symbols
+			continue
+
+		case *LabelStatement:
+			if stmt.Name == nil {
+				log.Debug("buildScope: LabelStatement has nil Name, skipping.")
+				continue
+			}
+			if stmt.Token.Line <= 0 || stmt.Token.Column <= 0 {
+				log.Debug("buildScope: LabelStatement has invalid token position, using defaults")
+				stmt.Token.Line = 1
+				stmt.Token.Column = 1
+			}
+			symbol := &Symbol{
+				Name: stmt.Name.Value,
+				Kind: Label,
+				Position: Position{
+					Line:      stmt.Token.Line - 1,
+					Character: stmt.Token.Column - 1,
+				},
+				Scope: currentScope,
+			}
+			if err := currentScope.AddSymbol(symbol); err != nil {
+				diagnostic := Diagnostic{
+					Severity: SeverityError,
+					Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
+					Message:  err.Error(),
+					Source:   "parser",
+				}
+				sb.diagnostics = append(sb.diagnostics, diagnostic)
+			}
+
+		case *DirectiveStatement:
+			if stmt == nil {
+				log.Debug("buildScope: DirectiveStatement is nil, skipping")
+				continue
+			}
+
+			directiveName := strings.ToLower(stmt.Token.Literal)
+
+			// .enum doesn't have a Name, but needs to process its block for constants
+			if stmt.Name == nil {
+				if directiveName == ".enum" && stmt.Block != nil && stmt.Block.Statements != nil {
+					log.Debug("buildScope: Processing .enum block")
+					sb.buildScope(stmt.Block.Statements, currentScope)
+				} else {
+					log.Debug("buildScope: DirectiveStatement '%s' has no name, skipping", stmt.Token.Literal)
+				}
+				continue
+			}
+
+			log.Debug("buildScope: Processing DirectiveStatement '%s' with name '%s'", stmt.Token.Literal, stmt.Name.Value)
+
+			if stmt.Name.Token.Type == 0 {
+				stmt.Name.Token = Token{Type: TOKEN_IDENTIFIER, Literal: stmt.Name.Value, Line: 1, Column: 1}
+			}
+			if stmt.Name.Token.Line <= 0 || stmt.Name.Token.Column <= 0 {
+				stmt.Name.Token.Line = 1
+				stmt.Name.Token.Column = 1
+			}
+
+			var kind SymbolKind
+			var params []string
+			var signature string
+
+			if stmt.Value != nil {
+				switch directiveName {
+				case ".const", "const":
+					kind = Constant
+				case ".var", "var":
+					kind = Variable
+				default:
+					kind = UnknownSymbol
+				}
+			} else if stmt.Block != nil {
+				switch directiveName {
+				case ".function":
+					kind = Function
+				case ".macro":
+					kind = Macro
+				case ".pseudocommand":
+					kind = PseudoCommand
+				case ".namespace":
+					kind = Namespace
+				default:
+					kind = UnknownSymbol
+				}
+				if kind != UnknownSymbol && stmt.Parameters != nil {
+					for _, p := range stmt.Parameters {
+						if p != nil {
+							params = append(params, p.Value)
+						}
+					}
+					signature = fmt.Sprintf("%s(%s)", stmt.Name.Value, strings.Join(params, ", "))
+				}
+			} else if directiveName == ".label" {
+				kind = Label
+			}
+
+			if kind != UnknownSymbol {
+				log.Debug("buildScope: Creating symbol for directive '%s' with name '%s'", stmt.Token.Literal, stmt.Name.Value)
+				value := ""
+				if stmt.Value != nil {
+					value = stmt.Value.TokenLiteral()
+				}
+				symbol := &Symbol{
+					Name:      stmt.Name.Value,
+					Kind:      kind,
+					Value:     value,
+					Params:    params,
+					Signature: signature,
+					Position: Position{
+						Line:      stmt.Name.Token.Line - 1,
+						Character: stmt.Name.Token.Column - 1,
+					},
+					Scope: currentScope,
+				}
+				if err := currentScope.AddSymbol(symbol); err != nil {
+					diagnostic := Diagnostic{
+						Severity: SeverityError,
+						Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
+						Message:  err.Error(),
+						Source:   "parser",
+					}
+					sb.diagnostics = append(sb.diagnostics, diagnostic)
+				}
+			}
+
+			// Process blocks for directives that create scopes or contain statements
+			if stmt.Block != nil && stmt.Block.Statements != nil {
+				if directiveName == ".namespace" && stmt.Name != nil {
+					// Create new scope for namespace
+					endLine := stmt.Name.Token.Line - 1
+					endChar := stmt.Name.Token.Column - 1
+					if stmt.Block.EndToken.Type != TOKEN_EOF {
+						endLine = stmt.Block.EndToken.Line - 1
+						endChar = stmt.Block.EndToken.Column
+					}
+					newScope := &Scope{
+						Name:     stmt.Name.Value,
+						Parent:   currentScope,
+						Children: make([]*Scope, 0),
+						Symbols:  make(map[string]*Symbol),
+						Uri:      currentScope.Uri,
+						Range: Range{
+							Start: Position{Line: stmt.Name.Token.Line - 1, Character: stmt.Name.Token.Column - 1},
+							End:   Position{Line: endLine, Character: endChar},
+						},
+					}
+					currentScope.AddChildScope(newScope)
+					sb.buildScope(stmt.Block.Statements, newScope)
+				} else if directiveName == ".function" || directiveName == ".macro" || directiveName == ".pseudocommand" {
+					// Process blocks without creating new scope
+					log.Debug("buildScope: Processing block for directive '%s'", stmt.Token.Literal)
+					sb.buildScope(stmt.Block.Statements, currentScope)
+				}
+			}
+
+		case *ExpressionStatement:
+			// Check if this is an enum constant assignment (YELLOW = 7)
+			if expr, ok := stmt.Expression.(*InfixExpression); ok {
+				if expr.Operator == "=" {
+					if ident, ok := expr.Left.(*Identifier); ok {
+						// This is an assignment like YELLOW = 7 inside .enum
+						symbol := &Symbol{
+							Name:  ident.Value,
+							Kind:  Constant,
+							Value: expr.Right.TokenLiteral(),
+							Position: Position{
+								Line:      ident.Token.Line - 1,
+								Character: ident.Token.Column - 1,
+							},
+							Scope: currentScope,
+						}
+						if err := currentScope.AddSymbol(symbol); err != nil {
+							diagnostic := Diagnostic{
+								Severity: SeverityError,
+								Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
+								Message:  err.Error(),
+								Source:   "parser",
+							}
+							sb.diagnostics = append(sb.diagnostics, diagnostic)
+						}
+						log.Debug("buildScope: Added enum constant '%s' = %s", ident.Value, symbol.Value)
+					}
+				}
+			}
+
+		default:
+			log.Debug("buildScope: Encountered unknown statement type: %T", statement)
+		}
+	}
 }

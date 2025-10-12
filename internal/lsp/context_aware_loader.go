@@ -67,9 +67,10 @@ func (ctx *ProcessorContext) loadKickAssemblerData(path string) error {
 	}
 
 	var kickassData struct {
-		Directives []KickDirectiveInfo `json:"directives"`
-		Functions  []FunctionInfo      `json:"functions"`
-		Constants  []ConstantInfo      `json:"constants"`
+		Directives             []KickDirectiveInfo `json:"directives"`
+		PreprocessorStatements []KickDirectiveInfo `json:"preprocessorStatements"`
+		Functions              []FunctionInfo      `json:"functions"`
+		Constants              []ConstantInfo      `json:"constants"`
 	}
 
 	if err := json.Unmarshal(data, &kickassData); err != nil {
@@ -79,11 +80,20 @@ func (ctx *ProcessorContext) loadKickAssemblerData(path string) error {
 	// Load directives
 	for _, directive := range kickassData.Directives {
 		name := strings.ToLower(directive.Name)
-		if !strings.HasPrefix(name, ".") {
+		// Don't add prefix if it already has . or # prefix
+		if !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "#") {
 			name = "." + name
 		}
+		directive.SourceType = SourceDirective
 		ctx.Directives[name] = &directive
 		ctx.DirectiveNames = append(ctx.DirectiveNames, name)
+	}
+
+	// Load preprocessor statements
+	for _, directive := range kickassData.PreprocessorStatements {
+		name := strings.ToLower(directive.Name)
+		directive.SourceType = SourcePreprocessor
+		ctx.PreprocessorStatements[name] = &directive
 	}
 
 	// Load functions
@@ -100,8 +110,8 @@ func (ctx *ProcessorContext) loadKickAssemblerData(path string) error {
 		ctx.ConstantNames = append(ctx.ConstantNames, name)
 	}
 
-	log.Info("Loaded Kick Assembler data: %d directives, %d functions, %d constants",
-		len(ctx.Directives), len(ctx.Functions), len(ctx.Constants))
+	log.Info("Loaded Kick Assembler data: %d directives, %d preprocessor statements, %d functions, %d constants",
+		len(ctx.Directives), len(ctx.PreprocessorStatements), len(ctx.Functions), len(ctx.Constants))
 
 	return nil
 }
@@ -245,7 +255,16 @@ func (ctx *ProcessorContext) GetDirectiveInfo(name string) *KickDirectiveInfo {
 	defer ctx.mutex.RUnlock()
 
 	name = strings.ToLower(name)
-	if !strings.HasPrefix(name, ".") {
+
+	// Check preprocessor statements first (they start with #)
+	if strings.HasPrefix(name, "#") {
+		if info, found := ctx.PreprocessorStatements[name]; found {
+			return info
+		}
+	}
+
+	// Don't add prefix if it already has . or # prefix
+	if !strings.HasPrefix(name, ".") && !strings.HasPrefix(name, "#") {
 		name = "." + name
 	}
 	return ctx.Directives[name]

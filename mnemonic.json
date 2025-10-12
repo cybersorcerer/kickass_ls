@@ -140,6 +140,13 @@
     "description": "SBC (**S**u**B**tract with **C**arry) subtracts the contents of a memory location and the complemented contents of the carry flag from the contents of the accumulator. Therefore, before every subtraction, unless the carry is to be considered in a compound subtraction, the carry flag should be set with the SEC instruction. The result is stored in the accumulator. The complemented carry (0 or 1), which essentially represents a borrow bit, is placed in the carry flag. If the decimal flag is set, the calculation is performed in BCD arithmetic. For operands in valid BCD format, only the carry flag and zero flag are set accordingly. The negative flag and overflow flag are modified according to the complement representation of the operands, but have no significance for BCD arithmetic.",
     "type": "Arithmetic",
 	"addressing_modes": [
+	  {
+        "opcode": "E9",
+        "addressing_mode": "Immediate",
+        "assembler_format": "SBC #nn",
+        "length": 2,
+        "cycles": "2"
+      },
       {
         "opcode": "ED",
         "addressing_mode": "Absolute",
@@ -272,7 +279,7 @@
       {
         "opcode": "0A",
         "addressing_mode": "Accumulator",
-        "assembler_format": "ASL A",
+        "assembler_format": "ASL [A]",
         "length": 1,
         "cycles": "2"
       },
@@ -1341,7 +1348,7 @@
       {
         "opcode": "4A",
         "addressing_mode": "Accumulator",
-        "assembler_format": "LSR A",
+        "assembler_format": "LSR [A]",
         "length": 1,
         "cycles": "2"
       },
@@ -1583,7 +1590,7 @@
       {
         "opcode": "6A",
         "addressing_mode": "Accumulator",
-        "assembler_format": "ROR A",
+        "assembler_format": "ROR [A]",
         "length": 1,
         "cycles": "2"
       },
@@ -2055,7 +2062,7 @@
       {
         "opcode": "2A",
         "addressing_mode": "Accumulator",
-        "assembler_format": "ROL A",
+        "assembler_format": "ROL [A]",
         "length": 1,
         "cycles": "2"
       },

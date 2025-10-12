@@ -96,24 +96,8 @@
 			]
 		},
 		{
-			"directive": "#import",
-			"description": "Use the preprocessor to import other source files.",
-			"signature": "#import file_name",
-			"examples": [
-				"#import \"MyLibrary.asm\" // Import the file \"mylibrary.asm\""
-			]
-		},
-		{
-			"directive": "#importif",
-			"description": "Use the preprocessor to import other source files.",
-			"signature": "#importif var/const file_name",
-			"examples": [
-				"#importif STAND_ALONE \"UpstartCode.asm\" // Only import \"UpstartCode.asm\" if STAND_ALONE is defined"
-			]
-		},
-		{
 			"directive": ".import",
-			"description": "With the .import directive you can import data from external files into your code. You can import binary, C64, and text files. The binary, c64 and text import takes an offset and a length as optional parameters.",
+			"description": "With the .import directive you can import **data** from external files into your code. You can import binary, C64, and text files. To import Kick Assembler source files see the #import preprocessor directive. The binary, c64 and text import takes an offset and a length as optional parameters.",
 			"signature": ".import file_name",
 			"examples": [
 				".import binary \"Music.bin\" // import the bytes from the file 'music.bin'",
@@ -153,6 +137,18 @@
 			"directive": ".function",
 			"description": "You can define you own functions which you can use like any of the build in library functions. Functions consist of non-byte generating directives like .eval, .for, .var, and .if. When the assembler evaluates the .return directive it returns the value given by the proceeding expression. If no expression is given, or if no .return directive is reached, a null value is returned. You can have several functions of the same name, as long as they have a different number of arguments.",
 			"signature": ".function function_name(args) {}",
+			"examples": [
+				"// Returns a string telling if a number is odd or even",
+				".function oddEven(number) {",
+				"   .if ([number&1] == 0 ) .return \"even\"",
+				"   else .return \"odd\"",
+				"}"
+			]
+		},
+		{
+			"directive": ".return",
+			"description": "Used inside functions to return a value. When the assembler evaluates the .return directive it returns the value given by the proceeding expression. If no expression is given, or if no .return directive is reached, a null value is returned.",
+			"signature": ".return [<expression>]",
 			"examples": [
 				"// Returns a string telling if a number is odd or even",
 				".function oddEven(number) {",
@@ -760,6 +756,40 @@
 			"examples": [
 				"lda #LIGHT_GRAY",
 				"sta $d021           // Set background to light gray"
+			]
+		}
+	],
+	"preprocessorStatements": [
+		{
+			"directive": "#import",
+			"description": "Use the preprocessor to import other **source** files. To import **data** files see the .import directive.",
+			"signature": "#import file_name",
+			"examples": [
+				"#import \"MyLibrary.asm\" // Import the file \"mylibrary.asm\""
+			]
+		},
+		{
+			"directive": "#importif",
+			"description": "Use the preprocessor to import other **source** files. To import **data** files see the .import directive.",
+			"signature": "#importif var/const file_name",
+			"examples": [
+				"#importif STAND_ALONE \"UpstartCode.asm\" // Only import \"UpstartCode.asm\" if STAND_ALONE is defined"
+			]
+		},
+		{
+			"directive": "#define",
+			"description": "The preprocessor uses symbols do determine if it should discard or include portions of the source file. There are two methods to define a symbol. The first is from the command line. The other way is using the #define directive.",
+			"signature": "#define symbol",
+			"examples": [
+				"#define TEST"
+			]
+		},
+		{
+			"directive": "#undef",
+			"description": "If you want to remove the definition of a symbol previously defined with #define, use the #undef directive.",
+			"signature": "#undef symbol",
+			"examples": [
+				"#undef TEST"
 			]
 		}
 	]

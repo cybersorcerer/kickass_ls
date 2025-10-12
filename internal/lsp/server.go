@@ -1738,6 +1738,13 @@ func getWordAtPosition(line string, char int) string {
 		return ""
 	}
 
+	// Define word character set for assembly language identifiers
+	// Include '.' for directive names like .byte, .const, .macro
+	// Include '#' for preprocessor directives like #import, #define
+	isWordChar := func(c byte) bool {
+		return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '#'
+	}
+
 	start := char
 	for start > 0 && isWordChar(line[start-1]) {
 		start--

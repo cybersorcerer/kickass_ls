@@ -1,6 +1,7 @@
 package lsp
 
 import (
+	"fmt"
 	"strings"
 	"sync"
 
@@ -67,9 +68,10 @@ type ProcessorContext struct {
 	ControlMnemonics  map[string]*EnhancedMnemonicInfo `json:"control_mnemonics"`
 
 	// Kick Assembler directives from kickass.json
-	Directives       map[string]*KickDirectiveInfo `json:"directives"`
-	Functions        map[string]*FunctionInfo      `json:"functions"`
-	Constants        map[string]*ConstantInfo      `json:"constants"`
+	Directives             map[string]*KickDirectiveInfo `json:"directives"`
+	PreprocessorStatements map[string]*KickDirectiveInfo `json:"preprocessor_statements"`
+	Functions              map[string]*FunctionInfo      `json:"functions"`
+	Constants              map[string]*ConstantInfo      `json:"constants"`
 
 	// C64 memory regions from c64memory.json
 	MemoryRegions    []*MemoryRegion `json:"memory_regions"`
@@ -101,13 +103,25 @@ type AddressingModeInfo struct {
 	Cycles          string `json:"cycles"`
 }
 
+// StatementSourceType indicates which table in kickass.json the statement comes from
+type StatementSourceType int
+
+const (
+	SourceUnknown StatementSourceType = iota
+	SourceDirective
+	SourcePreprocessor
+	SourceFunction
+	SourceConstant
+)
+
 // KickDirectiveInfo represents a Kick Assembler directive for context-aware parser
 type KickDirectiveInfo struct {
-	Name        string   `json:"directive"`
-	Description string   `json:"description"`
-	Signature   string   `json:"signature"`
-	Examples    []string `json:"examples"`
-	Category    string   `json:"category,omitempty"` // "data", "flow", "pre", etc.
+	Name        string              `json:"directive"`
+	Description string              `json:"description"`
+	Signature   string              `json:"signature"`
+	Examples    []string            `json:"examples"`
+	Category    string              `json:"category,omitempty"` // "data", "flow", "pre", etc.
+	SourceType  StatementSourceType `json:"-"`                  // Which table this came from
 }
 
 // FunctionInfo represents a Kick Assembler built-in function
@@ -164,6 +178,9 @@ type ContextAwareLexer struct {
 	// Token buffer for lookahead
 	tokenBuffer     []*ContextToken
 	bufferPos       int
+
+	// Parenthesis depth tracking for ; handling in .for loops
+	parenDepth      int
 
 	mutex           sync.RWMutex
 }
@@ -226,14 +243,15 @@ func LoadProcessorContext(mnemonicPath, kickassPath, c64MemoryPath string) error
 	defer processorContextMutex.Unlock()
 
 	ctx := &ProcessorContext{
-		StandardMnemonics: make(map[string]*EnhancedMnemonicInfo),
-		IllegalMnemonics:  make(map[string]*EnhancedMnemonicInfo),
-		ControlMnemonics:  make(map[string]*EnhancedMnemonicInfo),
-		Directives:        make(map[string]*KickDirectiveInfo),
-		Functions:         make(map[string]*FunctionInfo),
-		Constants:         make(map[string]*ConstantInfo),
-		MemoryMap:         make(map[uint16]*MemoryRegion),
-		AllMnemonics:      make(map[string]*EnhancedMnemonicInfo),
+		StandardMnemonics:      make(map[string]*EnhancedMnemonicInfo),
+		IllegalMnemonics:       make(map[string]*EnhancedMnemonicInfo),
+		ControlMnemonics:       make(map[string]*EnhancedMnemonicInfo),
+		Directives:             make(map[string]*KickDirectiveInfo),
+		PreprocessorStatements: make(map[string]*KickDirectiveInfo),
+		Functions:              make(map[string]*FunctionInfo),
+		Constants:              make(map[string]*ConstantInfo),
+		MemoryMap:              make(map[uint16]*MemoryRegion),
+		AllMnemonics:           make(map[string]*EnhancedMnemonicInfo),
 	}
 
 	// Load mnemonics
@@ -332,7 +350,7 @@ func (l *ContextAwareLexer) NextToken() *ContextToken {
 
 	// Check for EOF
 	if l.position >= len(l.input) {
-		return l.createToken(TOKEN_EOF, "", nil)
+		return l.createToken(TOKEN_EOF, "", l.column, nil)
 	}
 
 	// Get current context
@@ -348,6 +366,20 @@ func (l *ContextAwareLexer) NextToken() *ContextToken {
 	// Handle comments (always highest priority)
 	if strings.HasPrefix(remaining, "//") {
 		return l.readLineComment()
+	}
+	if strings.HasPrefix(remaining, "/*") {
+		return l.readBlockComment()
+	}
+	// Semicolon comment (assembly style)
+	// Important: ; is a comment EXCEPT inside parentheses (for .for loops)
+	// .for loops use ; as separator: .for (init; test; increment)
+	// But inline comments work: lda #$00  ; load zero
+	if strings.HasPrefix(remaining, ";") {
+		// Only treat as separator if we're inside parentheses
+		if l.parenDepth == 0 {
+			return l.readLineComment() // Semicolon comment
+		}
+		// Otherwise, let it be tokenized as TOKEN_SEMICOLON for .for loops
 	}
 
 	// Context-aware tokenization based on current state
@@ -387,7 +419,13 @@ func (l *ContextAwareLexer) skipWhitespace() {
 		} else if ch == '\n' {
 			// In operand, instruction, or directive state, newline is significant - don't skip it
 			if ctx.State == StateOperand || ctx.State == StateInstruction || ctx.State == StateDirective {
+				if l.debugMode {
+					log.Debug("skipWhitespace: NOT skipping newline in state %s at Line %d, Col %d", ctx.State.String(), l.line, l.column)
+				}
 				break
+			}
+			if l.debugMode {
+				log.Debug("skipWhitespace: Skipping newline in state %s at Line %d, Col %d, resetting column to 1", ctx.State.String(), l.line, l.column)
 			}
 			l.advance()
 			l.line++
@@ -451,8 +489,48 @@ func (l *ContextAwareLexer) readLineComment() *ContextToken {
 	return token
 }
 
+// readBlockComment reads a block comment starting with /* and ending with */
+func (l *ContextAwareLexer) readBlockComment() *ContextToken {
+	startLine := l.line
+	startCol := l.column
+	start := l.position
+
+	// Skip /*
+	l.advance()
+	l.advance()
+
+	// Read until */ is found
+	for l.position+1 < len(l.input) {
+		if l.peek() == '*' && l.peekAhead(1) == '/' {
+			l.advance() // skip *
+			l.advance() // skip /
+			break
+		}
+		// Track line numbers inside block comments
+		if l.peek() == '\n' {
+			l.advance()
+			l.line++
+			l.column = 1
+		} else {
+			l.advance()
+		}
+	}
+
+	literal := l.input[start:l.position]
+	token := &ContextToken{
+		Type:    TOKEN_COMMENT_BLOCK,
+		Literal: literal,
+		Line:    startLine,
+		Column:  startCol,
+		Context: l.CurrentContext(),
+		Metadata: &TokenMetadata{},
+	}
+
+	return token
+}
+
 // createToken creates a context token with the current context
-func (l *ContextAwareLexer) createToken(tokenType TokenType, literal string, metadata *TokenMetadata) *ContextToken {
+func (l *ContextAwareLexer) createToken(tokenType TokenType, literal string, startCol int, metadata *TokenMetadata) *ContextToken {
 	if metadata == nil {
 		metadata = &TokenMetadata{}
 	}
@@ -461,7 +539,7 @@ func (l *ContextAwareLexer) createToken(tokenType TokenType, literal string, met
 		Type:     tokenType,
 		Literal:  literal,
 		Line:     l.line,
-		Column:   l.column,
+		Column:   startCol,  // Use start column, not current column
 		Context:  l.CurrentContext(),
 		Metadata: metadata,
 	}
@@ -470,6 +548,18 @@ func (l *ContextAwareLexer) createToken(tokenType TokenType, literal string, met
 // tokenizeNormal handles tokenization in normal state
 func (l *ContextAwareLexer) tokenizeNormal() *ContextToken {
 	remaining := l.input[l.position:]
+
+	// Check for preprocessor directives (#define, #undef, #import, #importif)
+	if strings.HasPrefix(remaining, "#") {
+		// Check if it matches any preprocessor statement from kickass.json
+		if l.processorCtx != nil && l.processorCtx.PreprocessorStatements != nil {
+			for directiveName := range l.processorCtx.PreprocessorStatements {
+				if strings.HasPrefix(remaining, directiveName) {
+					return l.tokenizePreprocessorDirective()
+				}
+			}
+		}
+	}
 
 	// Check for directives first (start with .)
 	if strings.HasPrefix(remaining, ".") {
@@ -564,6 +654,43 @@ func (l *ContextAwareLexer) tokenizeDirective() *ContextToken {
 
 	return &ContextToken{
 		Type:     tokenType,
+		Literal:  literal,
+		Line:     l.line,
+		Column:   startCol,
+		Context:  l.CurrentContext(),
+		Metadata: metadata,
+	}
+}
+
+// tokenizePreprocessorDirective tokenizes preprocessor directives (#define, #undef, #import, #importif)
+func (l *ContextAwareLexer) tokenizePreprocessorDirective() *ContextToken {
+	start := l.position
+	startCol := l.column
+
+	// Read the directive name (starts with #)
+	l.advance() // skip #
+	for l.position < len(l.input) {
+		ch := l.peek()
+		if (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') {
+			l.advance()
+		} else {
+			break
+		}
+	}
+
+	literal := l.input[start:l.position]
+	directiveName := strings.ToLower(literal)
+
+	// Push directive context
+	l.PushContext(StateDirective, directiveName)
+
+	metadata := &TokenMetadata{
+		IsPartOfDirective: true,
+		DirectiveName:     directiveName,
+	}
+
+	return &ContextToken{
+		Type:     TOKEN_DIRECTIVE_KICK_PRE, // Preprocessor directive
 		Literal:  literal,
 		Line:     l.line,
 		Column:   startCol,
@@ -837,6 +964,11 @@ func (l *ContextAwareLexer) tokenizeProgramCounter() *ContextToken {
 func (l *ContextAwareLexer) tryTokenizeLabel() *ContextToken {
 	// Look ahead to see if this is a label
 	saved := l.position
+	savedCol := l.column
+
+	if l.debugMode && l.line >= 80 && l.line <= 110 {
+		log.Debug("tryTokenizeLabel: ENTER Line %d, l.position=%d, l.column=%d", l.line, l.position, l.column)
+	}
 
 	// Read identifier
 	if !isAlpha(l.peek()) && l.peek() != '_' {
@@ -876,6 +1008,11 @@ func (l *ContextAwareLexer) tryTokenizeLabel() *ContextToken {
 
 	// Not a label, restore position
 	l.position = saved
+
+	if l.debugMode && l.line >= 80 && l.line <= 110 {
+		log.Debug("tryTokenizeLabel: EXIT (not a label) Line %d, l.position=%d, l.column=%d, savedCol=%d", l.line, l.position, l.column, savedCol)
+	}
+
 	return nil
 }
 
@@ -896,8 +1033,9 @@ func (l *ContextAwareLexer) tryTokenizeMnemonic() *ContextToken {
 			mnemonic[i] = ch
 			l.advance()
 		} else {
-			// Not a mnemonic
+			// Not a mnemonic - restore position AND column
 			l.position = start
+			l.column = startCol
 			return nil
 		}
 	}
@@ -906,8 +1044,9 @@ func (l *ContextAwareLexer) tryTokenizeMnemonic() *ContextToken {
 	if l.position < len(l.input) {
 		ch := l.peek()
 		if isAlphaNumeric(ch) || ch == '_' {
-			// Part of longer identifier, not a mnemonic
+			// Part of longer identifier, not a mnemonic - restore position AND column
 			l.position = start
+			l.column = startCol
 			return nil
 		}
 	}
@@ -943,8 +1082,9 @@ func (l *ContextAwareLexer) tryTokenizeMnemonic() *ContextToken {
 		}
 	}
 
-	// Not a valid mnemonic, restore position
+	// Not a valid mnemonic, restore position AND column
 	l.position = start
+	l.column = startCol
 	return nil
 }
 
@@ -989,7 +1129,7 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 			if l.debugMode {
 				log.Warn("Invalid hex number found at %d:%d: %s", l.line, startCol, literal)
 			}
-			return l.createToken(TOKEN_ILLEGAL, literal, nil)
+			return l.createToken(TOKEN_ILLEGAL, literal, startCol, nil)
 		}
 
 		if hasValidHexDigits {
@@ -1027,6 +1167,35 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 		} else {
 			l.position = start
 			return nil
+		}
+	} else if ch == '\'' {
+		// Character literal ('A') - converts to ASCII value
+		l.advance() // skip opening '
+		if l.position >= len(l.input) {
+			l.position = start
+			return nil
+		}
+		charByte := l.peek() // the character itself
+		l.advance()
+
+		// Check for closing '
+		if l.peek() != '\'' {
+			l.position = start
+			return nil
+		}
+		l.advance() // skip closing '
+
+		// Convert character to its ASCII decimal value
+		// Return the numeric value as string, not 'A'
+		asciiValue := fmt.Sprintf("%d", charByte)
+
+		return &ContextToken{
+			Type:     TOKEN_NUMBER_DEC,
+			Literal:  asciiValue, // e.g. "65" for 'A'
+			Line:     l.line,
+			Column:   startCol,
+			Context:  l.CurrentContext(),
+			Metadata: &TokenMetadata{},
 		}
 	} else if isDigit(ch) {
 		// Decimal number
@@ -1067,11 +1236,15 @@ func (l *ContextAwareLexer) tryTokenizeIdentifier() *ContextToken {
 	start := l.position
 	startCol := l.column
 
-	// Read identifier
+	if l.debugMode && l.line >= 80 && l.line <= 110 {
+		log.Debug("tryTokenizeIdentifier: Line %d, l.column=%d, startCol=%d, start position=%d", l.line, l.column, startCol, start)
+	}
+
+	// Read identifier (allow dots for member access like Colors.BLUE)
 	l.advance()
 	for l.position < len(l.input) {
 		ch := l.peek()
-		if isAlphaNumeric(ch) || ch == '_' {
+		if isAlphaNumeric(ch) || ch == '_' || ch == '.' {
 			l.advance()
 		} else {
 			break
@@ -1129,14 +1302,16 @@ func (l *ContextAwareLexer) tokenizeOperatorOrPunctuation() *ContextToken {
 
 	// Multi-character operators
 	if ch == '<' && l.peekAhead(1) == '<' {
+		startCol := l.column
 		l.advance()
 		l.advance()
-		return l.createToken(TOKEN_LEFT_SHIFT, "<<", nil)
+		return l.createToken(TOKEN_LEFT_SHIFT, "<<", startCol, nil)
 	}
 	if ch == '>' && l.peekAhead(1) == '>' {
+		startCol := l.column
 		l.advance()
 		l.advance()
-		return l.createToken(TOKEN_RIGHT_SHIFT, ">>", nil)
+		return l.createToken(TOKEN_RIGHT_SHIFT, ">>", startCol, nil)
 	}
 
 	// Single character operators/punctuation
@@ -1162,8 +1337,12 @@ func (l *ContextAwareLexer) tokenizeOperatorOrPunctuation() *ContextToken {
 		tokenType = TOKEN_SLASH
 	case '(':
 		tokenType = TOKEN_LPAREN
+		l.parenDepth++
 	case ')':
 		tokenType = TOKEN_RPAREN
+		if l.parenDepth > 0 {
+			l.parenDepth--
+		}
 	case '[':
 		tokenType = TOKEN_LBRACKET
 	case ']':
@@ -1172,6 +1351,18 @@ func (l *ContextAwareLexer) tokenizeOperatorOrPunctuation() *ContextToken {
 		tokenType = TOKEN_LBRACE
 	case '}':
 		tokenType = TOKEN_RBRACE
+		// Pop block context when we see closing brace
+		ctx := l.CurrentContext()
+		if l.debugMode {
+			log.Debug("tokenizeOperatorOrPunctuation: Found }, currentContext=%s, stack depth=%d",
+				ctx.State.String(), len(l.contextStack))
+		}
+		if ctx.State == StateBlock {
+			l.PopContext()
+			if l.debugMode {
+				log.Debug("tokenizeOperatorOrPunctuation: Popped StateBlock, new stack depth=%d", len(l.contextStack))
+			}
+		}
 	case '=':
 		tokenType = TOKEN_EQUAL
 	case '<':
@@ -1192,8 +1383,9 @@ func (l *ContextAwareLexer) tokenizeOperatorOrPunctuation() *ContextToken {
 		tokenType = TOKEN_MODULO
 	default:
 		// Unknown character
+		startCol := l.column
 		l.advance()
-		return l.createToken(TOKEN_ILLEGAL, string(ch), nil)
+		return l.createToken(TOKEN_ILLEGAL, string(ch), startCol, nil)
 	}
 
 	l.advance()

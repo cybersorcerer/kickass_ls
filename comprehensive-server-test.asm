@@ -13,18 +13,22 @@
 .encoding "invalid_name"         // ⚠️ Should warn: Unknown encoding
 
 // ----------------------------------------------------------------------------
-// 2. DEFINE/UNDEF DIRECTIVES
+// 2. DEFINE/UNDEF DIRECTIVES (Preprocessor)
 // ----------------------------------------------------------------------------
-.define DEBUG                       // ✅ Symbol-only define
-.define RELEASE                     // ✅ Another define
-.define DEBUG                    // ⚠️ Should warn: Redefinition
+.define test
+#define
+#define DEBUG                       // ✅ Symbol-only define
+#define RELEASE                     // ✅ Another define
+#define DEBUG                       // ⚠️ Should warn: Redefinition
 
-.undef RELEASE                      // ✅ Undefine symbol
-.undef UNKNOWN                   // ⚠️ Could warn: Symbol not defined
+#undef
+#undef RELEASE                      // ✅ Undefine symbol
+#undef UNKNOWN                      // ⚠️ Could warn: Symbol not defined
 
 // ----------------------------------------------------------------------------
 // 3. IMPORT DIRECTIVE
 // ----------------------------------------------------------------------------
+#import
 .import source "lib/macros.asm"     // ✅ Import source file
 .import binary "data/charset.bin"   // ✅ Import binary data
 .import c64 "music/tune.sid"        // ✅ Import C64 file
@@ -71,9 +75,9 @@
 }
 
 // ----------------------------------------------------------------------------
-// 6. ENUM DIRECTIVE
+// 6. ENUM DIRECTIVE (Note: .enum has NO name in Kick Assembler)
 // ----------------------------------------------------------------------------
-.enum Colors {
+.enum {
     BLACK = 0,
     WHITE = 1,
     RED = 2,
@@ -92,10 +96,15 @@
     LIGHT_GRAY = 15
 }
 
-.enum Registers {
+.enum {
     VIC_BORDER = $d020,
     VIC_BACKGROUND = $d021,
     SID_VOLUME = $d418
+}
+
+// Test case: .enum with name (should generate error)
+.enum InvalidName {
+    TEST = 1
 }
 
 // ----------------------------------------------------------------------------
@@ -103,6 +112,11 @@
 // ----------------------------------------------------------------------------
 .function add(a, b) {
     .return a + b
+}
+
+.function testfunc(x, y) {
+  cli
+  .return
 }
 
 .function multiply(x, y) {
@@ -115,6 +129,14 @@
 
 .function noReturn(x) {          // ⚠️ Should warn: No .return statement
      .var temp = x * 2
+}
+
+.function sumRange(start, end) {
+    .var result = 0
+    .for (var i = start; i < end; i++) {
+        .eval result = result + i
+    }
+    .return result
 }
 
 // ----------------------------------------------------------------------------
@@ -219,6 +241,7 @@ start:
     .var sum = add(5, 3)            // ✅ Function call: 5 + 3 = 8
     .var product = multiply(4, 7)   // ✅ Function call: 4 * 7 = 28
     .var squared = square(9)        // ✅ Function call: 9 * 9 = 81
+    .var rangeSum = sumRange(1, 5)  // ✅ Function with .for loop: 1+2+3+4 = 10
 
     // Test pseudocommand calls
     mov #Colors.RED : BORDER        // ✅ Correct: 2 arguments
@@ -381,7 +404,7 @@ loop:
     ldx #10
 innerLoop:
     dex
-    bne innerLoop
+    bne innerLoop           // ✅ Valid: ~-3 bytes backward
     rts
 
 subroutine:
@@ -390,6 +413,32 @@ subroutine:
 
 .label localLabel = $2000
 .label anotherLabel = localLabel + $100
+
+// Branch distance test cases
+validBackwardBranch:
+    nop
+    nop
+    nop
+    bne validBackwardBranch  // ✅ Valid: ~-6 bytes backward
+
+validForwardBranch:
+    beq skipAhead            // ✅ Valid: ~+6 bytes forward
+    nop
+    nop
+    nop
+skipAhead:
+    nop
+
+// ⚠️ Invalid branch distance tests (should generate errors)
+tooFarBackward:
+    .fill 130, $ea          // Fill 130 NOPs
+    bne tooFarBackward      // ❌ Error: -132 bytes (out of -128 to +127 range)
+
+tooFarForward:
+    beq wayAhead            // ❌ Error: +132 bytes (out of -128 to +127 range)
+    .fill 130, $ea          // Fill 130 NOPs
+wayAhead:
+    nop
 
 // ----------------------------------------------------------------------------
 // 17. PROGRAM COUNTER EXPRESSIONS (for PC handling)
