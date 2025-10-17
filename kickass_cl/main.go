@@ -10,12 +10,13 @@ import (
 
 func main() {
 	var (
-		testSuite = flag.String("suite", "", "Path to test suite JSON file")
+		testSuite  = flag.String("suite", "", "Path to test suite JSON file")
 		serverPath = flag.String("server", "../6510lsp_server", "Path to LSP server executable")
 		serverArgs = flag.String("args", "", "Additional server arguments")
-		rootPath = flag.String("root", ".", "Root path for test files")
+		rootPath   = flag.String("root", ".", "Root path for test files")
 		outputFile = flag.String("output", "", "Save test results to JSON file")
-		verbose = flag.Bool("verbose", false, "Verbose output")
+		htmlReport = flag.String("html", "", "Save test results as HTML report")
+		verbose    = flag.Bool("verbose", false, "Verbose output")
 		interactive = flag.Bool("interactive", false, "Interactive mode for manual testing")
 	)
 	flag.Parse()
@@ -47,6 +48,22 @@ func main() {
 			runCompletionAtPosition(*serverPath, file, line, char, *verbose)
 			return
 		}
+		// Special case: if file is "semantic-tokens", run semantic tokens test
+		if filePath == "semantic-tokens" {
+			if flag.NArg() < 2 {
+				fmt.Println("Usage: test-client semantic-tokens <file> [line]")
+				fmt.Println("Example: test-client semantic-tokens test.asm")
+				fmt.Println("Example: test-client semantic-tokens test.asm 5")
+				os.Exit(1)
+			}
+			file := flag.Arg(1)
+			var line int = -1
+			if flag.NArg() >= 3 {
+				fmt.Sscanf(flag.Arg(2), "%d", &line)
+			}
+			runSemanticTokensTest(*serverPath, file, line, *verbose)
+			return
+		}
 		runQuickTest(*serverPath, filePath, *verbose)
 		return
 	}
@@ -76,6 +93,15 @@ func main() {
 			fmt.Printf("Failed to save results: %v\n", saveErr)
 		} else {
 			fmt.Printf("Results saved to %s\n", *outputFile)
+		}
+	}
+
+	// Save HTML report if requested
+	if *htmlReport != "" {
+		if saveErr := runner.SaveHTMLReport(*htmlReport, *testSuite); saveErr != nil {
+			fmt.Printf("Failed to save HTML report: %v\n", saveErr)
+		} else {
+			fmt.Printf("HTML report saved to %s\n", *htmlReport)
 		}
 	}
 
@@ -231,7 +257,11 @@ func runCompletionTest(serverPath string, verbose bool) {
 
 	for i := 0; i < maxShow; i++ {
 		item := completions[i]
-		fmt.Printf("%3d. %-20s %-30s [kind=%v]\n", i+1, item.Label, item.Detail, item.Kind)
+		detail := ""
+		if item.Detail != nil {
+			detail = *item.Detail
+		}
+		fmt.Printf("%3d. %-20s %-30s [kind=%v]\n", i+1, item.Label, detail, item.Kind)
 
 		// Analyze
 		if len(item.Label) > 0 && item.Label[0] == '.' {
@@ -334,6 +364,78 @@ func runCompletionAtPosition(serverPath, filePath string, line, char int, verbos
 	}
 }
 
+func runSemanticTokensTest(serverPath, filePath string, detailLine int, verbose bool) {
+	fmt.Printf("=== Semantic Tokens Test ===\n")
+	fmt.Printf("File: %s\n\n", filePath)
+
+	// Read file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Printf("❌ Failed to read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Create client
+	client := NewLSPClient(serverPath)
+
+	// Start server
+	if err := client.Start(); err != nil {
+		fmt.Printf("❌ Failed to start server: %v\n", err)
+		os.Exit(1)
+	}
+	defer client.Stop()
+
+	// Initialize
+	rootPath, _ := os.Getwd()
+	_, err = client.Initialize(rootPath)
+	if err != nil {
+		fmt.Printf("❌ Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get absolute path for URI
+	absPath, _ := filepath.Abs(filePath)
+	uri := "file://" + absPath
+
+	// Open document
+	err = client.OpenDocument(uri, "kickasm", string(content))
+	if err != nil {
+		fmt.Printf("❌ Failed to open document: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Wait for document to be parsed
+	time.Sleep(200 * time.Millisecond)
+
+	// Request semantic tokens
+	tokens, err := client.GetSemanticTokens(uri)
+	if err != nil {
+		fmt.Printf("❌ Failed to get semantic tokens: %v\n", err)
+		os.Exit(1)
+	}
+
+	if tokens == nil || len(tokens.Data) == 0 {
+		fmt.Println("❌ No semantic tokens returned")
+		os.Exit(1)
+	}
+
+	// Decode tokens
+	decodedTokens := DecodeSemanticTokens(tokens.Data)
+	fmt.Printf("✅ Got %d semantic tokens (raw data: %d integers)\n\n", len(decodedTokens), len(tokens.Data))
+
+	// Visualize
+	fmt.Println("=== File Content with Semantic Highlighting ===")
+	VisualizeSemanticTokens(string(content), decodedTokens)
+
+	// Print summary
+	PrintSemanticTokensSummary(decodedTokens)
+
+	// Print details for specific line if requested
+	if detailLine >= 0 {
+		PrintTokenDetails(decodedTokens, detailLine, string(content))
+	}
+}
+
 func runInteractiveMode(serverPath, serverArgs, rootPath string, verbose bool) {
 	fmt.Println("LSP Test Client - Interactive Mode")
 	fmt.Println("==================================")
@@ -362,12 +464,13 @@ func runInteractiveMode(serverPath, serverArgs, rootPath string, verbose bool) {
 
 	// Interactive commands
 	fmt.Println("\nServer initialized. Available commands:")
-	fmt.Println("  open <file>           - Open a document")
+	fmt.Println("  open <file>              - Open a document")
 	fmt.Println("  completion <line> <char> - Get completion at position")
 	fmt.Println("  hover <line> <char>      - Get hover info at position")
-	fmt.Println("  diagnostics             - Show current diagnostics")
-	fmt.Println("  symbols                 - Show document symbols")
-	fmt.Println("  quit                    - Exit")
+	fmt.Println("  diagnostics              - Show current diagnostics")
+	fmt.Println("  symbols                  - Show document symbols")
+	fmt.Println("  tokens [line]            - Show semantic tokens (optionally for specific line)")
+	fmt.Println("  quit                     - Exit")
 	fmt.Println()
 
 	var currentFile string
@@ -535,8 +638,54 @@ func runInteractiveMode(serverPath, serverArgs, rootPath string, verbose bool) {
 				fmt.Printf("  %s (line %d)%s\n", symbol.Name, symbol.Range.Start.Line+1, detail)
 			}
 
+		case "tokens":
+			if currentURI == "" {
+				fmt.Println("No document open. Use 'open <file>' first.")
+				continue
+			}
+
+			// Check if line number is provided
+			var detailLine int = -1
+			fmt.Print("Line number (or press Enter for all): ")
+			var lineInput string
+			fmt.Scanln(&lineInput)
+			if lineInput != "" {
+				fmt.Sscanf(lineInput, "%d", &detailLine)
+				detailLine-- // Convert to 0-based
+			}
+
+			// Request semantic tokens
+			tokens, err := client.GetSemanticTokens(currentURI)
+			if err != nil {
+				fmt.Printf("Error getting semantic tokens: %v\n", err)
+				continue
+			}
+
+			if tokens == nil || len(tokens.Data) == 0 {
+				fmt.Println("No semantic tokens returned")
+				continue
+			}
+
+			// Read file content
+			content, err := os.ReadFile(currentFile)
+			if err != nil {
+				fmt.Printf("Error reading file: %v\n", err)
+				continue
+			}
+
+			// Decode and visualize
+			decodedTokens := DecodeSemanticTokens(tokens.Data)
+			fmt.Printf("\nGot %d semantic tokens\n\n", len(decodedTokens))
+
+			VisualizeSemanticTokens(string(content), decodedTokens)
+			PrintSemanticTokensSummary(decodedTokens)
+
+			if detailLine >= 0 {
+				PrintTokenDetails(decodedTokens, detailLine, string(content))
+			}
+
 		default:
-			fmt.Println("Unknown command. Available: open, completion, hover, diagnostics, symbols, quit")
+			fmt.Println("Unknown command. Available: open, completion, hover, diagnostics, symbols, tokens, quit")
 		}
 	}
 }

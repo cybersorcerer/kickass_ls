@@ -278,6 +278,47 @@ type SemanticTokens struct {
 	Data     []int   `json:"data"`
 }
 
+// Document Formatting
+type DocumentFormattingParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Options      FormattingOptions      `json:"options"`
+}
+
+type FormattingOptions struct {
+	TabSize      int  `json:"tabSize"`
+	InsertSpaces bool `json:"insertSpaces"`
+}
+
+// Signature Help
+type SignatureHelpParams struct {
+	TextDocument TextDocumentIdentifier `json:"textDocument"`
+	Position     Position               `json:"position"`
+	Context      *SignatureHelpContext  `json:"context,omitempty"`
+}
+
+type SignatureHelpContext struct {
+	TriggerKind      int     `json:"triggerKind"`
+	TriggerCharacter *string `json:"triggerCharacter,omitempty"`
+	IsRetrigger      bool    `json:"isRetrigger"`
+}
+
+type SignatureHelp struct {
+	Signatures      []SignatureInformation `json:"signatures"`
+	ActiveSignature *int                   `json:"activeSignature,omitempty"`
+	ActiveParameter *int                   `json:"activeParameter,omitempty"`
+}
+
+type SignatureInformation struct {
+	Label         string                 `json:"label"`
+	Documentation interface{}            `json:"documentation,omitempty"`
+	Parameters    []ParameterInformation `json:"parameters,omitempty"`
+}
+
+type ParameterInformation struct {
+	Label         interface{} `json:"label"` // string or [int, int]
+	Documentation interface{} `json:"documentation,omitempty"`
+}
+
 // Helper functions for message creation
 func NewRequest(method string, params interface{}) *Message {
 	return &Message{

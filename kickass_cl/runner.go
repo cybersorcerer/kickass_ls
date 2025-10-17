@@ -67,6 +67,11 @@ type TestExpected struct {
 	// For document symbols tests
 	Symbols []ExpectedSymbol `json:"symbols,omitempty"`
 
+	// For semantic tokens tests
+	SemanticTokens []ExpectedSemanticToken `json:"semanticTokens,omitempty"`
+	MinTokens      int                     `json:"minTokens,omitempty"`
+	MaxTokens      int                     `json:"maxTokens,omitempty"`
+
 	// For error tests
 	ErrorMessage string `json:"errorMessage,omitempty"`
 	ShouldError  bool   `json:"shouldError,omitempty"`
@@ -99,6 +104,13 @@ type ExpectedSymbol struct {
 	Kind   int    `json:"kind"`
 	Line   int    `json:"line"`
 	Detail string `json:"detail,omitempty"`
+}
+
+type ExpectedSemanticToken struct {
+	Line      int    `json:"line"`
+	StartChar int    `json:"startChar"`
+	Length    int    `json:"length"`
+	TokenType string `json:"tokenType"` // "keyword", "variable", "function", etc.
 }
 
 // Test Runner
@@ -285,6 +297,8 @@ func (tr *TestRunner) runTestCase(testCase TestCase, rootPath string) TestResult
 		return tr.testDocumentSymbols(testCase, uri, result)
 	case "documentSymbol":
 		return tr.testDocumentSymbols(testCase, uri, result)
+	case "semanticTokens":
+		return tr.testSemanticTokens(testCase, uri, result)
 	case "lifecycle":
 		return tr.testLifecycle(testCase, uri, result)
 	case "performance":
@@ -624,6 +638,10 @@ func (tr *TestRunner) SaveResults(filename string) error {
 	return os.WriteFile(filename, data, 0644)
 }
 
+func (tr *TestRunner) SaveHTMLReport(filename string, suiteName string) error {
+	return GenerateHTMLReport(tr.results, filename, suiteName)
+}
+
 // testLifecycle tests basic server lifecycle functionality
 func (tr *TestRunner) testLifecycle(testCase TestCase, uri string, result TestResult) TestResult {
 	// For lifecycle tests, we just check that basic operations work
@@ -715,4 +733,82 @@ func (tr *TestRunner) testMemory(testCase TestCase, uri string, result TestResul
 	result.Message = fmt.Sprintf("Memory test completed %d operations", iterations)
 
 	return result
+}
+
+func (tr *TestRunner) testSemanticTokens(testCase TestCase, uri string, result TestResult) TestResult {
+	// Request semantic tokens
+	tokens, err := tr.client.GetSemanticTokens(uri)
+	if err != nil {
+		result.Message = fmt.Sprintf("semantic tokens request failed: %v", err)
+		return result
+	}
+
+	if tokens == nil || len(tokens.Data) == 0 {
+		if testCase.Expected.MinTokens == 0 && len(testCase.Expected.SemanticTokens) == 0 {
+			result.Status = "PASS"
+			return result
+		}
+		result.Status = "FAIL"
+		result.Message = "expected semantic tokens but got none"
+		return result
+	}
+
+	// Decode tokens
+	decodedTokens := DecodeSemanticTokens(tokens.Data)
+
+	// Check token count constraints
+	if testCase.Expected.MinTokens > 0 && len(decodedTokens) < testCase.Expected.MinTokens {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("expected at least %d tokens, got %d", testCase.Expected.MinTokens, len(decodedTokens))
+		result.Details = decodedTokens
+		return result
+	}
+
+	if testCase.Expected.MaxTokens > 0 && len(decodedTokens) > testCase.Expected.MaxTokens {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("expected at most %d tokens, got %d", testCase.Expected.MaxTokens, len(decodedTokens))
+		result.Details = decodedTokens
+		return result
+	}
+
+	// Check specific semantic tokens
+	for _, expected := range testCase.Expected.SemanticTokens {
+		found := false
+		for _, token := range decodedTokens {
+			if tr.matchesSemanticToken(token, expected) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result.Status = "FAIL"
+			result.Message = fmt.Sprintf("expected semantic token not found: line %d, char %d, type %s",
+				expected.Line, expected.StartChar, expected.TokenType)
+			result.Details = decodedTokens
+			return result
+		}
+	}
+
+	result.Status = "PASS"
+	return result
+}
+
+func (tr *TestRunner) matchesSemanticToken(token DecodedToken, expected ExpectedSemanticToken) bool {
+	if token.Line != expected.Line {
+		return false
+	}
+
+	if token.StartChar != expected.StartChar {
+		return false
+	}
+
+	if token.Length != expected.Length {
+		return false
+	}
+
+	if expected.TokenType != "" && token.TypeName != expected.TokenType {
+		return false
+	}
+
+	return true
 }

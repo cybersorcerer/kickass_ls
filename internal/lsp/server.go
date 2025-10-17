@@ -1115,9 +1115,9 @@ func Start() {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
-											isOperand, wordToComplete := getCompletionContext(lineContent, int(charNum))
-											log.Debug("Completion context: isOperand=%v, wordToComplete='%s'", isOperand, wordToComplete)
-											completionItems = generateCompletions(symbolTree, int(lineNum), isOperand, wordToComplete, lineContent, int(charNum), text)
+											contextType, wordToComplete := getCompletionContext(lineContent, int(charNum))
+											log.Debug("Completion context: contextType=%v, wordToComplete='%s'", contextType, wordToComplete)
+											completionItems = generateCompletions(symbolTree, int(lineNum), contextType, wordToComplete, lineContent, int(charNum), text)
 										}
 									}
 								}
@@ -1384,18 +1384,18 @@ func LoadC64MemoryMap(path string) error {
 }
 
 // GetCompletionContext is the exported version of getCompletionContext for test mode
-func GetCompletionContext(line string, char int) (isOperand bool, word string) {
+func GetCompletionContext(line string, char int) (contextType CompletionContextType, word string) {
 	return getCompletionContext(line, char)
 }
 
 // GenerateCompletions is the exported version of generateCompletions for test mode
-func GenerateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string) []map[string]interface{} {
-	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, "", 0, "")
+func GenerateCompletions(symbolTree *Scope, lineNum int, contextType CompletionContextType, wordToComplete string) []map[string]interface{} {
+	return generateCompletions(symbolTree, lineNum, contextType, wordToComplete, "", 0, "")
 }
 
 // GenerateCompletionsWithContext is the extended version for test mode with line context
-func GenerateCompletionsWithContext(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int) []map[string]interface{} {
-	return generateCompletions(symbolTree, lineNum, isOperand, wordToComplete, lineContent, cursorPos, "")
+func GenerateCompletionsWithContext(symbolTree *Scope, lineNum int, contextType CompletionContextType, wordToComplete string, lineContent string, cursorPos int) []map[string]interface{} {
+	return generateCompletions(symbolTree, lineNum, contextType, wordToComplete, lineContent, cursorPos, "")
 }
 
 func getOpcodeDescription(mnemonic string) string {
@@ -1955,11 +1955,11 @@ func getPrecedingMnemonicOrDirective(lineContent string, cursorPos int) (string,
 	return "", false, false
 }
 
-func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToComplete string, lineContent string, cursorPos int, documentText string) []map[string]interface{} {
+func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionContextType, wordToComplete string, lineContent string, cursorPos int, documentText string) []map[string]interface{} {
 	items := []map[string]interface{}{}
 
-	log.Debug("generateCompletions called: lineNum=%d, isOperand=%v, wordToComplete='%s', lineContent='%s', cursorPos=%d",
-		lineNum, isOperand, wordToComplete, lineContent, cursorPos)
+	log.Debug("generateCompletions called: lineNum=%d, contextType=%v, wordToComplete='%s', lineContent='%s', cursorPos=%d",
+		lineNum, contextType, wordToComplete, lineContent, cursorPos)
 
 	// Determine context: are we after a mnemonic or directive?
 	precedingName, isMnem, isDir := getPrecedingMnemonicOrDirective(lineContent, cursorPos)
@@ -1979,7 +1979,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 	}
 
 	// If after a declaration directive and no "=" yet, don't offer completions
-	if isOperand && isDir && declarationDirectives[precedingName] {
+	if contextType == ContextDirectiveOperand && isDir && declarationDirectives[precedingName] {
 		// Check if there's already a "=" in the line - if so, we're past the name part
 		if !strings.Contains(lineContent[:cursorPos], "=") {
 			// We're at the name part - don't offer completions (user should type new name)
@@ -1990,22 +1990,22 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 
 	// CRITICAL FIX: Handle space trigger character case
 	// When user types "lda<space>", LSP sends completion request BEFORE space is in buffer
-	// So we get: isOperand=false, wordToComplete='lda', cursor at end of 'lda'
+	// So we get: contextType=ContextMnemonic, wordToComplete='lda', cursor at end of 'lda'
 	// We need to detect this and offer addressing mode hints anyway
 	offerAddressingHints := false
 	targetMnemonic := ""
 
 	// Case 1: Normal - "lda " with space already in buffer
-	if isOperand && precedingName != "" && isMnem {
+	if contextType == ContextOperandGeneral && precedingName != "" && isMnem {
 		offerAddressingHints = true
 		targetMnemonic = precedingName
-		log.Debug("Case 1: offering hints for mnemonic %s (isOperand=true, after space)", targetMnemonic)
+		log.Debug("Case 1: offering hints for mnemonic %s (ContextOperandGeneral, after space)", targetMnemonic)
 	}
 	// Case 2: Space trigger - user typed "lda<space>", space not yet in buffer
-	if !isOperand && isMnemonic(wordToComplete) && cursorPos == len(strings.TrimRight(lineContent, " \t")) {
+	if contextType == ContextMnemonic && isMnemonic(wordToComplete) && cursorPos == len(strings.TrimRight(lineContent, " \t")) {
 		offerAddressingHints = true
 		targetMnemonic = strings.ToUpper(wordToComplete)
-		log.Debug("Case 2: offering hints for mnemonic %s (isOperand=false, space trigger)", targetMnemonic)
+		log.Debug("Case 2: offering hints for mnemonic %s (ContextMnemonic, space trigger)", targetMnemonic)
 	}
 
 	// Offer addressing mode hints if applicable
@@ -2062,7 +2062,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 	}
 
 	// If we're completing an operand, offer context-specific hints
-	if isOperand && precedingName != "" {
+	if (contextType == ContextOperandGeneral || contextType == ContextJumpTarget || contextType == ContextDirectiveOperand) && precedingName != "" {
 		// Offer previously used operands for this mnemonic/directive
 		if documentText != "" {
 			usedOperands := getUsedOperandsForMnemonic(documentText, precedingName)
@@ -2081,7 +2081,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 		}
 	}
 
-	// Special case: check for memory address completion even if isOperand=false
+	// Special case: check for memory address completion even in mnemonic context
 	// This handles cases where cursor is on or near $ symbol
 	memoryPrefix := ""
 	log.Debug("Checking for memory completion: wordToComplete='%s', lineContent='%s', cursorPos=%d", wordToComplete, lineContent, cursorPos)
@@ -2161,8 +2161,64 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 		}
 	}
 
-	if isOperand {
-		// If we already found memory address completions, don't add other operands
+	// Handle completions based on context type
+	switch contextType {
+	case ContextJumpTarget:
+		// After jmp/jsr/branch - suggest ONLY labels
+		log.Debug("ContextJumpTarget: suggesting labels only")
+		if memoryPrefix != "" {
+			log.Debug("Already found memory completions, skipping other completions")
+			return items
+		}
+		symbols := symbolTree.FindAllVisibleSymbols(lineNum)
+		for _, symbol := range symbols {
+			if symbol.Kind == Label && strings.HasPrefix(symbol.Name, wordToComplete) {
+				item := map[string]interface{}{
+					"label":  symbol.Name,
+					"kind":   toCompletionItemKind(symbol.Kind),
+					"detail": symbol.Value,
+				}
+				items = append(items, item)
+			}
+		}
+
+	case ContextImmediate:
+		// After # - suggest constants and numbers only
+		log.Debug("ContextImmediate: suggesting constants only")
+		wordToComplete = strings.TrimPrefix(wordToComplete, "#")
+
+		// Add built-in constants
+		for _, const_ := range builtinConstants {
+			if strings.HasPrefix(strings.ToLower(const_.Name), strings.ToLower(wordToComplete)) {
+				item := map[string]interface{}{
+					"label":         const_.Name,
+					"kind":          float64(21), // Constant
+					"detail":        fmt.Sprintf("%s constant", const_.Category),
+					"documentation": const_.Description,
+				}
+				if const_.Value != "" {
+					item["detail"] = fmt.Sprintf("%s = %s", const_.Name, const_.Value)
+				}
+				items = append(items, item)
+			}
+		}
+
+		// Add user-defined constants
+		symbols := symbolTree.FindAllVisibleSymbols(lineNum)
+		for _, symbol := range symbols {
+			if symbol.Kind == Constant && strings.HasPrefix(symbol.Name, wordToComplete) {
+				item := map[string]interface{}{
+					"label":  symbol.Name,
+					"kind":   toCompletionItemKind(symbol.Kind),
+					"detail": symbol.Value,
+				}
+				items = append(items, item)
+			}
+		}
+
+	case ContextOperandGeneral, ContextDirectiveOperand:
+		// General operand context - suggest labels, constants, variables
+		log.Debug("ContextOperandGeneral/DirectiveOperand: suggesting all operands")
 		if memoryPrefix != "" {
 			log.Debug("Already found memory completions, skipping other operand completions")
 			return items
@@ -2263,7 +2319,45 @@ func generateCompletions(symbolTree *Scope, lineNum int, isOperand bool, wordToC
 				}
 			}
 		}
-	} else {
+
+	case ContextDirective:
+		// After . - suggest directives only
+		log.Debug("ContextDirective: suggesting directives only")
+		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
+
+		// Try ProcessorContext first (Context-Aware Parser)
+		if ctx := GetProcessorContext(); ctx != nil {
+			for _, directiveName := range ctx.DirectiveNames {
+				displayName := strings.TrimPrefix(directiveName, ".")
+				if strings.HasPrefix(strings.ToLower(displayName), strings.ToLower(wordWithoutDot)) {
+					directiveInfo := ctx.GetDirectiveInfo(directiveName)
+					documentation := ""
+					if directiveInfo != nil {
+						documentation = directiveInfo.Description
+					}
+					items = append(items, map[string]interface{}{
+						"label":         "." + displayName,
+						"kind":          float64(14), // Keyword
+						"detail":        "Kick Assembler Directive",
+						"documentation": documentation,
+					})
+				}
+			}
+		} else {
+			// Fallback to old kickassDirectives array (legacy parser)
+			for _, d := range kickassDirectives {
+				if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+					items = append(items, map[string]interface{}{
+						"label":         applyCase(wordToComplete, d.Directive),
+						"kind":          float64(14), // Keyword
+						"detail":        "Kick Assembler Directive",
+						"documentation": d.Description,
+					})
+				}
+			}
+		}
+
+	case ContextMnemonic:
 		// Offer directives
 		// Strip leading dot from wordToComplete for matching (user types "." or ".by" etc.)
 		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
@@ -2396,6 +2490,20 @@ func isMnemonic(word string) bool {
 	return false
 }
 
+// isJumpInstruction checks if the word is a jump/branch instruction
+// Uses ProcessorContext to check mnemonic type from mnemonic.json
+// Returns true for both Jump and Branch types (for completion context)
+func isJumpInstruction(word string) bool {
+	if ctx := GetProcessorContext(); ctx != nil {
+		mnemonicInfo := ctx.GetMnemonicInfo(strings.ToUpper(word))
+		if mnemonicInfo != nil {
+			// For completion context, we want labels after BOTH jumps and branches
+			return mnemonicInfo.Type == "Jump" || mnemonicInfo.Type == "Branch"
+		}
+	}
+	return false
+}
+
 func isDirective(word string) bool {
 	// Try ProcessorContext first (Context-Aware Parser)
 	if ctx := GetProcessorContext(); ctx != nil {
@@ -2446,9 +2554,21 @@ func extractWordAtPosition(text string, pos int) string {
 	return text[start:end]
 }
 
-// getCompletionContext determines if we are completing an operand or a mnemonic
-// and returns the word being completed.
-func getCompletionContext(line string, char int) (isOperand bool, word string) {
+// CompletionContextType specifies what kind of completion context we're in
+type CompletionContextType int
+
+const (
+	ContextMnemonic     CompletionContextType = iota // At line start or after label - suggest mnemonics/directives/macros
+	ContextDirective                                 // After . - suggest directives only
+	ContextJumpTarget                                // After jmp/jsr/bra/etc - suggest labels only
+	ContextImmediate                                 // After # - suggest constants/numbers only
+	ContextOperandGeneral                            // After other mnemonics - suggest all operands
+	ContextDirectiveOperand                          // After directive - context-specific suggestions
+)
+
+// getCompletionContext determines what kind of completion context we're in
+// and returns the context type and word being completed.
+func getCompletionContext(line string, char int) (CompletionContextType, string) {
 	log.Debug("getCompletionContext line: '%s', char: %d", line, char)
 
 	// Extract the part of the line before the cursor
@@ -2469,7 +2589,7 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	trimmedContext := strings.TrimSpace(context)
 	if trimmedContext == "" {
 		log.Debug("Context is empty or only whitespace, assuming mnemonic context.")
-		return false, ""
+		return ContextMnemonic, ""
 	}
 
 	parts := strings.Fields(trimmedContext)
@@ -2477,7 +2597,7 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 
 	if len(parts) == 0 {
 		log.Debug("No parts found, assuming mnemonic context.")
-		return false, ""
+		return ContextMnemonic, ""
 	}
 
 	// Determine which part the cursor is on.
@@ -2490,20 +2610,33 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 			} else {
 				// After "label: ", starting a new word (mnemonic)
 				log.Debug("Cursor after a label, assuming mnemonic context.")
-				return false, ""
+				return ContextMnemonic, ""
 			}
 		}
 		if strings.HasPrefix(verb, ":") { // It's a macro/pseudocommand call with ':' prefix
 			log.Debug("Cursor after a ':' prefixed macro/pseudocommand, assuming operand context.")
-			return true, ""
+			return ContextOperandGeneral, ""
 		}
-		if isMnemonic(verb) || isDirective(verb) {
-			log.Debug("Cursor after a mnemonic/directive, assuming operand context.")
-			return true, ""
+
+		// Check if verb is a jump instruction
+		if isJumpInstruction(verb) {
+			log.Debug("Cursor after jump instruction '%s', suggesting labels only.", verb)
+			return ContextJumpTarget, ""
 		}
+
+		if isMnemonic(verb) {
+			log.Debug("Cursor after a mnemonic '%s', assuming operand context.", verb)
+			return ContextOperandGeneral, ""
+		}
+
+		if isDirective(verb) {
+			log.Debug("Cursor after a directive '%s', assuming directive operand context.", verb)
+			return ContextDirectiveOperand, ""
+		}
+
 		// e.g. after a constant definition "MAX_SPRITES = 8 |"
 		log.Debug("Cursor in whitespace, but not after a known mnemonic/directive. Assuming mnemonic context for a new line.")
-		return false, ""
+		return ContextMnemonic, ""
 	}
 
 	// Cursor is in the middle of a word.
@@ -2515,7 +2648,13 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	// Special case: if word starts with '.', it's definitely a directive (not an operand)
 	if strings.HasPrefix(wordToComplete, ".") {
 		log.Debug("Word starts with '.', definitely a directive context.")
-		return false, wordToComplete
+		return ContextDirective, wordToComplete
+	}
+
+	// Special case: if word starts with '#', it's immediate addressing (constants only)
+	if strings.HasPrefix(wordToComplete, "#") {
+		log.Debug("Word starts with '#', immediate addressing - constants only.")
+		return ContextImmediate, wordToComplete
 	}
 
 	// Is this word the "verb" (mnemonic/directive) or an operand?
@@ -2527,26 +2666,38 @@ func getCompletionContext(line string, char int) (isOperand bool, word string) {
 	// If we are completing a word at or before the verb index, it's a mnemonic/directive context.
 	if len(parts)-1 <= verbIndex {
 		log.Debug("Completing the verb part of the line.")
-		return false, wordToComplete
+		return ContextMnemonic, wordToComplete
 	}
 
 	// We are completing a word after the verb. This is an operand.
 	verb := parts[verbIndex]
-	if isMnemonic(verb) || isDirective(verb) {
-		log.Debug("Completing after a known verb ('%s'), this is an operand.", verb)
-		return true, wordToComplete
+
+	// Check if verb is a jump instruction
+	if isJumpInstruction(verb) {
+		log.Debug("Completing after jump instruction '%s', suggesting labels only.", verb)
+		return ContextJumpTarget, wordToComplete
+	}
+
+	if isMnemonic(verb) {
+		log.Debug("Completing after a known mnemonic ('%s'), this is an operand.", verb)
+		return ContextOperandGeneral, wordToComplete
+	}
+
+	if isDirective(verb) {
+		log.Debug("Completing after a directive ('%s'), this is a directive operand.", verb)
+		return ContextDirectiveOperand, wordToComplete
 	}
 
 	// Fallback: if the "verb" is not a known mnemonic/directive (e.g. a macro call),
 	// we can assume what follows is an operand.
 	if verbIndex < len(parts)-1 {
 		log.Debug("Completing after an unknown verb ('%s'), assuming operand.", verb)
-		return true, wordToComplete
+		return ContextOperandGeneral, wordToComplete
 	}
 
 	// Default fallback
 	log.Debug("Defaulting to mnemonic context.")
-	return false, wordToComplete
+	return ContextMnemonic, wordToComplete
 }
 func toCompletionItemKind(kind SymbolKind) CompletionItemKind {
 	switch kind {

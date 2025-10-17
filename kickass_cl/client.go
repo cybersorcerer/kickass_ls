@@ -551,6 +551,95 @@ func (c *LSPClient) GetDocumentSymbols(uri string) ([]DocumentSymbol, error) {
 	return symbols, nil
 }
 
+func (c *LSPClient) GetSemanticTokens(uri string) (*SemanticTokens, error) {
+	params := SemanticTokensParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+	}
+
+	response, err := c.SendRequest("textDocument/semanticTokens/full", params)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.Error != nil {
+		return nil, fmt.Errorf("semantic tokens error: %s", response.Error.Message)
+	}
+
+	if response.Result == nil {
+		return nil, nil
+	}
+
+	var tokens SemanticTokens
+	if data, err := json.Marshal(response.Result); err == nil {
+		if err := json.Unmarshal(data, &tokens); err != nil {
+			return nil, fmt.Errorf("failed to parse semantic tokens result: %w", err)
+		}
+	}
+
+	return &tokens, nil
+}
+
+func (c *LSPClient) FormatDocument(uri string) ([]TextEdit, error) {
+	params := DocumentFormattingParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Options: FormattingOptions{
+			TabSize:      4,
+			InsertSpaces: true,
+		},
+	}
+
+	response, err := c.SendRequest("textDocument/formatting", params)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.Error != nil {
+		return nil, fmt.Errorf("formatting error: %s", response.Error.Message)
+	}
+
+	if response.Result == nil {
+		return nil, nil
+	}
+
+	var edits []TextEdit
+	if data, err := json.Marshal(response.Result); err == nil {
+		if err := json.Unmarshal(data, &edits); err != nil {
+			return nil, fmt.Errorf("failed to parse formatting result: %w", err)
+		}
+	}
+
+	return edits, nil
+}
+
+func (c *LSPClient) GetSignatureHelp(uri string, line, character int) (*SignatureHelp, error) {
+	params := SignatureHelpParams{
+		TextDocument: TextDocumentIdentifier{URI: uri},
+		Position:     Position{Line: line, Character: character},
+	}
+
+	response, err := c.SendRequest("textDocument/signatureHelp", params)
+	if err != nil {
+		return nil, err
+	}
+
+	if response.Error != nil {
+		return nil, fmt.Errorf("signature help error: %s", response.Error.Message)
+	}
+
+	if response.Result == nil {
+		return nil, nil
+	}
+
+	var sigHelp SignatureHelp
+	if data, err := json.Marshal(response.Result); err == nil {
+		if err := json.Unmarshal(data, &sigHelp); err != nil {
+			return nil, fmt.Errorf("failed to parse signature help result: %w", err)
+		}
+	}
+
+	return &sigHelp, nil
+}
+
 func (c *LSPClient) GetDiagnostics(uri string) []Diagnostic {
 	c.diagMutex.RLock()
 	defer c.diagMutex.RUnlock()

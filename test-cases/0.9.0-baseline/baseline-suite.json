@@ -1,0 +1,306 @@
+{
+  "name": "Kick Assembler LSP v0.9.0 Baseline Test Suite",
+  "description": "Validates current implementation of core LSP features and semantic token highlighting",
+  "setup": {
+    "serverPath": "../../kickass_ls",
+    "serverArgs": [],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Semantic Tokens - Basic highlighting",
+      "description": "Verifies all token types are correctly highlighted, including the fixed enum bug",
+      "type": "semanticTokens",
+      "input": {
+        "file": "01-semantic-tokens.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {
+        "minTokens": 500,
+        "semanticTokens": [
+          {
+            "line": 40,
+            "startChar": 4,
+            "length": 5,
+            "tokenType": "variable"
+          },
+          {
+            "line": 40,
+            "startChar": 12,
+            "length": 1,
+            "tokenType": "number"
+          },
+          {
+            "line": 46,
+            "startChar": 4,
+            "length": 4,
+            "tokenType": "variable"
+          },
+          {
+            "line": 46,
+            "startChar": 11,
+            "length": 1,
+            "tokenType": "number"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Semantic Tokens - Enum highlighting (critical bug fix)",
+      "description": "Tests that numbers in enums are fully orange, not character-by-character wrong",
+      "type": "semanticTokens",
+      "input": {
+        "file": "01-semantic-tokens.asm",
+        "line": 50,
+        "character": 0
+      },
+      "expected": {
+        "semanticTokens": [
+          {
+            "line": 50,
+            "startChar": 4,
+            "length": 9,
+            "tokenType": "variable"
+          },
+          {
+            "line": 50,
+            "startChar": 16,
+            "length": 2,
+            "tokenType": "number"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Basic Syntax - Parse without errors",
+      "description": "Verifies parser handles all basic syntax correctly",
+      "type": "diagnostics",
+      "input": {
+        "file": "02-basic-syntax.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {
+        "diagnostics": []
+      }
+    },
+    {
+      "name": "Diagnostics - Unknown mnemonics",
+      "description": "Detects unknown mnemonics and reports errors",
+      "type": "diagnostics",
+      "input": {
+        "file": "03-diagnostics.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 23,
+            "column": 0,
+            "severity": 1,
+            "message": "Unknown mnemonic"
+          },
+          {
+            "line": 24,
+            "column": 0,
+            "severity": 1,
+            "message": "Unknown mnemonic"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Diagnostics - Invalid hex numbers",
+      "description": "Detects invalid hexadecimal numbers",
+      "type": "diagnostics",
+      "input": {
+        "file": "03-diagnostics.asm",
+        "line": 31,
+        "character": 0
+      },
+      "expected": {
+        "diagnostics": [
+          {
+            "line": 31,
+            "column": 0,
+            "severity": 1,
+            "message": "Invalid"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Completion - Directive completion after dot",
+      "description": "After typing '.', only directives should be suggested",
+      "type": "completion",
+      "input": {
+        "file": "04-completion.asm",
+        "line": 11,
+        "character": 12
+      },
+      "expected": {
+        "minItems": 10,
+        "completionItems": [
+          {
+            "label": ".byte"
+          },
+          {
+            "label": ".const"
+          },
+          {
+            "label": ".var"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Hover - Mnemonic documentation",
+      "description": "Hovering over mnemonic shows documentation",
+      "type": "hover",
+      "input": {
+        "file": "05-hover.asm",
+        "line": 12,
+        "character": 4
+      },
+      "expected": {
+        "hoverContent": "LDA"
+      }
+    },
+    {
+      "name": "Hover - Constant value",
+      "description": "Hovering over constant shows its value",
+      "type": "hover",
+      "input": {
+        "file": "05-hover.asm",
+        "line": 8,
+        "character": 7
+      },
+      "expected": {
+        "hoverContent": "SCREEN"
+      }
+    },
+    {
+      "name": "Definition - Constant definition",
+      "description": "Go to definition jumps to constant declaration",
+      "type": "definition",
+      "input": {
+        "file": "06-goto-definition.asm",
+        "line": 11,
+        "character": 9
+      },
+      "expected": {
+        "locations": [
+          {
+            "file": "06-goto-definition.asm",
+            "line": 7,
+            "character": 7
+          }
+        ]
+      }
+    },
+    {
+      "name": "References - Find all constant references",
+      "description": "Find references shows all usages of SCREEN constant",
+      "type": "references",
+      "input": {
+        "file": "06-goto-definition.asm",
+        "line": 7,
+        "character": 7
+      },
+      "expected": {
+        "locations": [
+          {
+            "file": "06-goto-definition.asm",
+            "line": 7,
+            "character": 7
+          },
+          {
+            "file": "06-goto-definition.asm",
+            "line": 11,
+            "character": 9
+          },
+          {
+            "file": "06-goto-definition.asm",
+            "line": 17,
+            "character": 9
+          }
+        ]
+      }
+    },
+    {
+      "name": "Document Symbols - Constants",
+      "description": "Document symbols list includes all constants",
+      "type": "documentSymbol",
+      "input": {
+        "file": "07-document-symbols.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {
+        "symbols": [
+          {
+            "name": "SCREEN",
+            "kind": 14,
+            "line": 8
+          },
+          {
+            "name": "BORDER",
+            "kind": 14,
+            "line": 9
+          }
+        ]
+      }
+    },
+    {
+      "name": "Document Symbols - Functions",
+      "description": "Document symbols list includes all functions",
+      "type": "documentSymbol",
+      "input": {
+        "file": "07-document-symbols.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {
+        "symbols": [
+          {
+            "name": "add",
+            "kind": 12,
+            "line": 17
+          },
+          {
+            "name": "multiply",
+            "kind": 12,
+            "line": 21
+          }
+        ]
+      }
+    },
+    {
+      "name": "Document Symbols - Labels",
+      "description": "Document symbols list includes all labels",
+      "type": "documentSymbol",
+      "input": {
+        "file": "07-document-symbols.asm",
+        "line": 0,
+        "character": 0
+      },
+      "expected": {
+        "symbols": [
+          {
+            "name": "start",
+            "kind": 6,
+            "line": 56
+          },
+          {
+            "name": "subroutine",
+            "kind": 6,
+            "line": 62
+          }
+        ]
+      }
+    }
+  ]
+}

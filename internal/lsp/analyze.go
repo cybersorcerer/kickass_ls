@@ -141,7 +141,7 @@ type SemanticAnalyzer struct {
 	diagnostics   []Diagnostic
 	documentLines []string
 	// Enhanced analysis context
-	context       *AnalysisContext
+	context *AnalysisContext
 	// Track if we're inside a macro or function template (for skipping PC-based validations)
 	inMacroOrFunction bool
 }
@@ -520,8 +520,8 @@ func (a *SemanticAnalyzer) getInstructionLength(mnemonic string, operand Express
 	case "BRK", "RTI", "RTS":
 		return 1 // Implied
 	case "PHP", "PLP", "PHA", "PLA", "DEY", "TAY", "INY", "INX",
-		 "CLC", "SEC", "CLI", "SEI", "CLV", "CLD", "SED", "TXA",
-		 "TYA", "TXS", "TSX", "DEX", "NOP":
+		"CLC", "SEC", "CLI", "SEI", "CLV", "CLD", "SED", "TXA",
+		"TYA", "TXS", "TSX", "DEX", "NOP":
 		return 1 // Implied
 	}
 
@@ -553,22 +553,24 @@ func (a *SemanticAnalyzer) getInstructionLength(mnemonic string, operand Express
 }
 
 // isBranchInstruction checks if a mnemonic is a branch instruction
+// Uses ProcessorContext to check mnemonic type from mnemonic.json
 func (a *SemanticAnalyzer) isBranchInstruction(mnemonic string) bool {
-	branches := []string{"BEQ", "BNE", "BCC", "BCS", "BPL", "BMI", "BVC", "BVS"}
-	for _, branch := range branches {
-		if mnemonic == branch {
-			return true
+	if ctx := GetProcessorContext(); ctx != nil {
+		mnemonicInfo := ctx.GetMnemonicInfo(strings.ToUpper(mnemonic))
+		if mnemonicInfo != nil {
+			return mnemonicInfo.Type == "Branch"
 		}
 	}
 	return false
 }
 
 // isJumpInstruction checks if the mnemonic is a jump or call instruction
+// Uses ProcessorContext to check mnemonic type from mnemonic.json
 func (a *SemanticAnalyzer) isJumpInstruction(mnemonic string) bool {
-	jumps := []string{"JMP", "JSR"}
-	for _, jump := range jumps {
-		if mnemonic == jump {
-			return true
+	if ctx := GetProcessorContext(); ctx != nil {
+		mnemonicInfo := ctx.GetMnemonicInfo(strings.ToUpper(mnemonic))
+		if mnemonicInfo != nil {
+			return mnemonicInfo.Type == "Jump"
 		}
 	}
 	return false
@@ -588,13 +590,19 @@ func (a *SemanticAnalyzer) calculateInstructionAddress(node *InstructionStatemen
 		a.checkZeroPageOptimization(mnemonic, node.Operand, node.Token)
 	}
 
+	// Validate branch distance for backward branches (Pass 1)
+	// Forward branches will be validated in Pass 2
+	if a.isBranchInstruction(mnemonic) && node.Operand != nil && !a.inMacroOrFunction {
+		a.validateBranchDistancePass1(node.Operand, node.Token)
+	}
+
 	// Update program counter (but not inside templates)
 	if !a.inMacroOrFunction {
 		a.context.CurrentPC += int64(length)
 	}
 }
 
-// processInstruction handles instruction processing with PC tracking
+// processInstruction handles instruction processing (Pass 3 - no PC tracking)
 func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	if node == nil || a.context == nil || node.Token.Literal == "" {
 		return
@@ -603,17 +611,12 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	mnemonic := strings.ToUpper(node.Token.Literal)
 	// Debug: Log instruction processing to help debug semantic analysis
 	log.Debug("Processing instruction: %s", mnemonic)
-	length := a.getInstructionLength(mnemonic, node.Operand)
 
-	// Update program counter (but not inside templates)
-	if !a.inMacroOrFunction {
-		a.context.CurrentPC += int64(length)
-	}
+	// NOTE: PC tracking is done in Pass 1 (pass1AddressCalculation)
+	// Pass 3 is for usage analysis and validation only - NO PC tracking here!
 
-	// Check for branch distance validation (relative branches only)
-	if a.isBranchInstruction(mnemonic) && node.Operand != nil {
-		a.validateBranchDistance(node.Operand, node.Token)
-	}
+	// Branch distance validation is done in Pass 2 (forward reference resolution)
+	// where all labels are known and PCs are correct. Skip it in Pass 3.
 
 	// Check for undefined symbols in jump/call instructions
 	if a.isJumpInstruction(mnemonic) && node.Operand != nil {
@@ -642,8 +645,9 @@ func (a *SemanticAnalyzer) processInstruction(node *InstructionStatement) {
 	}
 }
 
-// validateBranchDistance checks if branch distance is within 6502 limits
-func (a *SemanticAnalyzer) validateBranchDistance(operand Expression, token Token) {
+// validateBranchDistancePass1 checks if branch distance is within 6502 limits (Pass 1)
+// This validates backward branches and creates forward references for forward branches
+func (a *SemanticAnalyzer) validateBranchDistancePass1(operand Expression, token Token) {
 	config := GetLSPConfig()
 
 	// Check if branch distance validation is enabled
@@ -809,7 +813,10 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			}
 		}
 	case ".encoding":
-		// Encoding directive - validate encoding name
+		// Encoding directive - validate encoding name (ONLY in Pass 1 to avoid duplicate warnings)
+		if !isPass1 {
+			return
+		}
 		if node.Value != nil {
 			if strLit, ok := node.Value.(*StringLiteral); ok {
 				encodingName := strings.ToLower(strLit.Value)
@@ -865,7 +872,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		if isPass1 && node.Name != nil && node.Block != nil {
 			hasReturn := a.blockHasReturnStatement(node.Block)
 			if !hasReturn {
-				a.addWarning(node.Token, "Function '%s' has no .return statement", node.Name.Value)
+				a.addWarning(node.Token, "Function '%s' has no .return statement, the returned value will be null", node.Name.Value)
 			}
 			log.Debug("processDirective .function: name=%s, hasReturn=%v", node.Name.Value, hasReturn)
 		}
@@ -875,8 +882,8 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			log.Debug("processDirective .macro: name=%s, params=%d", node.Name.Value, len(node.Parameters))
 		}
 	case ".pc", "*", "*=":
-		// Set program counter
-		if node.Value != nil {
+		// Set program counter (ONLY in Pass 1)
+		if isPass1 && node.Value != nil {
 			if addr := a.evaluateExpression(node.Value); addr != -1 {
 				a.context.CurrentPC = addr
 			}
@@ -953,8 +960,8 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		if node.Value != nil {
 			a.checkRangeValidation(node.Value, "byte", 0, 255, node.Token)
 		}
-		// Don't update PC inside templates
-		if !a.inMacroOrFunction {
+		// Update PC only in Pass 1 and not inside templates
+		if isPass1 && !a.inMacroOrFunction {
 			a.context.CurrentPC++
 		}
 	case ".word", ".wo":
@@ -963,8 +970,8 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		if node.Value != nil {
 			a.checkRangeValidation(node.Value, "word", 0, 65535, node.Token)
 		}
-		// Don't update PC inside templates
-		if !a.inMacroOrFunction {
+		// Update PC only in Pass 1 and not inside templates
+		if isPass1 && !a.inMacroOrFunction {
 			a.context.CurrentPC += 2
 		}
 	case ".text", ".tx":
@@ -972,16 +979,16 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		if node.Value != nil {
 			// For text directives, estimate 1 byte per character
 			// This is a simplified estimation since we don't have StringLiteral type
-			// Don't update PC inside templates
-			if !a.inMacroOrFunction {
+			// Update PC only in Pass 1 and not inside templates
+			if isPass1 && !a.inMacroOrFunction {
 				a.context.CurrentPC += 8 // Default text size estimate
 			}
 		}
 	case ".fill":
 		// Fill directive: .fill count, value
 		// Syntax: .fill <count>, <value>
-		// Updates PC by count bytes
-		if node.Value != nil {
+		// Updates PC by count bytes (ONLY in Pass 1)
+		if isPass1 && node.Value != nil {
 			// node.Value should be an expression or array with count and value
 			// For now, try to evaluate it as count
 			if arrayExpr, ok := node.Value.(*ArrayExpression); ok && len(arrayExpr.Elements) > 0 {
@@ -1406,8 +1413,8 @@ func (a *SemanticAnalyzer) evaluateBuiltinFunction(name string, args []Expressio
 				return val
 			}
 		}
-	// More complex functions like sin, cos, sqrt cannot be evaluated at compile time
-	// without proper floating point support, so return -1 to indicate cannot evaluate
+		// More complex functions like sin, cos, sqrt cannot be evaluated at compile time
+		// without proper floating point support, so return -1 to indicate cannot evaluate
 	}
 	return -1 // Cannot evaluate this function
 }
@@ -1460,7 +1467,6 @@ func (a *SemanticAnalyzer) parseBuiltinFunctionSignature(signature string) int {
 	// Count comma-separated parameters
 	return len(strings.Split(params, ","))
 }
-
 
 // Quick Wins Implementation
 
@@ -1669,10 +1675,10 @@ func (a *SemanticAnalyzer) checkJMPIndirectBug(operand Expression, token Token) 
 	}
 
 	// Check if we have a valid address and it triggers the page boundary bug
-	if addr != -1 && (addr & 0xFF) == 0xFF {
+	if addr != -1 && (addr&0xFF) == 0xFF {
 		a.addWarning(token,
 			"JMP ($%04X) triggers 6502 page-boundary bug - "+
-			"will read from $%04X and $%04X instead of $%04X/$%04X",
+				"will read from $%04X and $%04X instead of $%04X/$%04X",
 			addr, addr, addr&0xFF00, addr, addr+1)
 	}
 }
@@ -1714,7 +1720,7 @@ func (a *SemanticAnalyzer) checkMemoryAccess(mnemonic string, operand Expression
 func (a *SemanticAnalyzer) isWriteInstruction(mnemonic string) bool {
 	writeInstructions := []string{
 		"STA", "STX", "STY", // Store instructions
-		"INC", "DEC",        // Read-modify-write instructions
+		"INC", "DEC", // Read-modify-write instructions
 		"ASL", "LSR", "ROL", "ROR", // Shift/rotate instructions (when used with memory)
 	}
 
@@ -1809,17 +1815,19 @@ func (a *SemanticAnalyzer) analyzeControlFlowWithVisited(statements []Statement,
 }
 
 // isUnconditionalJump checks if an instruction is an unconditional jump
+// Uses ProcessorContext to check mnemonic type from mnemonic.json
 func (a *SemanticAnalyzer) isUnconditionalJump(stmt *InstructionStatement) bool {
 	if stmt == nil || stmt.Token.Literal == "" {
 		return false
 	}
 
 	mnemonic := strings.ToUpper(stmt.Token.Literal)
-	unconditionalJumps := []string{"JMP", "RTS", "RTI"}
 
-	for _, jump := range unconditionalJumps {
-		if mnemonic == jump {
-			return true
+	if ctx := GetProcessorContext(); ctx != nil {
+		mnemonicInfo := ctx.GetMnemonicInfo(mnemonic)
+		if mnemonicInfo != nil {
+			// JMP is unconditional Jump, RTS/RTI are Returns (also unconditional)
+			return mnemonicInfo.Type == "Jump" || mnemonicInfo.Type == "Return"
 		}
 	}
 	return false
@@ -2175,9 +2183,9 @@ func (a *SemanticAnalyzer) addDeadCodeWarningsForIfBlock(node *DirectiveStatemen
 				log.Debug("addDeadCodeWarningsForIfBlock: adding generic warning for statement type %T", statement)
 				// Create a generic token for the warning
 				token := Token{
-					Type:    TOKEN_COMMENT,  // Generic type for unidentified statements
+					Type:    TOKEN_COMMENT, // Generic type for unidentified statements
 					Literal: "unknown",
-					Line:    1,              // We'll use a default position
+					Line:    1, // We'll use a default position
 					Column:  1,
 				}
 				a.addWarning(token, "Dead code: statement will never be executed (.if condition is always false)")

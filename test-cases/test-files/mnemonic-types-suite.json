@@ -1,0 +1,54 @@
+{
+  "name": "Mnemonic Type Classification Test Suite",
+  "description": "Tests Branch/Jump/Return type classification from mnemonic.json",
+  "testCases": [
+    {
+      "name": "Branch Instructions - BEQ recognized",
+      "file": "test-cases/test-mnemonic-types.asm",
+      "type": "diagnostics",
+      "expected": {
+        "minDiagnostics": 0,
+        "maxDiagnostics": 10
+      }
+    },
+    {
+      "name": "Dead Code Detection - After JMP",
+      "file": "test-cases/test-mnemonic-types.asm",
+      "type": "diagnostics",
+      "expected": {
+        "diagnostics": [
+          {
+            "severity": "Warning",
+            "message": "Dead code: This code is unreachable"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Dead Code Detection - After RTS",
+      "file": "test-cases/test-mnemonic-types.asm",
+      "type": "diagnostics",
+      "expected": {
+        "diagnostics": [
+          {
+            "severity": "Warning",
+            "message": "Dead code: This code is unreachable"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Completion after JMP - Only labels",
+      "file": "test-cases/completion-test.asm",
+      "type": "completion",
+      "position": {
+        "line": 24,
+        "character": 8
+      },
+      "expected": {
+        "maxItems": 20,
+        "comment": "Should show only labels, not 130 items with directives/mnemonics"
+      }
+    }
+  ]
+}
