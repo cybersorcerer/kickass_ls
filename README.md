@@ -57,6 +57,7 @@ Made with love for the retro computing community.
 		- [c64memory.json](#c64memoryjson)
 	- [Contributing](#contributing)
 	- [License](#license)
+	- [Support](#support)
 
 ## Features
 
@@ -636,6 +637,17 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+---
+
+## Support
+
+This project is developed with love for the retro computing community. If you find it useful and want to support its continued development, consider sponsoring:
+
+- [GitHub Sponsors](https://github.com/sponsors/cybersorcerer) - Preferred method
+- [Ko-fi](https://ko-fi.com/yourusername) - For one-time donations
+
+Your support helps maintain and improve this tool. Thank you!
 
 ---
 
