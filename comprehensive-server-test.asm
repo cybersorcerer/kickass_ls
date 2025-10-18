@@ -486,7 +486,8 @@ c64Registers:
     lda $d001                       // Sprite 0 Y
     lda $d020                       // Border Color
     lda $d021                       // Background Color
-
+    lda $
+huhuh
     // SID Chip
     lda $d400                       // Voice 1 Frequency Low
     lda $d401                       // Voice 1 Frequency High
