@@ -849,7 +849,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "0.9.6", // Version updated
+						"version": "1.0.0", // Version updated
 					},
 				},
 			}
@@ -2558,12 +2558,12 @@ func extractWordAtPosition(text string, pos int) string {
 type CompletionContextType int
 
 const (
-	ContextMnemonic     CompletionContextType = iota // At line start or after label - suggest mnemonics/directives/macros
-	ContextDirective                                 // After . - suggest directives only
-	ContextJumpTarget                                // After jmp/jsr/bra/etc - suggest labels only
-	ContextImmediate                                 // After # - suggest constants/numbers only
-	ContextOperandGeneral                            // After other mnemonics - suggest all operands
-	ContextDirectiveOperand                          // After directive - context-specific suggestions
+	ContextMnemonic         CompletionContextType = iota // At line start or after label - suggest mnemonics/directives/macros
+	ContextDirective                                     // After . - suggest directives only
+	ContextJumpTarget                                    // After jmp/jsr/bra/etc - suggest labels only
+	ContextImmediate                                     // After # - suggest constants/numbers only
+	ContextOperandGeneral                                // After other mnemonics - suggest all operands
+	ContextDirectiveOperand                              // After directive - context-specific suggestions
 )
 
 // getCompletionContext determines what kind of completion context we're in

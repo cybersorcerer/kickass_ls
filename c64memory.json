@@ -70,6 +70,205 @@
         "related": ["0xD010", "0xD001"],
         "tips": ["Full 9-bit X position with $D010 bit 0"]
       },
+      "0xD001": {
+        "name": "Sprite 0 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 0",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "examples": [
+          "lda #50      ; Set Y position",
+          "sta $d001    ; Sprite 0 Y coordinate"
+        ],
+        "related": ["0xD000", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD002": {
+        "name": "Sprite 1 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 1 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD003", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 1"]
+      },
+      "0xD003": {
+        "name": "Sprite 1 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 1",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD002", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD004": {
+        "name": "Sprite 2 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 2 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD005", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 2"]
+      },
+      "0xD005": {
+        "name": "Sprite 2 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 2",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD004", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD006": {
+        "name": "Sprite 3 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 3 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD007", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 3"]
+      },
+      "0xD007": {
+        "name": "Sprite 3 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 3",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD006", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD008": {
+        "name": "Sprite 4 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 4 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD009", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 4"]
+      },
+      "0xD009": {
+        "name": "Sprite 4 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 4",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD008", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD00A": {
+        "name": "Sprite 5 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 5 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD00B", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 5"]
+      },
+      "0xD00B": {
+        "name": "Sprite 5 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 5",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD00A", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD00C": {
+        "name": "Sprite 6 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 6 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD00D", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 6"]
+      },
+      "0xD00D": {
+        "name": "Sprite 6 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 6",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD00C", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
+      "0xD00E": {
+        "name": "Sprite 7 X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "X coordinate of sprite 7 (bits 0-7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "X position bits 0-7 (bit 8 in $D010)"
+        },
+        "related": ["0xD00F", "0xD010"],
+        "tips": ["Full 9-bit X position with $D010 bit 7"]
+      },
+      "0xD00F": {
+        "name": "Sprite 7 Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Y coordinate of sprite 7",
+        "access": "read/write",
+        "bitFields": {
+          "0-7": "Y position (0-255)"
+        },
+        "related": ["0xD00E", "0xD010"],
+        "tips": ["Y position is 8-bit only (0-255)"]
+      },
       "0xD010": {
         "name": "Sprites 0-7 X Position MSB",
         "category": "VIC-II",
@@ -135,6 +334,38 @@
         "related": ["0xD011", "0xD01A", "0xD019"],
         "tips": ["Combined with bit 7 of $D011 for full 9-bit raster", "Used for raster interrupts"]
       },
+      "0xD013": {
+        "name": "Light Pen X Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Light pen horizontal position (read-only)",
+        "access": "read",
+        "bitFields": {
+          "0-7": "X position / 2"
+        },
+        "examples": [
+          "lda $d013    ; Read light pen X position"
+        ],
+        "related": ["0xD014", "0xD019"],
+        "tips": ["Triggered by light pen input", "Value is X/2 for resolution reasons"]
+      },
+      "0xD014": {
+        "name": "Light Pen Y Position",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Light pen vertical position (read-only)",
+        "access": "read",
+        "bitFields": {
+          "0-7": "Y position"
+        },
+        "examples": [
+          "lda $d014    ; Read light pen Y position"
+        ],
+        "related": ["0xD013", "0xD019"],
+        "tips": ["Triggered by light pen input"]
+      },
       "0xD015": {
         "name": "Sprite Enable Register",
         "category": "VIC-II",
@@ -158,6 +389,57 @@
         ],
         "related": ["0xD000", "0xD001", "0xD010"],
         "tips": ["Sprites must be enabled to be visible"]
+      },
+      "0xD016": {
+        "name": "VIC Control Register 2",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Screen control register for horizontal scroll and multicolor mode",
+        "access": "read/write",
+        "bitFields": {
+          "0-2": "Horizontal scroll (0-7)",
+          "3": "Screen width (0=38 columns, 1=40 columns)",
+          "4": "Multicolor mode enable",
+          "5": "Reset bit (unused)"
+        },
+        "examples": [
+          "lda #$08     ; 40 column mode",
+          "sta $d016    ; Set screen width",
+          "lda $d016",
+          "ora #$10     ; Enable multicolor",
+          "sta $d016"
+        ],
+        "related": ["0xD011", "0xD01C"],
+        "tips": ["Bit 4 enables multicolor text mode", "Horizontal scroll for smooth scrolling"]
+      },
+      "0xD017": {
+        "name": "Sprite Vertical Expansion",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls sprite double height (Y-expansion)",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Sprite 0 double height",
+          "1": "Sprite 1 double height",
+          "2": "Sprite 2 double height",
+          "3": "Sprite 3 double height",
+          "4": "Sprite 4 double height",
+          "5": "Sprite 5 double height",
+          "6": "Sprite 6 double height",
+          "7": "Sprite 7 double height"
+        },
+        "examples": [
+          "lda #%00000001 ; Double height sprite 0",
+          "sta $d017"
+        ],
+        "related": ["0xD01D", "0xD015"],
+        "tips": [
+          "1 = sprite is stretched vertically (2x height)",
+          "Crunch effect: toggle during display for multiplexing",
+          "Changed mid-sprite causes glitches (FLD-like effect)"
+        ]
       },
       "0xD018": {
         "name": "VIC Memory Control Register",
@@ -225,6 +507,152 @@
         "related": ["0xD019", "0xD011", "0xD012"],
         "tips": ["Must enable specific interrupt types", "Combined with global interrupt enable"]
       },
+      "0xD01B": {
+        "name": "Sprite Priority Register",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls sprite display priority (foreground/background)",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Sprite 0 priority (0=foreground, 1=background)",
+          "1": "Sprite 1 priority",
+          "2": "Sprite 2 priority",
+          "3": "Sprite 3 priority",
+          "4": "Sprite 4 priority",
+          "5": "Sprite 5 priority",
+          "6": "Sprite 6 priority",
+          "7": "Sprite 7 priority"
+        },
+        "examples": [
+          "lda #%00000000 ; All sprites in foreground",
+          "sta $d01b",
+          "lda #%11111111 ; All sprites behind screen",
+          "sta $d01b"
+        ],
+        "related": ["0xD015", "0xD01E", "0xD01F"],
+        "tips": [
+          "0 = sprite drawn in front of screen data",
+          "1 = sprite drawn behind foreground pixels",
+          "Background color pixels always behind sprite",
+          "Affects sprite-background collision detection ($D01F)"
+        ]
+      },
+      "0xD01C": {
+        "name": "Sprite Multicolor Mode",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Enables multicolor mode for individual sprites",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Sprite 0 multicolor enable",
+          "1": "Sprite 1 multicolor enable",
+          "2": "Sprite 2 multicolor enable",
+          "3": "Sprite 3 multicolor enable",
+          "4": "Sprite 4 multicolor enable",
+          "5": "Sprite 5 multicolor enable",
+          "6": "Sprite 6 multicolor enable",
+          "7": "Sprite 7 multicolor enable"
+        },
+        "examples": [
+          "lda #%00000011 ; Multicolor for sprites 0-1",
+          "sta $d01c"
+        ],
+        "related": ["0xD025", "0xD026", "0xD027"],
+        "tips": [
+          "Multicolor: 4 colors but HALF horizontal resolution",
+          "Colors: $D025, $D026, sprite color ($D027-$D02E), transparent",
+          "Pixel pairs: 00=transparent, 01=$D025, 10=sprite color, 11=$D026",
+          "Mix hires and multicolor sprites for best results"
+        ]
+      },
+      "0xD01D": {
+        "name": "Sprite Horizontal Expansion",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Controls sprite double width (X-expansion)",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Sprite 0 double width",
+          "1": "Sprite 1 double width",
+          "2": "Sprite 2 double width",
+          "3": "Sprite 3 double width",
+          "4": "Sprite 4 double width",
+          "5": "Sprite 5 double width",
+          "6": "Sprite 6 double width",
+          "7": "Sprite 7 double width"
+        },
+        "examples": [
+          "lda #%00000001 ; Double width sprite 0",
+          "sta $d01d"
+        ],
+        "related": ["0xD017", "0xD015"],
+        "tips": [
+          "1 = sprite is stretched horizontally (2x width)",
+          "Toggling creates X-stretch effects",
+          "Can be used for sprite multiplexing tricks"
+        ]
+      },
+      "0xD01E": {
+        "name": "Sprite-Sprite Collision",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Sprite-to-sprite collision detection register",
+        "access": "read",
+        "bitFields": {
+          "0": "Sprite 0 collision flag",
+          "1": "Sprite 1 collision flag",
+          "2": "Sprite 2 collision flag",
+          "3": "Sprite 3 collision flag",
+          "4": "Sprite 4 collision flag",
+          "5": "Sprite 5 collision flag",
+          "6": "Sprite 6 collision flag",
+          "7": "Sprite 7 collision flag"
+        },
+        "examples": [
+          "lda $d01e    ; Read collision register",
+          "and #%00000011 ; Check sprites 0-1 collision"
+        ],
+        "related": ["0xD01F", "0xD019"],
+        "tips": [
+          "CLEARED ON READ - save value immediately if needed",
+          "Bit set when sprite collides with ANY other sprite",
+          "Check collision interrupt flag in $D019 first",
+          "Reading clears ALL collision bits at once"
+        ]
+      },
+      "0xD01F": {
+        "name": "Sprite-Background Collision",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Sprite-to-background collision detection register",
+        "access": "read",
+        "bitFields": {
+          "0": "Sprite 0 background collision",
+          "1": "Sprite 1 background collision",
+          "2": "Sprite 2 background collision",
+          "3": "Sprite 3 background collision",
+          "4": "Sprite 4 background collision",
+          "5": "Sprite 5 background collision",
+          "6": "Sprite 6 background collision",
+          "7": "Sprite 7 background collision"
+        },
+        "examples": [
+          "lda $d01f    ; Read collision register",
+          "and #$01     ; Check sprite 0 collision"
+        ],
+        "related": ["0xD01E", "0xD019"],
+        "tips": [
+          "CLEARED ON READ - save value immediately if needed",
+          "Detects collision with foreground screen data only",
+          "Priority bit ($D01B) affects which pixels are checked",
+          "Reading clears ALL collision bits at once"
+        ]
+      },
       "0xD020": {
         "name": "Border Color Register",
         "category": "VIC-II",
@@ -270,6 +698,187 @@
         ],
         "related": ["0xD020", "0xD022", "0xD023"],
         "tips": ["Background color 0 (default)", "Use with multicolor modes for additional colors"]
+      },
+      "0xD022": {
+        "name": "Extra Background Color 1",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Background color 1 for multicolor and ECM modes",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD021", "0xD023", "0xD024"],
+        "tips": ["Used in extended background color mode and multicolor text mode"]
+      },
+      "0xD023": {
+        "name": "Extra Background Color 2",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Background color 2 for multicolor and ECM modes",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD021", "0xD022", "0xD024"],
+        "tips": ["Used in extended background color mode and multicolor text mode"]
+      },
+      "0xD024": {
+        "name": "Extra Background Color 3",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Background color 3 for ECM mode",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD021", "0xD022", "0xD023"],
+        "tips": ["Used in extended background color mode"]
+      },
+      "0xD025": {
+        "name": "Sprite Multicolor 0",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Shared multicolor register for all sprites",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "examples": [
+          "lda #$01    ; White",
+          "sta $d025   ; Sprite multicolor 0"
+        ],
+        "related": ["0xD026", "0xD01C", "0xD027"],
+        "tips": ["Shared by all multicolor sprites", "Works with $D026 for 4-color sprites"]
+      },
+      "0xD026": {
+        "name": "Sprite Multicolor 1",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Shared multicolor register for all sprites",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "examples": [
+          "lda #$02    ; Red",
+          "sta $d026   ; Sprite multicolor 1"
+        ],
+        "related": ["0xD025", "0xD01C", "0xD027"],
+        "tips": ["Shared by all multicolor sprites", "Works with $D025 for 4-color sprites"]
+      },
+      "0xD027": {
+        "name": "Sprite 0 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 0",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "examples": [
+          "lda #$07    ; Yellow sprite",
+          "sta $d027   ; Sprite 0 color"
+        ],
+        "related": ["0xD028", "0xD015"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD028": {
+        "name": "Sprite 1 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 1",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD027", "0xD029"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD029": {
+        "name": "Sprite 2 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 2",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD028", "0xD02A"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD02A": {
+        "name": "Sprite 3 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 3",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD029", "0xD02B"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD02B": {
+        "name": "Sprite 4 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 4",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD02A", "0xD02C"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD02C": {
+        "name": "Sprite 5 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 5",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD02B", "0xD02D"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD02D": {
+        "name": "Sprite 6 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 6",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD02C", "0xD02E"],
+        "tips": ["Independent color for each sprite"]
+      },
+      "0xD02E": {
+        "name": "Sprite 7 Color",
+        "category": "VIC-II",
+        "type": "register",
+        "size": 1,
+        "description": "Individual color for sprite 7",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Color value (0-15)"
+        },
+        "related": ["0xD02D", "0xD027"],
+        "tips": ["Independent color for each sprite"]
       },
       "0xD400": {
         "name": "SID Voice 1 Frequency Low",
@@ -328,6 +937,108 @@
         ],
         "related": ["0xD40B", "0xD412"],
         "tips": ["Multiple waveforms can be combined", "Gate bit starts/stops voice"]
+      },
+      "0xD407": {
+        "name": "SID Voice 2 Frequency Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 frequency control (low byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Frequency bits 0-7"
+        },
+        "related": ["0xD408", "0xD40B"],
+        "tips": ["16-bit frequency with $D408"]
+      },
+      "0xD408": {
+        "name": "SID Voice 2 Frequency High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 frequency control (high byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Frequency bits 8-15"
+        },
+        "related": ["0xD407", "0xD40B"],
+        "tips": ["Combined with $D407 for full 16-bit frequency"]
+      },
+      "0xD40B": {
+        "name": "SID Voice 2 Control Register",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 control and waveform selection",
+        "access": "write",
+        "bitFields": {
+          "0": "Gate (voice on/off)",
+          "1": "Sync oscillator with voice 1",
+          "2": "Ring modulation with voice 1",
+          "3": "Test (disable oscillator)",
+          "4": "Triangle waveform",
+          "5": "Sawtooth waveform",
+          "6": "Pulse waveform",
+          "7": "Noise waveform"
+        },
+        "related": ["0xD404", "0xD412"],
+        "tips": [
+          "Voice 2 can sync/ring-mod with voice 1",
+          "Gate bit: 0→1 triggers attack, 1→0 triggers release",
+          "Set frequency BEFORE setting gate bit",
+          "Test bit can be used to reset oscillator phase"
+        ]
+      },
+      "0xD40E": {
+        "name": "SID Voice 3 Frequency Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 frequency control (low byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Frequency bits 0-7"
+        },
+        "related": ["0xD40F", "0xD412"],
+        "tips": ["16-bit frequency with $D40F"]
+      },
+      "0xD40F": {
+        "name": "SID Voice 3 Frequency High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 frequency control (high byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Frequency bits 8-15"
+        },
+        "related": ["0xD40E", "0xD412"],
+        "tips": ["Combined with $D40E for full 16-bit frequency"]
+      },
+      "0xD412": {
+        "name": "SID Voice 3 Control Register",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 control and waveform selection",
+        "access": "write",
+        "bitFields": {
+          "0": "Gate (voice on/off)",
+          "1": "Sync oscillator with voice 2",
+          "2": "Ring modulation with voice 2",
+          "3": "Test (disable oscillator)",
+          "4": "Triangle waveform",
+          "5": "Sawtooth waveform",
+          "6": "Pulse waveform",
+          "7": "Noise waveform"
+        },
+        "related": ["0xD404", "0xD40B"],
+        "tips": [
+          "Voice 3 can sync/ring-mod with voice 2",
+          "Voice 3 output readable at $D41B/$D41C",
+          "Noise waveform + fast frequency = random number generator",
+          "Can be muted with bit 7 of $D418 for RNG-only use"
+        ]
       },
       "0xD418": {
         "name": "SID Volume and Filter Control",
@@ -451,6 +1162,30 @@
         ],
         "related": ["0xD018", "0xDD02"],
         "tips": ["Bits 0-1 are inverted for VIC bank", "Default is bank 0"]
+      },
+      "0xD800": {
+        "name": "Color RAM Start",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1000,
+        "description": "Color RAM for screen characters (1000 bytes, $D800-$DBE7)",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Character color (0-15)",
+          "4-7": "Always read as 1 (unused)"
+        },
+        "examples": [
+          "lda #$01     ; White color",
+          "sta $d800    ; First screen position",
+          "ldx #$00",
+          "lda #$05     ; Green",
+          "loop:",
+          "sta $d800,x  ; Fill screen with green",
+          "inx",
+          "bne loop"
+        ],
+        "related": ["0xD021", "0x0400"],
+        "tips": ["Each byte controls color of one screen character", "1000 bytes ($D800-$DBE7)", "High nibble always reads as 1", "Commonly used address!"]
       },
       "0xDD0D": {
         "name": "CIA2 Interrupt Control Register",

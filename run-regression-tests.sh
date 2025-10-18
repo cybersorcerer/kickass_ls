@@ -1,215 +1,113 @@
 #!/bin/bash
 
 # Regression Test Runner for kickass_ls
-# This script runs comprehensive tests to ensure no functionality is lost during redesign
+# Runs all test suites in test-cases/ to ensure no functionality is lost
 
-echo "=== kickass_ls Regression Test Suite ==="
-echo "Testing kickass_ls server functionality before context-aware redesign"
+set -e
+
+echo "========================================"
+echo " kickass_ls Regression Test Suite"
+echo "========================================"
 echo
 
+# Colors
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+RESET='\033[0m'
+
 # Check if server exists
-if [ ! -f "./kickass_ls" ]; then
-    echo "ERROR: kickass_ls server not found. Build it first with: go build -o kickass_ls ."
+if [ ! -f "build/kickass_ls" ]; then
+    echo -e "${RED}ERROR: kickass_ls server not found.${RESET}"
+    echo "Build it first with: make build"
     exit 1
 fi
 
 # Check if test client exists
-if [ ! -f "./kickass_cl/kickass_cl" ]; then
-    echo "ERROR: kickass_cl test client not found. Build it first with: cd kickass_cl && go build -o kickass_cl ."
+if [ ! -f "build/kickass_cl" ]; then
+    echo -e "${RED}ERROR: kickass_cl test client not found.${RESET}"
+    echo "Build it first with: make build"
     exit 1
 fi
 
-# Check if comprehensive test file exists
-if [ ! -f "./comprehensive-test.asm" ]; then
-    echo "ERROR: comprehensive-test.asm not found"
-    exit 1
-fi
+# Find all test suite JSON files
+TEST_SUITES=(
+    "test-cases/regression-test/regression-suite.json"
+    "test-cases/0.9.0-baseline/baseline-suite.json"
+    "test-cases/0.9.7-baseline/baseline-suite.json"
+    "test-cases/test-files/test-encoding-suite.json"
+)
 
-# Create required test files
-echo "Creating test files..."
+# Counters
+TOTAL_SUITES=0
+PASSED_SUITES=0
+FAILED_SUITES=0
+TIMEOUT_SUITES=0
 
-cat > test-cases/test_simple.asm << 'EOF'
-// Simple test file for completion and hover tests
-*= $0801
-start:
-    lda #$00
-    sta $d020
-    rts
-EOF
+# Test results
+FAILED_SUITE_NAMES=()
 
-cat > test-cases/test_builtins.asm << 'EOF'
-// Test file for built-in function completion
-.const angle = 45
-.const radius = sin(angle) * 100
-.const file_size = size("data.bin")
-EOF
-
-cat > test-cases/test_signature.asm << 'EOF'
-// Test file for signature help
-*= $0801
-.function calculateDistance(x1, y1, x2, y2) {
-    .return sqrt(pow(x2-x1, 2) + pow(y2-y1, 2))
-}
-EOF
-
-cat > test-cases/test_comprehensive.asm << 'EOF'
-// Large test file for performance testing
-.const NUM_SPRITES = 8
-*= $0801
-.for (var i = 0; i < NUM_SPRITES; i++) {
-    .for (var j = 0; j < 21; j++) {
-        .byte $00
-    }
-}
-EOF
-
-cat > test-cases/test_illegal.asm << 'EOF'
-// Test file for illegal opcode detection
-*= $0801
-    lda #$00
-    dcp $ff      // Illegal opcode
-    sax $80      // Illegal opcode
-    rra $c000    // Illegal opcode
-EOF
-
-echo "Test files created."
-echo
-
-# Function to run a test and capture results
-run_test() {
-    local test_name="$1"
-    local test_file="$2"
-    local expected_patterns="$3"
-
-    echo "Running: $test_name"
-
-    # Run the test with timeout
-    timeout 30s ./kickass_cl/kickass_cl -suite "$test_file" -server "./kickass_ls" > "test_output_${test_name// /_}.log" 2>&1
-    local exit_code=$?
-
-    if [ $exit_code -eq 124 ]; then
-        echo "  ❌ TIMEOUT (30s exceeded)"
-        return 1
-    elif [ $exit_code -ne 0 ]; then
-        echo "  ❌ FAILED (exit code: $exit_code)"
-        return 1
+# Run each test suite
+for suite in "${TEST_SUITES[@]}"; do
+    if [ ! -f "$suite" ]; then
+        echo -e "${YELLOW}⚠ Skipping: $suite (not found)${RESET}"
+        continue
     fi
 
-    # Check for expected patterns
-    if [ -n "$expected_patterns" ]; then
-        IFS='|' read -ra PATTERNS <<< "$expected_patterns"
-        for pattern in "${PATTERNS[@]}"; do
-            if ! grep -q "$pattern" "test_output_${test_name// /_}.log"; then
-                echo "  ❌ FAILED (missing pattern: $pattern)"
-                return 1
-            fi
-        done
+    TOTAL_SUITES=$((TOTAL_SUITES + 1))
+    suite_name=$(basename "$suite" .json)
+    suite_dir=$(dirname "$suite")
+
+    echo -e "${CYAN}Running: $suite_dir/$suite_name${RESET}"
+
+    # Run test with timeout
+    if timeout 60s build/kickass_cl -suite "$suite" -server "build/kickass_ls" > "test_output_${suite_name}.log" 2>&1; then
+        echo -e "${GREEN}✓ PASSED${RESET}"
+        PASSED_SUITES=$((PASSED_SUITES + 1))
+    else
+        exit_code=$?
+        if [ $exit_code -eq 124 ]; then
+            echo -e "${RED}✗ TIMEOUT (60s exceeded)${RESET}"
+            TIMEOUT_SUITES=$((TIMEOUT_SUITES + 1))
+            FAILED_SUITE_NAMES+=("$suite_name (timeout)")
+        else
+            echo -e "${RED}✗ FAILED (exit code: $exit_code)${RESET}"
+            echo -e "${YELLOW}  See: test_output_${suite_name}.log${RESET}"
+            FAILED_SUITES=$((FAILED_SUITES + 1))
+            FAILED_SUITE_NAMES+=("$suite_name (failed)")
+
+            # Show last 10 lines of error
+            echo -e "${YELLOW}  Last 10 lines:${RESET}"
+            tail -10 "test_output_${suite_name}.log" | sed 's/^/    /'
+        fi
     fi
-
-    echo "  ✅ PASSED"
-    return 0
-}
-
-# Run individual tests
-echo "=== Running Individual Feature Tests ==="
-echo
-
-passed=0
-failed=0
-
-# Test 1: Basic LSP Communication
-if run_test "Basic LSP" "test-cases/test-kickass-ls-basic.json" "kickass_ls"; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-# Test 2: Dead Code Detection
-if run_test "Dead Code Detection" "test-cases/test-dead-code.json" "Dead code"; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-# Test 3: Range Validation
-if run_test "Range Validation" "test-cases/test-range-validation.json" "out of.*range"; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-# Test 4: Zero Page Hints
-if run_test "Zero Page Hints" "test-cases/test-zero-page-hints.json" "zero page"; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-# Test 5: For Loop Processing
-if run_test "For Loop Processing" "test-cases/test-comprehensive-for-loop.json" ""; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-# Test 6: Illegal Opcodes
-if run_test "Illegal Opcodes" "test-cases/test-simple-illegal.json" "illegal"; then
-    ((passed++))
-else
-    ((failed++))
-fi
-
-echo
-echo "=== Running Comprehensive Regression Test ==="
-echo
-
-# Run the full regression test
-timeout 60s ./kickass_cl/kickass_cl -suite "test-cases/kickass-ls-full-regression-test.json" -server "./kickass_ls" > regression_test_output.log 2>&1
-regression_exit_code=$?
-
-if [ $regression_exit_code -eq 124 ]; then
-    echo "❌ Comprehensive regression test TIMEOUT (60s exceeded)"
-    ((failed++))
-elif [ $regression_exit_code -eq 0 ]; then
-    echo "✅ Comprehensive regression test PASSED"
-    ((passed++))
-else
-    echo "❌ Comprehensive regression test FAILED (exit code: $regression_exit_code)"
-    ((failed++))
-fi
-
-echo
-echo "=== Performance Baseline Test ==="
-echo
-
-# Performance test
-start_time=$(date +%s%N)
-timeout 30s ./kickass_cl/kickass_cl -suite "test-cases/performance-baseline-test.json" -server "./kickass_ls" > performance_test_output.log 2>&1
-end_time=$(date +%s%N)
-duration=$(( (end_time - start_time) / 1000000 )) # Convert to milliseconds
-
-if [ $? -eq 0 ]; then
-    echo "✅ Performance test PASSED (${duration}ms)"
-    ((passed++))
-else
-    echo "❌ Performance test FAILED"
-    ((failed++))
-fi
-
-echo
-echo "=== Test Summary ==="
-echo "Passed: $passed"
-echo "Failed: $failed"
-echo "Total:  $((passed + failed))"
-echo
-
-if [ $failed -eq 0 ]; then
-    echo "🎉 ALL TESTS PASSED - kickass_ls is ready for redesign!"
-    exit 0
-else
-    echo "❌ Some tests failed - fix issues before proceeding with redesign"
     echo
-    echo "Check log files for details:"
-    ls -la test_output_*.log regression_test_output.log performance_test_output.log 2>/dev/null
+done
+
+# Summary
+echo "========================================"
+echo " Test Summary"
+echo "========================================"
+echo -e "Total test suites:  ${CYAN}${TOTAL_SUITES}${RESET}"
+echo -e "Passed:             ${GREEN}${PASSED_SUITES}${RESET}"
+echo -e "Failed:             ${RED}${FAILED_SUITES}${RESET}"
+echo -e "Timeout:            ${YELLOW}${TIMEOUT_SUITES}${RESET}"
+echo
+
+if [ ${#FAILED_SUITE_NAMES[@]} -gt 0 ]; then
+    echo -e "${RED}Failed suites:${RESET}"
+    for failed in "${FAILED_SUITE_NAMES[@]}"; do
+        echo -e "  ${RED}✗${RESET} $failed"
+    done
+    echo
+fi
+
+# Exit code
+if [ $FAILED_SUITES -gt 0 ] || [ $TIMEOUT_SUITES -gt 0 ]; then
+    echo -e "${RED}Regression tests FAILED${RESET}"
     exit 1
+else
+    echo -e "${GREEN}All regression tests PASSED${RESET}"
+    exit 0
 fi
