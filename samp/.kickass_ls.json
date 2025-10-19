@@ -38,17 +38,6 @@
       "showHints": false,
       "upperCaseConstants": false,
       "descriptiveLabels": false
-    },
-    "parserFeatureFlags": {
-      "useContextAware": true,
-      "contextAwareLexer": true,
-      "enhancedAST": true,
-      "debugMode": true,
-      "fallbackToOld": false,
-      "enableExperimental": true,
-      "smartCompletion": true,
-      "semanticValidation": true,
-      "performanceMode": false
     }
   }
 }

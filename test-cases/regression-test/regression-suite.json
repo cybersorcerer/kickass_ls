@@ -3,7 +3,7 @@
   "description": "Comprehensive regression tests to ensure no features are broken during development",
   "version": "1.0.0",
   "setup": {
-    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverPath": "kickass_ls",
     "serverArgs": ["--debug"],
     "rootPath": ".",
     "files": {}
@@ -401,6 +401,69 @@
       },
       "expected": {
         "maxErrors": 0
+      }
+    },
+    {
+      "name": "v1.0.1 - Dead Code: JSR Should Not Cause Warnings",
+      "description": "JSR is a subroutine call that returns - code after JSR should NOT be unreachable",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-dead-code-jsr.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
+      }
+    },
+    {
+      "name": "v1.0.1 - Dead Code: JMP and RTS Detection",
+      "description": "JMP and RTS should cause dead code warnings for unreachable code",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-dead-code-jmp-rts.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "minWarnings": 5,
+        "diagnostics": [
+          {
+            "line": 11,
+            "severity": 2,
+            "message": "Unreachable"
+          },
+          {
+            "line": 12,
+            "severity": 2,
+            "message": "Unreachable"
+          },
+          {
+            "line": 13,
+            "severity": 2,
+            "message": "Unreachable"
+          },
+          {
+            "line": 23,
+            "severity": 2,
+            "message": "Unreachable"
+          },
+          {
+            "line": 24,
+            "severity": 2,
+            "message": "Unreachable"
+          }
+        ]
+      }
+    },
+    {
+      "name": "v1.0.1 - Dead Code: Multiple PC Directives",
+      "description": "Multiple *= or .pc directives should not cause false unreachable warnings",
+      "type": "diagnostics",
+      "input": {
+        "file": "../test-files/test-dead-code-multiple-pc.asm"
+      },
+      "expected": {
+        "maxErrors": 0,
+        "maxWarnings": 0
       }
     }
   ]

@@ -1826,8 +1826,15 @@ func (a *SemanticAnalyzer) isUnconditionalJump(stmt *InstructionStatement) bool 
 	if ctx := GetProcessorContext(); ctx != nil {
 		mnemonicInfo := ctx.GetMnemonicInfo(mnemonic)
 		if mnemonicInfo != nil {
-			// JMP is unconditional Jump, RTS/RTI are Returns (also unconditional)
-			return mnemonicInfo.Type == "Jump" || mnemonicInfo.Type == "Return"
+			// Only JMP (not JSR!) and RTS/RTI are unconditional
+			// JSR is categorized as "Jump" but it's a subroutine call that returns
+			if mnemonicInfo.Type == "Jump" && mnemonic != "JSR" {
+				return true
+			}
+			// RTS/RTI are Returns (also unconditional)
+			if mnemonicInfo.Type == "Return" {
+				return true
+			}
 		}
 	}
 	return false
@@ -1868,6 +1875,14 @@ func (a *SemanticAnalyzer) checkForDeadCodeAfterJumpWithVisited(statements []Sta
 			}
 			// Continue checking for more dead code
 		case *DirectiveStatement:
+			// Check if this is a PC directive (*= or .pc) - these start new code sections
+			if statement != nil && statement.Token.Literal != "" {
+				tokenLiteral := strings.ToLower(statement.Token.Literal)
+				if tokenLiteral == "*=" || tokenLiteral == ".pc" {
+					// PC directive starts a new code section - code after it is reachable
+					return
+				}
+			}
 			// Most directives in dead code are also unreachable
 			if statement != nil && statement.Name != nil && statement.Token.Literal != "" {
 				directive := strings.ToLower(statement.Name.Value)

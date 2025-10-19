@@ -16,7 +16,7 @@ lsp.log
 *.log
 
 # IDE and OS
-.c64plugin
+.kickass
 .vscode
 .DS_Store
 

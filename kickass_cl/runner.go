@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -149,8 +150,12 @@ func (tr *TestRunner) RunTestSuite(suitePath string) error {
 
 	// Setup LSP client
 	serverPath := suite.Setup.ServerPath
-	if !filepath.IsAbs(serverPath) {
-		// Make relative to suite file directory
+
+	// First try to resolve via PATH
+	if resolvedPath, err := exec.LookPath(serverPath); err == nil {
+		serverPath = resolvedPath
+	} else if !filepath.IsAbs(serverPath) {
+		// If not found in PATH and not absolute, make relative to suite file directory
 		suiteDir := filepath.Dir(suitePath)
 		serverPath = filepath.Join(suiteDir, serverPath)
 	}
