@@ -2123,6 +2123,11 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					if stmt.Block.EndToken.Type != TOKEN_EOF {
 						endLine = stmt.Block.EndToken.Line - 1
 						endChar = stmt.Block.EndToken.Column
+					} else {
+						// If namespace extends to EOF, use a large line number
+						// This ensures the range is always valid (no negative lines)
+						endLine = 999999
+						endChar = 0
 					}
 					newScope := &Scope{
 						Name:     stmt.Name.Value,

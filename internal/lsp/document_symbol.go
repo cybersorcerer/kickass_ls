@@ -72,10 +72,19 @@ func convertScopeToDocumentSymbols(scope *Scope) []DocumentSymbol {
 
 	// Add child scopes as symbols
 	for _, child := range scope.Children {
+		// Sanitize the range to ensure no negative line numbers (VSCode compatibility)
+		endLine := child.Range.End.Line
+		if endLine < 0 {
+			endLine = 999999 // Use large number instead of -1 for EOF
+		}
+
 		childSymbol := DocumentSymbol{
 			Name: child.Name,
 			Kind: toDocumentSymbolKind(Namespace),
-			Range: child.Range,
+			Range: Range{
+				Start: child.Range.Start,
+				End:   Position{Line: endLine, Character: child.Range.End.Character},
+			},
 			SelectionRange: Range{
 				Start: child.Range.Start,
 				End:   Position{Line: child.Range.Start.Line, Character: child.Range.Start.Character + len(child.Name)},

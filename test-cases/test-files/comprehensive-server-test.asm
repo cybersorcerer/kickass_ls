@@ -54,6 +54,7 @@
     clear:
         lda #$20
         ldx #$00
+        ad
     loop:
         sta SCREEN,x
         sta SCREEN+$100,x

@@ -849,7 +849,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "1.0.1", // Version updated
+						"version": "1.0.2", // Version updated
 					},
 				},
 			}
@@ -2008,7 +2008,8 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		log.Debug("Case 2: offering hints for mnemonic %s (ContextMnemonic, space trigger)", targetMnemonic)
 	}
 
-	// Offer addressing mode hints if applicable
+	// Build addressing mode documentation string if applicable
+	addressingModeDoc := ""
 	if offerAddressingHints && targetMnemonic != "" {
 		if ctx := GetProcessorContext(); ctx != nil {
 			log.Debug("ProcessorContext is available")
@@ -2016,39 +2017,39 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			log.Debug("MnemonicInfo for %s: %+v", targetMnemonic, mnemonicInfo)
 			if mnemonicInfo != nil && len(mnemonicInfo.AddressingModes) > 0 {
 				log.Debug("Found %d addressing modes for %s", len(mnemonicInfo.AddressingModes), targetMnemonic)
-				// Build unique set of addressing mode prefixes
+				// Build documentation string with all addressing modes
+				var modeDescriptions []string
 				addedModes := make(map[string]bool)
 
 				for _, mode := range mnemonicInfo.AddressingModes {
-					var prefix, doc string
+					var modeDesc string
 					switch mode.Mode {
 					case "Immediate":
-						prefix = "#"
-						doc = fmt.Sprintf("Immediate addressing - %s", mode.AssemblerFormat)
+						if !addedModes["#"] {
+							modeDesc = fmt.Sprintf("• # - Immediate addressing (%s)", mode.AssemblerFormat)
+							addedModes["#"] = true
+						}
 					case "Absolute", "Absolute,X", "Absolute,Y", "Zeropage", "Zeropage,X", "Zeropage,Y":
 						if !addedModes["$"] {
-							prefix = "$"
-							doc = "Memory address (absolute or zero page)"
+							modeDesc = "• $ - Memory address (absolute or zero page)"
+							addedModes["$"] = true
 						}
 					case "Indexed-indirect", "Indirect-indexed", "Indirect":
 						if !addedModes["("] {
-							prefix = "("
-							doc = "Indirect addressing"
+							modeDesc = "• ( - Indirect addressing"
+							addedModes["("] = true
 						}
 					}
-
-					if prefix != "" && !addedModes[prefix] {
-						items = append(items, map[string]interface{}{
-							"label":         prefix,
-							"kind":          float64(14), // Keyword
-							"detail":        "Addressing Mode",
-							"documentation": doc,
-							"sortText":      "0_" + prefix, // Sort first
-						})
-						addedModes[prefix] = true
+					if modeDesc != "" {
+						modeDescriptions = append(modeDescriptions, modeDesc)
 					}
 				}
-				log.Debug("Added %d addressing mode completion items", len(addedModes))
+
+				if len(modeDescriptions) > 0 {
+					addressingModeDoc = fmt.Sprintf("Available addressing modes for %s:\n%s\n\n",
+						targetMnemonic, strings.Join(modeDescriptions, "\n"))
+				}
+				log.Debug("Built addressing mode documentation for %s", targetMnemonic)
 			} else {
 				if mnemonicInfo == nil {
 					log.Debug("MnemonicInfo is nil for %s", targetMnemonic)
@@ -2061,25 +2062,9 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		}
 	}
 
-	// If we're completing an operand, offer context-specific hints
-	if (contextType == ContextOperandGeneral || contextType == ContextJumpTarget || contextType == ContextDirectiveOperand) && precedingName != "" {
-		// Offer previously used operands for this mnemonic/directive
-		if documentText != "" {
-			usedOperands := getUsedOperandsForMnemonic(documentText, precedingName)
-			for _, operand := range usedOperands {
-				// Only add if it matches what user is typing
-				if wordToComplete == "" || strings.HasPrefix(strings.ToLower(operand), strings.ToLower(wordToComplete)) {
-					items = append(items, map[string]interface{}{
-						"label":         operand,
-						"kind":          float64(12), // Value
-						"detail":        "Recently used",
-						"documentation": fmt.Sprintf("Previously used with %s", precedingName),
-						"sortText":      "1_" + operand, // Sort after addressing mode hints
-					})
-				}
-			}
-		}
-	}
+	// Removed "Recently used" completion items to avoid duplicate menu issue
+	// The actual symbols (variables, constants, labels) are already offered below
+	// and are more useful than the "recently used" suggestions
 
 	// Special case: check for memory address completion even in mnemonic context
 	// This handles cases where cursor is on or near $ symbol
@@ -2154,7 +2139,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					"detail":        fmt.Sprintf("%s - %s", region.Category, region.Name),
 					"documentation": documentation,
 					"insertText":    addressWithDollar,
-					"sortText":      fmt.Sprintf("0_%s", address), // Sort memory addresses first
+					// Removed sortText to avoid duplicate menu grouping in nvim-cmp
 				}
 				items = append(items, item)
 			}
@@ -2252,7 +2237,8 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		} else {
 			// Only offer built-in functions and constants if we're NOT after a mnemonic
 			// (Mnemonics expect addresses, symbols, or immediate values - not function calls)
-			offerBuiltins := !isMnem
+			// Also don't offer builtins if we're offering addressing mode hints
+			offerBuiltins := !isMnem && !offerAddressingHints
 
 			// Check if we should use relaxed matching for built-ins
 			useRelaxedMatching := len(wordToComplete) <= 2 ||
@@ -2286,18 +2272,24 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					shouldInclude := useRelaxedMatching ||
 						strings.HasPrefix(strings.ToLower(const_.Name), strings.ToLower(wordToComplete))
 					if shouldInclude {
+						// Build documentation with addressing mode hints
+						doc := const_.Description
+						if addressingModeDoc != "" {
+							doc = addressingModeDoc + doc
+						}
+
 						item := map[string]interface{}{
 							"label":         const_.Name,
 							"kind":          float64(21), // Constant
 							"detail":        fmt.Sprintf("%s constant", const_.Category),
-							"documentation": const_.Description,
+							"documentation": doc,
 						}
 						if const_.Value != "" {
 							item["detail"] = fmt.Sprintf("%s = %s", const_.Name, const_.Value)
 						}
 						if len(const_.Examples) > 0 {
 							item["documentation"] = fmt.Sprintf("%s\n\n**Example:** `%s`",
-								const_.Description, const_.Examples[0])
+								doc, const_.Examples[0])
 						}
 						items = append(items, item)
 					}
@@ -2307,10 +2299,23 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			symbols := symbolTree.FindAllVisibleSymbols(lineNum)
 			for _, symbol := range symbols {
 				if strings.HasPrefix(symbol.Name, wordToComplete) {
+					// Always set documentation to avoid nvim-cmp grouping issues
+					doc := ""
+					if addressingModeDoc != "" {
+						doc = addressingModeDoc
+					}
+
+					// Always set detail to avoid nvim-cmp grouping by empty vs non-empty detail
+					detail := symbol.Value
+					if detail == "" {
+						detail = " " // Use space instead of empty to avoid grouping
+					}
+
 					item := map[string]interface{}{
-						"label":  symbol.Name,
-						"kind":   toCompletionItemKind(symbol.Kind),
-						"detail": symbol.Value,
+						"label":         symbol.Name,
+						"kind":          toCompletionItemKind(symbol.Kind),
+						"detail":        detail,
+						"documentation": doc,
 					}
 					if symbol.Kind == Function {
 						item["insertText"] = symbol.Name

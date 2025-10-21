@@ -24,3 +24,7 @@ lsp.log
 planning
 .claude
 doc
+
+# C64 Files
+*.prg
+*.sym
