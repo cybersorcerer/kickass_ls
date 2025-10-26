@@ -15,6 +15,7 @@ const (
 	Constant
 	Variable // Note: In Kick Assembler, .var can be reassigned.
 	Label
+	MultiLabel // Multi labels that can be declared multiple times (!label:)
 	Function
 	Macro
 	PseudoCommand
@@ -30,6 +31,8 @@ func (sk SymbolKind) String() string {
 		return "variable"
 	case Label:
 		return "label"
+	case MultiLabel:
+		return "multilabel"
 	case Function:
 		return "function"
 	case Macro:

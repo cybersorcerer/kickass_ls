@@ -3,7 +3,7 @@
   "description": "Directive parsing and program counter expression tests for version 0.9.7",
   "version": "0.9.7",
   "setup": {
-    "serverPath": "/Users/Ronald.Funk/My_Documents/source/gitlab/c64.nvim/kickass_ls",
+    "serverPath": "kickass_ls",
     "serverArgs": ["--debug"],
     "rootPath": ".",
     "files": {}

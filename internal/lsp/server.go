@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -467,12 +468,14 @@ var documentStore = struct {
 	documents: make(map[string]string),
 }
 
-// symbolStore holds the parsed symbol trees for each document.
+// symbolStore holds the parsed symbol trees and analysis contexts for each document.
 var symbolStore = struct {
 	sync.RWMutex
-	trees map[string]*Scope
+	trees    map[string]*Scope
+	contexts map[string]*AnalysisContext
 }{
-	trees: make(map[string]*Scope),
+	trees:    make(map[string]*Scope),
+	contexts: make(map[string]*AnalysisContext),
 }
 
 // DocumentCache represents cached parsing results for a document
@@ -480,6 +483,7 @@ type DocumentCache struct {
 	Content      string
 	ContentHash  string
 	Scope        *Scope
+	Context      *AnalysisContext
 	Diagnostics  []Diagnostic
 	LastModified time.Time
 }
@@ -499,7 +503,7 @@ func calculateContentHash(content string) string {
 }
 
 // ParseDocumentCached parses a document with caching for unchanged content
-func ParseDocumentCached(uri string, text string) (*Scope, []Diagnostic) {
+func ParseDocumentCached(uri string, text string) (*Scope, *AnalysisContext, []Diagnostic) {
 	contentHash := calculateContentHash(text)
 
 	// Check cache first
@@ -509,14 +513,14 @@ func ParseDocumentCached(uri string, text string) (*Scope, []Diagnostic) {
 			// Cache hit - return cached results
 			parseCache.RUnlock()
 			log.Debug("Cache hit for document %s", uri)
-			return cached.Scope, cached.Diagnostics
+			return cached.Scope, cached.Context, cached.Diagnostics
 		}
 	}
 	parseCache.RUnlock()
 
 	// Cache miss - parse document
 	log.Debug("Cache miss for document %s - parsing", uri)
-	scope, diagnostics := ParseDocument(uri, text)
+	scope, context, diagnostics := ParseDocument(uri, text)
 
 	// Update cache
 	parseCache.Lock()
@@ -524,12 +528,13 @@ func ParseDocumentCached(uri string, text string) (*Scope, []Diagnostic) {
 		Content:      text,
 		ContentHash:  contentHash,
 		Scope:        scope,
+		Context:      context,
 		Diagnostics:  diagnostics,
 		LastModified: time.Now(),
 	}
 	parseCache.Unlock()
 
-	return scope, diagnostics
+	return scope, context, diagnostics
 }
 
 // ClearParseCache removes a document from the parse cache
@@ -570,11 +575,12 @@ func startAnalysisWorker() {
 // processAnalysisJob processes a single analysis job
 func processAnalysisJob(job AnalysisJob) {
 	// Parse document with caching
-	symbolTree, diagnostics := ParseDocumentCached(job.URI, job.Content)
+	symbolTree, analysisContext, diagnostics := ParseDocumentCached(job.URI, job.Content)
 
 	// Update symbol store
 	symbolStore.Lock()
 	symbolStore.trees[job.URI] = symbolTree
+	symbolStore.contexts[job.URI] = analysisContext
 	symbolStore.Unlock()
 
 	if job.IsOpen {
@@ -1145,7 +1151,7 @@ func Start() {
 			writeResponse(writer, response)
 
 		case "textDocument/definition":
-			log.Debug("Handling textDocument/definition request.")
+			log.Info("=== Handling textDocument/definition request ===")
 			var responseResult interface{} = nil
 
 			if params, ok := message["params"].(map[string]interface{}); ok {
@@ -1154,30 +1160,9 @@ func Start() {
 						if position, ok := params["position"].(map[string]interface{}); ok {
 							if lineNum, ok := position["line"].(float64); ok {
 								if charNum, ok := position["character"].(float64); ok {
-									documentStore.RLock()
-									text, docFound := documentStore.documents[uri]
-									documentStore.RUnlock()
-
-									symbolStore.RLock()
-									symbolTree, treeFound := symbolStore.trees[uri]
-									symbolStore.RUnlock()
-
-									if docFound && treeFound {
-										lines := strings.Split(text, "\n")
-										if int(lineNum) < len(lines) {
-											lineContent := lines[int(lineNum)]
-											word := getWordAtPosition(lineContent, int(charNum))
-											if symbol, found := symbolTree.FindSymbol(normalizeLabel(word)); found {
-												responseResult = map[string]interface{}{
-													"uri": uri,
-													"range": map[string]interface{}{
-														"start": map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character},
-														"end":   map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character + len(symbol.Name)},
-													},
-												}
-											}
-										}
-									}
+									log.Info("GotoDefinition: uri=%s, line=%d, char=%d", uri, int(lineNum), int(charNum))
+									responseResult = handleGotoDefinition(uri, int(lineNum), int(charNum))
+									log.Info("GotoDefinition: responseResult=%+v", responseResult)
 								}
 							}
 						}
@@ -1215,50 +1200,130 @@ func Start() {
 									text, docFound := documentStore.documents[uri]
 									documentStore.RUnlock()
 
-									symbolStore.RLock()
-									symbolTree, treeFound := symbolStore.trees[uri]
-									symbolStore.RUnlock()
-
-									if docFound && treeFound {
+									if docFound {
 										lines := strings.Split(text, "\n")
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
-											word := getWordAtPosition(lineContent, int(charNum))
+											// Use getTokenAtPosition to handle multi-labels (e.g., !loop-, !skip+)
+											token := getTokenAtPosition(lineContent, int(charNum))
+											log.Debug("textDocument/references: token='%s' at line=%d char=%d", token, int(lineNum), int(charNum))
 
-											if word != "" {
-												normalizedWord := normalizeLabel(word)
+											if token != "" {
+												// Check if this is a multi-label (starts with !)
+												if strings.HasPrefix(token, "!") {
+													// Multi-label: strip the direction suffix to get the base name
+													labelName := strings.TrimPrefix(token, "!")
+													labelName = strings.TrimSuffix(labelName, "+")
+													labelName = strings.TrimSuffix(labelName, "-")
+													labelName = strings.TrimSuffix(labelName, ":")
 
-												// First check if the symbol exists
-												if symbol, found := symbolTree.FindSymbol(normalizedWord); found {
-													// Find all references to this symbol
-													references := symbolTree.FindAllReferences(normalizedWord, text, uri)
+													log.Debug("textDocument/references: Multi-label detected, labelName='%s'", labelName)
 
-													// If includeDeclaration is false, filter out the declaration
-													if !includeDeclaration && len(references) > 0 {
-														filteredReferences := []map[string]interface{}{}
-														for _, ref := range references {
-															if refRange, ok := ref["range"].(map[string]interface{}); ok {
-																if start, ok := refRange["start"].(map[string]interface{}); ok {
-																	if refLine, ok := start["line"].(float64); ok {
-																		if refChar, ok := start["character"].(float64); ok {
-																			// Skip if this is the declaration position
-																			if int(refLine) != symbol.Position.Line ||
-																				int(refChar) != symbol.Position.Character {
-																				filteredReferences = append(filteredReferences, ref)
+													// Get analysis context for this URI
+													symbolStore.RLock()
+													analysisContext, hasContext := symbolStore.contexts[uri]
+													symbolStore.RUnlock()
+
+													if hasContext {
+														// Get all instances of this multi-label
+														if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found {
+															log.Debug("textDocument/references: Found %d instances of multi-label '%s'", len(instances), labelName)
+
+															// Collect all references to this multi-label
+															references := []map[string]interface{}{}
+
+															// Search for all references in the document
+															// Pattern: !labelName followed by +, -, or :
+															for lineIdx, line := range lines {
+																// Find all occurrences of !labelName with suffix
+																searchPatterns := []string{
+																	"!" + labelName + "+",  // Forward reference
+																	"!" + labelName + "-",  // Backward reference
+																	"!" + labelName + ":",  // Definition
+																}
+
+																for _, pattern := range searchPatterns {
+																	searchIndex := 0
+																	for {
+																		index := strings.Index(line[searchIndex:], pattern)
+																		if index == -1 {
+																			break
+																		}
+
+																		actualIndex := searchIndex + index
+
+																		// Create reference location
+																		reference := map[string]interface{}{
+																			"uri": uri,
+																			"range": map[string]interface{}{
+																				"start": map[string]interface{}{
+																					"line":      lineIdx,
+																					"character": actualIndex,
+																				},
+																				"end": map[string]interface{}{
+																					"line":      lineIdx,
+																					"character": actualIndex + len(pattern),
+																				},
+																			},
+																		}
+																		references = append(references, reference)
+
+																		searchIndex = actualIndex + 1
+																	}
+																}
+															}
+
+															log.Debug("textDocument/references: Found %d total references for multi-label '%s'", len(references), labelName)
+															responseResult = references
+														} else {
+															log.Debug("textDocument/references: Multi-label '%s' not found in analysis context", labelName)
+														}
+													} else {
+														log.Debug("textDocument/references: No analysis context for URI %s", uri)
+													}
+												} else {
+													// Regular symbol (not a multi-label)
+													symbolStore.RLock()
+													symbolTree, treeFound := symbolStore.trees[uri]
+													symbolStore.RUnlock()
+
+													if treeFound {
+														normalizedWord := normalizeLabel(token)
+														log.Debug("textDocument/references: Regular symbol, normalizedWord='%s'", normalizedWord)
+
+														// First check if the symbol exists
+														if symbol, found := symbolTree.FindSymbol(normalizedWord); found {
+															// Find all references to this symbol
+															references := symbolTree.FindAllReferences(normalizedWord, text, uri)
+
+															// If includeDeclaration is false, filter out the declaration
+															if !includeDeclaration && len(references) > 0 {
+																filteredReferences := []map[string]interface{}{}
+																for _, ref := range references {
+																	if refRange, ok := ref["range"].(map[string]interface{}); ok {
+																		if start, ok := refRange["start"].(map[string]interface{}); ok {
+																			if refLine, ok := start["line"].(float64); ok {
+																				if refChar, ok := start["character"].(float64); ok {
+																					// Skip if this is the declaration position
+																					if int(refLine) != symbol.Position.Line ||
+																						int(refChar) != symbol.Position.Character {
+																						filteredReferences = append(filteredReferences, ref)
+																					}
+																				}
 																			}
 																		}
 																	}
 																}
+																responseResult = filteredReferences
+															} else {
+																responseResult = references
 															}
-														}
-														responseResult = filteredReferences
-													} else {
-														responseResult = references
-													}
 
-													log.Debug("Found %d references for symbol '%s'", len(references), word)
-												} else {
-													log.Debug("Symbol '%s' not found for references", word)
+															log.Debug("Found %d references for regular symbol '%s'", len(references), token)
+														} else {
+															log.Debug("Regular symbol '%s' not found for references", token)
+														}
+													}
 												}
 											}
 										}
@@ -1768,6 +1833,211 @@ func getWordAtPosition(line string, char int) string {
 	}
 
 	return line[start : end+1]
+}
+
+// handleGotoDefinition handles goto definition requests for both regular labels and multi-labels
+func handleGotoDefinition(uri string, lineNum int, charNum int) interface{} {
+	documentStore.RLock()
+	text, docFound := documentStore.documents[uri]
+	documentStore.RUnlock()
+
+	if !docFound {
+		return nil
+	}
+
+	symbolStore.RLock()
+	symbolTree, treeFound := symbolStore.trees[uri]
+	analysisContext, contextFound := symbolStore.contexts[uri]
+	symbolStore.RUnlock()
+
+	if !treeFound {
+		return nil
+	}
+
+	lines := strings.Split(text, "\n")
+	if lineNum >= len(lines) {
+		return nil
+	}
+
+	lineContent := lines[lineNum]
+
+	// Get the full token at position (including ! for multi-labels)
+	token := getTokenAtPosition(lineContent, charNum)
+	if token == "" {
+		return nil
+	}
+
+	log.Debug("handleGotoDefinition: token='%s'", token)
+
+	// Check if this is a multi-label
+	if strings.HasPrefix(token, "!") {
+		// Multi-label handling
+		if !contextFound || analysisContext == nil {
+			log.Debug("handleGotoDefinition: No analysis context available for multi-labels")
+			return nil
+		}
+
+		// Extract label name and direction/type
+		labelName := strings.TrimPrefix(token, "!")
+
+		if strings.HasSuffix(labelName, "+") {
+			// Forward reference - find target instance
+			labelName = strings.TrimSuffix(labelName, "+")
+			log.Info("handleGotoDefinition: Forward ref to '%s', current line %d", labelName, lineNum)
+			if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found && len(instances) > 0 {
+				log.Info("handleGotoDefinition: Found %d instances", len(instances))
+				// Sort instances by line number
+				sortedInstances := make([]*Symbol, len(instances))
+				copy(sortedInstances, instances)
+				sort.Slice(sortedInstances, func(i, j int) bool {
+					return sortedInstances[i].Position.Line < sortedInstances[j].Position.Line
+				})
+
+				// Find the first instance after this line
+				for _, inst := range sortedInstances {
+					log.Info("handleGotoDefinition: Checking instance at line %d", inst.Position.Line)
+					if inst.Position.Line > lineNum {
+						log.Info("handleGotoDefinition: Found target at line %d", inst.Position.Line)
+						return map[string]interface{}{
+							"uri": uri,
+							"range": map[string]interface{}{
+								"start": map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character},
+								"end":   map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character + len(labelName) + 2}, // +2 for "!:"
+							},
+						}
+					}
+				}
+				log.Info("handleGotoDefinition: No instance found after line %d", lineNum)
+			} else {
+				log.Info("handleGotoDefinition: No instances found for '%s'", labelName)
+			}
+		} else if strings.HasSuffix(labelName, "-") {
+			// Backward reference - find target instance
+			labelName = strings.TrimSuffix(labelName, "-")
+			log.Info("handleGotoDefinition: Backward ref to '%s', current line %d", labelName, lineNum)
+			if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found && len(instances) > 0 {
+				log.Info("handleGotoDefinition: Found %d instances", len(instances))
+				// Sort instances by line number
+				sortedInstances := make([]*Symbol, len(instances))
+				copy(sortedInstances, instances)
+				sort.Slice(sortedInstances, func(i, j int) bool {
+					return sortedInstances[i].Position.Line < sortedInstances[j].Position.Line
+				})
+
+				// Find the last instance before this line
+				var target *Symbol
+				for _, inst := range sortedInstances {
+					log.Info("handleGotoDefinition: Checking instance at line %d", inst.Position.Line)
+					if inst.Position.Line < lineNum {
+						target = inst
+					} else {
+						break
+					}
+				}
+
+				if target != nil {
+					log.Info("handleGotoDefinition: Found target at line %d", target.Position.Line)
+					return map[string]interface{}{
+						"uri": uri,
+						"range": map[string]interface{}{
+							"start": map[string]interface{}{"line": target.Position.Line, "character": target.Position.Character},
+							"end":   map[string]interface{}{"line": target.Position.Line, "character": target.Position.Character + len(labelName) + 2},
+						},
+					}
+				} else {
+					log.Info("handleGotoDefinition: No instance found before line %d", lineNum)
+				}
+			} else {
+				log.Info("handleGotoDefinition: No instances found for '%s'", labelName)
+			}
+		} else if strings.HasSuffix(labelName, ":") {
+			// Definition - return all instances
+			labelName = strings.TrimSuffix(labelName, ":")
+			if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found && len(instances) > 0 {
+				// Return array of locations (LSP supports this)
+				locations := []map[string]interface{}{}
+				for _, inst := range instances {
+					locations = append(locations, map[string]interface{}{
+						"uri": uri,
+						"range": map[string]interface{}{
+							"start": map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character},
+							"end":   map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character + len(labelName) + 2},
+						},
+					})
+				}
+				return locations
+			}
+		}
+		return nil
+	}
+
+	// Regular label - use existing logic
+	word := getWordAtPosition(lineContent, charNum)
+	if symbol, found := symbolTree.FindSymbol(normalizeLabel(word)); found {
+		return map[string]interface{}{
+			"uri": uri,
+			"range": map[string]interface{}{
+				"start": map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character},
+				"end":   map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character + len(symbol.Name)},
+			},
+		}
+	}
+
+	return nil
+}
+
+// getTokenAtPosition gets the full token at a position, including special characters like '!' for multi-labels
+// This is a SIMPLE wrapper around getWordAtPosition that just adds multi-label prefix/suffix detection
+func getTokenAtPosition(line string, char int) string {
+	if char < 0 || char >= len(line) {
+		return ""
+	}
+
+	// Use the existing, proven getWordAtPosition function
+	word := getWordAtPosition(line, char)
+	if word == "" {
+		return ""
+	}
+
+	// Now find where this word appears in the line near the cursor position
+	// Search backwards from cursor to find word start
+	searchStart := char
+	if searchStart >= len(word) {
+		searchStart = char - len(word) + 1
+	}
+	if searchStart < 0 {
+		searchStart = 0
+	}
+
+	wordStart := -1
+	for i := searchStart; i <= char && i < len(line); i++ {
+		if i+len(word) <= len(line) && line[i:i+len(word)] == word {
+			wordStart = i
+			break
+		}
+	}
+
+	if wordStart < 0 {
+		// Fallback: just return the word without prefix/suffix
+		return word
+	}
+
+	wordEnd := wordStart + len(word) - 1
+
+	// Check for '!' prefix (multi-label)
+	if wordStart > 0 && line[wordStart-1] == '!' {
+		word = "!" + word
+	}
+
+	// Check for suffix ('+', '-', or ':')
+	if wordEnd+1 < len(line) {
+		nextChar := line[wordEnd+1]
+		if nextChar == '+' || nextChar == '-' || nextChar == ':' {
+			word = word + string(nextChar)
+		}
+	}
+
+	return word
 }
 
 // getMemoryAddressAtPosition extracts memory addresses like $D020, $0800, etc.

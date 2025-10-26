@@ -571,6 +571,11 @@ func (l *ContextAwareLexer) tokenizeNormal() *ContextToken {
 		return l.tokenizeProgramCounter()
 	}
 
+	// Check for multi-labels first (!label:, !label+, !label-)
+	if token := l.tryTokenizeMultiLabel(); token != nil {
+		return token
+	}
+
 	// Check for labels (identifier followed by :)
 	if token := l.tryTokenizeLabel(); token != nil {
 		return token
@@ -873,6 +878,13 @@ func (l *ContextAwareLexer) tokenizeOperand() *ContextToken {
 		}
 	}
 
+	// Check for multi-labels first (!label+, !label-)
+	if token := l.tryTokenizeMultiLabel(); token != nil {
+		token.Metadata.IsOperand = true
+		token.Metadata.OperandType = "label"
+		return token
+	}
+
 	if token := l.tryTokenizeIdentifier(); token != nil {
 		token.Metadata.IsOperand = true
 		token.Metadata.OperandType = "label"
@@ -955,6 +967,86 @@ func (l *ContextAwareLexer) tokenizeProgramCounter() *ContextToken {
 		Literal:  "*=",
 		Line:     l.line,
 		Column:   startCol,
+		Context:  l.CurrentContext(),
+		Metadata: &TokenMetadata{},
+	}
+}
+
+// tryTokenizeMultiLabel attempts to tokenize a multi-label (!label:, !label+, !label-)
+func (l *ContextAwareLexer) tryTokenizeMultiLabel() *ContextToken {
+	// Multi labels start with '!'
+	if l.peek() != '!' {
+		return nil
+	}
+
+	saved := l.position
+	savedCol := l.column
+
+	// Consume '!'
+	l.advance()
+
+	// Read identifier
+	if !isAlpha(l.peek()) && l.peek() != '_' {
+		// Not a multi-label, restore
+		l.position = saved
+		l.column = savedCol
+		return nil
+	}
+
+	tempPos := l.position
+	for tempPos < len(l.input) {
+		ch := l.input[tempPos]
+		if isAlphaNumeric(ch) || ch == '_' {
+			tempPos++
+		} else {
+			break
+		}
+	}
+
+	// Check what follows the identifier
+	if tempPos >= len(l.input) {
+		// End of input, not a multi-label
+		l.position = saved
+		l.column = savedCol
+		return nil
+	}
+
+	nextChar := l.input[tempPos]
+	var tokenType TokenType
+	var endPos int
+
+	if nextChar == ':' {
+		// Multi-label definition: !label:
+		tokenType = TOKEN_MULTILABEL
+		endPos = tempPos + 1
+	} else if nextChar == '+' {
+		// Multi-label forward reference: !label+
+		tokenType = TOKEN_MULTILABEL_FWD
+		endPos = tempPos + 1
+	} else if nextChar == '-' {
+		// Multi-label backward reference: !label-
+		tokenType = TOKEN_MULTILABEL_BACK
+		endPos = tempPos + 1
+	} else {
+		// Not a multi-label (just ! followed by identifier)
+		l.position = saved
+		l.column = savedCol
+		return nil
+	}
+
+	// Extract literal (including !, identifier, and :, +, or -)
+	literal := l.input[saved:endPos]
+
+	// Advance position to end
+	for l.position < endPos {
+		l.advance()
+	}
+
+	return &ContextToken{
+		Type:     tokenType,
+		Literal:  literal,
+		Line:     l.line,
+		Column:   savedCol,
 		Context:  l.CurrentContext(),
 		Metadata: &TokenMetadata{},
 	}

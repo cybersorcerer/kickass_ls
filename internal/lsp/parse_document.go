@@ -4,8 +4,8 @@ import (
 	log "c64.nvim/internal/log"
 )
 
-// ParseDocument parses an assembly document and returns the symbol scope and diagnostics
-func ParseDocument(uri string, text string) (*Scope, []Diagnostic) {
+// ParseDocument parses an assembly document and returns the symbol scope, analysis context, and diagnostics
+func ParseDocument(uri string, text string) (*Scope, *AnalysisContext, []Diagnostic) {
 	var program *Program
 	var parserDiagnostics []Diagnostic
 
@@ -15,7 +15,7 @@ func ParseDocument(uri string, text string) (*Scope, []Diagnostic) {
 	processorCtx := GetProcessorContext()
 	if processorCtx == nil {
 		log.Error("ParseDocument: ProcessorContext is nil")
-		return NewRootScope(uri), []Diagnostic{{
+		return NewRootScope(uri), nil, []Diagnostic{{
 			Range: Range{
 				Start: Position{Line: 0, Character: 0},
 				End:   Position{Line: 0, Character: 0},
@@ -43,5 +43,5 @@ func ParseDocument(uri string, text string) (*Scope, []Diagnostic) {
 	allDiagnostics := append(parserDiagnostics, definitionDiagnostics...)
 	allDiagnostics = append(allDiagnostics, semanticDiagnostics...)
 
-	return scope, allDiagnostics
+	return scope, analyzer.GetContext(), allDiagnostics
 }

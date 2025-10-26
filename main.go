@@ -139,7 +139,7 @@ func runTestMode(filename, mnemonicPath, kickassDir string) {
 
 	// Parse the document and run semantic analysis
 	text := string(content)
-	_, allDiagnostics := lsp.ParseDocument(filename, text)
+	_, _, allDiagnostics := lsp.ParseDocument(filename, text)
 
 	// Output results
 	if len(allDiagnostics) == 0 {
@@ -278,7 +278,7 @@ func runCompletionTest(filePos, mnemonicPath, kickassDir string) {
 
 	// Parse the document to get symbol tree
 	text := string(content)
-	scope, _ := lsp.ParseDocument(file, text)
+	scope, _, _ := lsp.ParseDocument(file, text)
 
 	// Get the line content for completion context
 	lines := strings.Split(text, "\n")
@@ -380,7 +380,7 @@ func runHoverTest(filePos, mnemonicPath, kickassDir string) {
 
 	// Parse the document to get symbol tree
 	text := string(content)
-	scope, _ := lsp.ParseDocument(file, text)
+	scope, _, _ := lsp.ParseDocument(file, text)
 
 	// Get the line content for hover context
 	lines := strings.Split(text, "\n")
@@ -434,7 +434,7 @@ func runSignatureTest(filePos, mnemonicPath, kickassDir string) {
 
 	// Parse the document to get symbol tree
 	text := string(content)
-	scope, _ := lsp.ParseDocument(file, text)
+	scope, _, _ := lsp.ParseDocument(file, text)
 
 	// Get the line content for signature context
 	lines := strings.Split(text, "\n")
@@ -481,7 +481,7 @@ func runSymbolsTest(filename, mnemonicPath, kickassDir string) {
 
 	// Parse the document to get symbol tree
 	text := string(content)
-	scope, _ := lsp.ParseDocument(filename, text)
+	scope, _, _ := lsp.ParseDocument(filename, text)
 
 	// Generate symbol listing
 	symbols := lsp.ListSymbols(scope)
@@ -557,7 +557,7 @@ func runReferencesTest(filePos, mnemonicPath, kickassDir string) {
 
 	// Parse the document to get symbol tree
 	text := string(content)
-	scope, _ := lsp.ParseDocument(file, text)
+	scope, _, _ := lsp.ParseDocument(file, text)
 
 	// Get the line content for reference context
 	lines := strings.Split(text, "\n")
@@ -624,7 +624,7 @@ func runGotoDefinitionTest(filePos, mnemonicPath, kickassDir string) {
 
 	// Parse the document to get symbol tree
 	text := string(content)
-	scope, _ := lsp.ParseDocument(file, text)
+	scope, _, _ := lsp.ParseDocument(file, text)
 
 	// Get the line content for definition context
 	lines := strings.Split(text, "\n")

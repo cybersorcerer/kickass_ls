@@ -26,7 +26,10 @@ const (
 
 	// Literals
 	TOKEN_LABEL
-	TOKEN_IDENTIFIER // For identifiers that are not yet classified as labels, mnemonics, etc.
+	TOKEN_MULTILABEL      // Multi-label definition (!label:)
+	TOKEN_MULTILABEL_FWD  // Multi-label forward reference (!label+)
+	TOKEN_MULTILABEL_BACK // Multi-label backward reference (!label-)
+	TOKEN_IDENTIFIER      // For identifiers that are not yet classified as labels, mnemonics, etc.
 
 	// Comments
 	TOKEN_COMMENT
@@ -100,6 +103,9 @@ var tokenNames = map[TokenType]string{
 	TOKEN_ILLEGAL:             "ILLEGAL",
 	TOKEN_EOF:                 "EOF",
 	TOKEN_LABEL:               "LABEL",
+	TOKEN_MULTILABEL:          "MULTILABEL",
+	TOKEN_MULTILABEL_FWD:      "MULTILABEL_FWD",
+	TOKEN_MULTILABEL_BACK:     "MULTILABEL_BACK",
 	TOKEN_IDENTIFIER:          "IDENTIFIER",
 	TOKEN_COMMENT:             "COMMENT",
 	TOKEN_COMMENT_BLOCK:       "COMMENT_BLOCK",

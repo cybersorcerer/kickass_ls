@@ -18,10 +18,11 @@ func generateSemanticTokens(uri string, text string) []int {
 	if !exists {
 		log.Debug("generateSemanticTokens: No symbol tree found, parsing document now")
 		// Parse document to get symbol tree
-		tree, _ = ParseDocument(uri, text)
+		tree, context, _ := ParseDocument(uri, text)
 		// Store it for future use
 		symbolStore.Lock()
 		symbolStore.trees[uri] = tree
+		symbolStore.contexts[uri] = context
 		symbolStore.Unlock()
 	}
 	

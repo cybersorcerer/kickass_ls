@@ -11,10 +11,12 @@ import (
 
 // ForwardReference represents an unresolved symbol reference
 type ForwardReference struct {
-	SymbolName string
-	Position   Position
-	Context    string // Where this reference occurs (e.g., "branch", "operand")
-	PC         int64  // Program counter where this reference occurs (for branch distance calculation)
+	SymbolName   string
+	Position     Position
+	Context      string // Where this reference occurs (e.g., "branch", "operand")
+	PC           int64  // Program counter where this reference occurs (for branch distance calculation)
+	IsMultiLabel bool   // True if this is a multi-label reference
+	Direction    rune   // '+' for forward, '-' for backward (only for multi-labels)
 }
 
 // MacroDefinition represents a macro with enhanced analysis
@@ -50,29 +52,31 @@ type CPUFlags struct {
 
 // AnalysisContext holds enhanced analysis state
 type AnalysisContext struct {
-	CurrentPC        int64                       // Track program counter
-	DefinedLabels    map[string]*Symbol          // Labels with addresses
-	DefinedSymbols   map[string]bool             // Symbols defined via .define directive
-	ForwardRefs      []ForwardReference          // Unresolved references
-	MacroDefinitions map[string]*MacroDefinition // Macro definitions
-	MemoryMap        *MemoryMap                  // C64/6502 memory layout
-	CPUFlags         *CPUFlags                   // Processor flags state
-	CurrentNamespace string                      // Current namespace context for label resolution
-	NamespaceStack   []string                    // Stack for nested namespaces
+	CurrentPC          int64                       // Track program counter
+	DefinedLabels      map[string]*Symbol          // Labels with addresses
+	DefinedMultiLabels map[string][]*Symbol        // Multi labels: Name → [Instance1, Instance2, ...]
+	DefinedSymbols     map[string]bool             // Symbols defined via .define directive
+	ForwardRefs        []ForwardReference          // Unresolved references
+	MacroDefinitions   map[string]*MacroDefinition // Macro definitions
+	MemoryMap          *MemoryMap                  // C64/6502 memory layout
+	CPUFlags           *CPUFlags                   // Processor flags state
+	CurrentNamespace   string                      // Current namespace context for label resolution
+	NamespaceStack     []string                    // Stack for nested namespaces
 }
 
 // NewAnalysisContext creates a new enhanced analysis context
 func NewAnalysisContext() *AnalysisContext {
 	return &AnalysisContext{
-		CurrentPC:        0x1000, // Default start address
-		DefinedLabels:    make(map[string]*Symbol),
-		DefinedSymbols:   make(map[string]bool),
-		ForwardRefs:      []ForwardReference{},
-		MacroDefinitions: make(map[string]*MacroDefinition),
-		MemoryMap:        NewC64MemoryMap(),
-		CPUFlags:         &CPUFlags{},
-		CurrentNamespace: "",
-		NamespaceStack:   []string{},
+		CurrentPC:          0x1000, // Default start address
+		DefinedLabels:      make(map[string]*Symbol),
+		DefinedMultiLabels: make(map[string][]*Symbol),
+		DefinedSymbols:     make(map[string]bool),
+		ForwardRefs:        []ForwardReference{},
+		MacroDefinitions:   make(map[string]*MacroDefinition),
+		MemoryMap:          NewC64MemoryMap(),
+		CPUFlags:           &CPUFlags{},
+		CurrentNamespace:   "",
+		NamespaceStack:     []string{},
 	}
 }
 
@@ -97,6 +101,68 @@ func (ctx *AnalysisContext) lookupLabel(label string) (*Symbol, bool) {
 	// Then try global scope (no prefix)
 	if symbol, found := ctx.DefinedLabels[label]; found {
 		return symbol, true
+	}
+
+	return nil, false
+}
+
+// lookupMultiLabel searches for a multi-label instance based on direction and position
+// direction: '+' for forward (next instance after fromPC), '-' for backward (previous instance before fromPC)
+// Returns the appropriate instance or nil if not found
+func (ctx *AnalysisContext) lookupMultiLabel(label string, direction rune, fromPC int64) (*Symbol, bool) {
+	// Try with namespace prefix first
+	var instances []*Symbol
+	if ctx.CurrentNamespace != "" {
+		qualifiedName := ctx.CurrentNamespace + "." + label
+		if inst, found := ctx.DefinedMultiLabels[qualifiedName]; found {
+			instances = inst
+		}
+	}
+
+	// Fall back to global scope if not found in namespace
+	if instances == nil {
+		if inst, found := ctx.DefinedMultiLabels[label]; found {
+			instances = inst
+		}
+	}
+
+	if instances == nil || len(instances) == 0 {
+		return nil, false
+	}
+
+	// Instances are sorted by Address (chronologically)
+	if direction == '+' {
+		// Forward: find first instance AFTER fromPC
+		for _, inst := range instances {
+			if inst.Address > fromPC {
+				return inst, true
+			}
+		}
+	} else if direction == '-' {
+		// Backward: find last instance BEFORE fromPC
+		for i := len(instances) - 1; i >= 0; i-- {
+			if instances[i].Address < fromPC {
+				return instances[i], true
+			}
+		}
+	}
+
+	return nil, false
+}
+
+// getAllMultiLabelInstances returns all instances of a multi-label (for "Find All Definitions")
+func (ctx *AnalysisContext) getAllMultiLabelInstances(label string) ([]*Symbol, bool) {
+	// Try with namespace prefix first
+	if ctx.CurrentNamespace != "" {
+		qualifiedName := ctx.CurrentNamespace + "." + label
+		if instances, found := ctx.DefinedMultiLabels[qualifiedName]; found {
+			return instances, true
+		}
+	}
+
+	// Fall back to global scope
+	if instances, found := ctx.DefinedMultiLabels[label]; found {
+		return instances, true
 	}
 
 	return nil, false
@@ -156,6 +222,11 @@ func NewSemanticAnalyzer(scope *Scope, text string) *SemanticAnalyzer {
 	}
 }
 
+// GetContext returns the analysis context (for use by Goto Definition, etc.)
+func (a *SemanticAnalyzer) GetContext() *AnalysisContext {
+	return a.context
+}
+
 // Analyze starts the enhanced multi-pass analysis of the program.
 func (a *SemanticAnalyzer) Analyze(program *Program) []Diagnostic {
 	if program == nil {
@@ -208,6 +279,9 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 				// Skip label registration inside macro/function templates
 				// Labels in templates are local to the template, not global
 				if !a.inMacroOrFunction {
+					// Determine if this is a multi-label or regular label
+					isMultiLabel := stmt.Token.Type == TOKEN_MULTILABEL
+
 					// Record label with current PC
 					symbol := &Symbol{
 						Name:    stmt.Name.Value,
@@ -218,9 +292,20 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 							Character: stmt.Token.Column - 1,
 						},
 					}
-					// Store label with namespace prefix if inside a namespace
+
 					qualifiedName := a.context.getQualifiedLabelName(normalizeLabel(stmt.Name.Value))
-					a.context.DefinedLabels[qualifiedName] = symbol
+
+					if isMultiLabel {
+						symbol.Kind = MultiLabel
+						// Store in DefinedMultiLabels map (allows multiple instances)
+						a.context.DefinedMultiLabels[qualifiedName] = append(
+							a.context.DefinedMultiLabels[qualifiedName],
+							symbol,
+						)
+					} else {
+						// Store regular label in DefinedLabels map (unique)
+						a.context.DefinedLabels[qualifiedName] = symbol
+					}
 				}
 			}
 		case *InstructionStatement:
@@ -273,8 +358,17 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 // Pass 2: Forward reference resolution
 func (a *SemanticAnalyzer) pass2ForwardReferenceResolution() {
 	for _, ref := range a.context.ForwardRefs {
-		// Use namespace-aware label lookup
-		if symbol, found := a.context.lookupLabel(normalizeLabel(ref.SymbolName)); found {
+		var symbol *Symbol
+		var found bool
+
+		// Use appropriate lookup based on whether it's a multi-label or regular label
+		if ref.IsMultiLabel {
+			symbol, found = a.context.lookupMultiLabel(normalizeLabel(ref.SymbolName), ref.Direction, ref.PC)
+		} else {
+			symbol, found = a.context.lookupLabel(normalizeLabel(ref.SymbolName))
+		}
+
+		if found {
 			if ref.Context == "branch" {
 				// Validate branch distance now that we know the label address
 				// Use the stored PC from when the branch instruction was processed
@@ -666,21 +760,58 @@ func (a *SemanticAnalyzer) validateBranchDistancePass1(operand Expression, token
 	}
 
 	if ident, ok := operand.(*Identifier); ok {
-		// Use namespace-aware label lookup
-		if symbol, found := a.context.lookupLabel(normalizeLabel(ident.Value)); found {
-			// Calculate branch distance (branch instruction PC + 2 is the base)
-			distance := symbol.Address - (a.context.CurrentPC + 2)
-			if distance < -128 || distance > 127 {
-				a.addError(token, "Branch distance %d out of range (-128 to +127)", distance)
+		// Check if this is a multi-label reference (token type is TOKEN_MULTILABEL_FWD or TOKEN_MULTILABEL_BACK)
+		isMultiLabel := ident.Token.Type == TOKEN_MULTILABEL_FWD || ident.Token.Type == TOKEN_MULTILABEL_BACK
+
+		if isMultiLabel {
+			// Extract direction from token type
+			var direction rune
+			if ident.Token.Type == TOKEN_MULTILABEL_FWD {
+				direction = '+'
+			} else {
+				direction = '-'
+			}
+
+			// Try to find the multi-label instance
+			if symbol, found := a.context.lookupMultiLabel(normalizeLabel(ident.Value), direction, a.context.CurrentPC); found {
+				// Calculate branch distance
+				distance := symbol.Address - (a.context.CurrentPC + 2)
+				if distance < -128 || distance > 127 {
+					a.addError(token, "Branch distance %d out of range (-128 to +127)", distance)
+				}
+			} else {
+				// Add forward reference for later resolution (only for forward multi-labels)
+				if direction == '+' {
+					a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
+						SymbolName:   ident.Value,
+						Position:     Position{Line: token.Line - 1, Character: token.Column - 1},
+						Context:      "branch",
+						PC:           a.context.CurrentPC,
+						IsMultiLabel: true,
+						Direction:    direction,
+					})
+				} else {
+					// Backward multi-label not found - error
+					a.addError(token, "Multi-label '!%s-' not found before this position", ident.Value)
+				}
 			}
 		} else {
-			// Add forward reference for later resolution
-			a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
-				SymbolName: ident.Value,
-				Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
-				Context:    "branch",
-				PC:         a.context.CurrentPC, // Store the PC where the branch instruction is
-			})
+			// Regular label lookup
+			if symbol, found := a.context.lookupLabel(normalizeLabel(ident.Value)); found {
+				// Calculate branch distance (branch instruction PC + 2 is the base)
+				distance := symbol.Address - (a.context.CurrentPC + 2)
+				if distance < -128 || distance > 127 {
+					a.addError(token, "Branch distance %d out of range (-128 to +127)", distance)
+				}
+			} else {
+				// Add forward reference for later resolution
+				a.context.ForwardRefs = append(a.context.ForwardRefs, ForwardReference{
+					SymbolName: ident.Value,
+					Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
+					Context:    "branch",
+					PC:         a.context.CurrentPC, // Store the PC where the branch instruction is
+				})
+			}
 		}
 	}
 }

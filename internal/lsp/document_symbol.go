@@ -11,9 +11,11 @@ func toDocumentSymbolKind(kind SymbolKind) float64 {
 	case Constant:
 		return 14 // Constant
 	case Variable:
-		return 13 // Variable  
+		return 13 // Variable
 	case Label:
 		return 13 // Variable (labels are named memory addresses/positions)
+	case MultiLabel:
+		return 13 // Variable (multi-labels are also memory addresses/positions)
 	case Function:
 		return 12 // Function
 	case Macro:

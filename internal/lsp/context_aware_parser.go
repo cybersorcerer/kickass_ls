@@ -122,6 +122,8 @@ func (p *ContextAwareParser) parseStatement() Statement {
 	switch p.currentToken.Type {
 	case TOKEN_LABEL:
 		return p.parseLabelStatement()
+	case TOKEN_MULTILABEL:
+		return p.parseMultiLabelStatement()
 
 	case TOKEN_MNEMONIC_STD, TOKEN_MNEMONIC_CTRL, TOKEN_MNEMONIC_ILL:
 		return p.parseInstructionStatement()
@@ -184,6 +186,34 @@ func (p *ContextAwareParser) parseLabelStatement() *LabelStatement {
 
 	if p.debugMode {
 		log.Debug("ContextAwareParser: Parsed label '%s' at Line %d", labelName, stmt.Token.Line)
+	}
+
+	return stmt
+}
+
+// parseMultiLabelStatement parses a multi-label definition (!label:)
+func (p *ContextAwareParser) parseMultiLabelStatement() *LabelStatement {
+	stmt := &LabelStatement{
+		Token: Token{
+			Type:    p.currentToken.Type,
+			Literal: p.currentToken.Literal,
+			Line:    p.currentToken.Line,
+			Column:  p.currentToken.Column,
+		},
+	}
+
+	// Extract multi-label name (remove leading '!' and trailing ':')
+	// e.g., "!loop:" -> "loop"
+	labelName := strings.TrimPrefix(p.currentToken.Literal, "!")
+	labelName = strings.TrimSuffix(labelName, ":")
+
+	stmt.Name = &Identifier{
+		Token: stmt.Token,
+		Value: labelName,
+	}
+
+	if p.debugMode {
+		log.Debug("ContextAwareParser: Parsed multi-label '!%s:' at Line %d", labelName, stmt.Token.Line)
 	}
 
 	return stmt
@@ -789,6 +819,7 @@ func (p *ContextAwareParser) isStatementTerminator() bool {
 func (p *ContextAwareParser) isNextTokenStatementTerminator() bool {
 	return p.peekToken.Type == TOKEN_EOF ||
 		p.peekToken.Type == TOKEN_LABEL ||
+		p.peekToken.Type == TOKEN_MULTILABEL ||
 		p.peekToken.Type == TOKEN_MNEMONIC_STD ||
 		p.peekToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.peekToken.Type == TOKEN_MNEMONIC_ILL ||
@@ -862,6 +893,8 @@ func (p *ContextAwareParser) parseExpression(precedence int) Expression {
 	switch p.currentToken.Type {
 	case TOKEN_IDENTIFIER:
 		leftExp = p.parseIdentifier()
+	case TOKEN_MULTILABEL_FWD, TOKEN_MULTILABEL_BACK:
+		leftExp = p.parseMultiLabelReference()
 	case TOKEN_NUMBER_DEC, TOKEN_NUMBER_HEX, TOKEN_NUMBER_BIN, TOKEN_NUMBER_OCT:
 		leftExp = p.parseIntegerLiteral()
 	case TOKEN_STRING:
@@ -925,6 +958,30 @@ func (p *ContextAwareParser) parseIdentifier() Expression {
 			Column:  p.currentToken.Column,
 		},
 		Value: p.currentToken.Literal,
+	}
+}
+
+// parseMultiLabelReference parses a multi-label reference (!label+ or !label-)
+func (p *ContextAwareParser) parseMultiLabelReference() Expression {
+	// Extract the label name from the literal
+	// e.g., "!loop+" -> name="loop"
+	//       "!skip-" -> name="skip"
+	// Direction is preserved in Token.Type (TOKEN_MULTILABEL_FWD or TOKEN_MULTILABEL_BACK)
+	literal := p.currentToken.Literal
+	name := strings.TrimPrefix(literal, "!")
+	name = strings.TrimSuffix(name, "+")
+	name = strings.TrimSuffix(name, "-")
+
+	// Store the direction in the token literal for later analysis
+	// We'll create an Identifier with metadata about the direction
+	return &Identifier{
+		Token: Token{
+			Type:    p.currentToken.Type,
+			Literal: p.currentToken.Literal, // Keep full literal like "!loop+"
+			Line:    p.currentToken.Line,
+			Column:  p.currentToken.Column,
+		},
+		Value: name, // Just the name without ! and +/-
 	}
 }
 
@@ -1999,16 +2056,30 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 				stmt.Token.Line = 1
 				stmt.Token.Column = 1
 			}
+
+			// Check if this is a multi-label or regular label based on token type
+			symbolKind := Label
+			if stmt.Token.Type == TOKEN_MULTILABEL {
+				symbolKind = MultiLabel
+			}
+
 			symbol := &Symbol{
 				Name: stmt.Name.Value,
-				Kind: Label,
+				Kind: symbolKind,
 				Position: Position{
 					Line:      stmt.Token.Line - 1,
 					Character: stmt.Token.Column - 1,
 				},
 				Scope: currentScope,
 			}
-			if err := currentScope.AddSymbol(symbol); err != nil {
+
+			// For multi-labels, we allow duplicates by using unique names
+			// Store as "name#line" to make each instance unique
+			if symbolKind == MultiLabel {
+				uniqueName := fmt.Sprintf("%s#%d", symbol.Name, stmt.Token.Line)
+				symbol.Name = uniqueName
+				currentScope.Symbols[uniqueName] = symbol
+			} else if err := currentScope.AddSymbol(symbol); err != nil {
 				diagnostic := Diagnostic{
 					Severity: SeverityError,
 					Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},

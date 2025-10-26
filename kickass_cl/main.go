@@ -11,7 +11,7 @@ import (
 func main() {
 	var (
 		testSuite  = flag.String("suite", "", "Path to test suite JSON file")
-		serverPath = flag.String("server", "../6510lsp_server", "Path to LSP server executable")
+		serverPath = flag.String("server", "kickass_ls", "Path to LSP server executable")
 		serverArgs = flag.String("args", "", "Additional server arguments")
 		rootPath   = flag.String("root", ".", "Root path for test files")
 		outputFile = flag.String("output", "", "Save test results to JSON file")
