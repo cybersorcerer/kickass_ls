@@ -126,19 +126,20 @@ func (ctx *AnalysisContext) lookupMultiLabel(label string, direction rune, fromP
 		}
 	}
 
-	if instances == nil || len(instances) == 0 {
+	if len(instances) == 0 {
 		return nil, false
 	}
 
 	// Instances are sorted by Address (chronologically)
-	if direction == '+' {
+	switch direction {
+	case '+':
 		// Forward: find first instance AFTER fromPC
 		for _, inst := range instances {
 			if inst.Address > fromPC {
 				return inst, true
 			}
 		}
-	} else if direction == '-' {
+	case '-':
 		// Backward: find last instance BEFORE fromPC
 		for i := len(instances) - 1; i >= 0; i-- {
 			if instances[i].Address < fromPC {
@@ -1152,49 +1153,6 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 	}
 }
 
-// processForDirectiveKickAsm handles .for directive processing for Kick Assembler
-func (a *SemanticAnalyzer) processForDirectiveKickAsm(stmt *DirectiveStatement) {
-	if stmt == nil || a.context == nil {
-		return
-	}
-
-	// Extract iteration count from the original source around this line
-	iterationCount := a.extractIterationCountFromLine(stmt.Token.Line)
-
-	if iterationCount <= 0 {
-		// Couldn't determine iteration count - use conservative estimate
-		iterationCount = 1
-	}
-
-	// Calculate the size of the block content
-	blockSize := int64(0)
-	if stmt.Block != nil && stmt.Block.Statements != nil {
-		// For each statement in the block, estimate its size
-		for _, blockStmt := range stmt.Block.Statements {
-			if instrStmt, ok := blockStmt.(*InstructionStatement); ok {
-				// Estimate instruction size
-				if instrStmt.Token.Literal != "" {
-					size := a.getInstructionLength(strings.ToUpper(instrStmt.Token.Literal), instrStmt.Operand)
-					blockSize += int64(size)
-				}
-			} else {
-				// Other statements (directives, etc.) - estimate 1 byte
-				blockSize += 1
-			}
-		}
-	}
-
-	// If block is empty or very small, assume it contains simple instructions like nop
-	if blockSize == 0 {
-		blockSize = 1 // Default to 1 byte per iteration (e.g., nop)
-	}
-
-	// Add total loop size to PC (but not inside templates)
-	if !a.inMacroOrFunction {
-		totalLoopSize := blockSize * int64(iterationCount)
-		a.context.CurrentPC += totalLoopSize
-	}
-}
 
 // handleUnparsedForDirectives scans document lines for .for directives that weren't parsed correctly
 func (a *SemanticAnalyzer) handleUnparsedForDirectives() {
@@ -1269,146 +1227,6 @@ func (a *SemanticAnalyzer) extractForLoopContent(startLine int) []string {
 	return content
 }
 
-// extractIterationCountFromLine attempts to extract iteration count from .for directive
-func (a *SemanticAnalyzer) extractIterationCountFromLine(line int) int {
-	// Hardcoded patterns for known test cases - this will be enhanced later
-	// when we implement full Kick Assembler directive parsing
-
-	// First .for loop around line 22: i<100
-	if line >= 21 && line <= 25 {
-		return 100
-	}
-
-	// Second .for loop around line 30: i<50
-	if line >= 29 && line <= 33 {
-		return 50
-	}
-
-	// Default: try to parse from common patterns
-	// TODO: Implement proper parameter parsing for comprehensive solution
-	return 1 // Conservative fallback
-}
-
-// isForDirective checks if a DirectiveStatement represents a .for directive
-func (a *SemanticAnalyzer) isForDirective(stmt *DirectiveStatement) bool {
-	if stmt == nil || stmt.Token.Literal == "" {
-		return false
-	}
-	return strings.EqualFold(stmt.Token.Literal, ".for") || strings.EqualFold(stmt.Token.Literal, "for")
-}
-
-// processForDirectiveInPC handles .for directive expansion for PC calculation
-func (a *SemanticAnalyzer) processForDirectiveInPC(stmt *DirectiveStatement) {
-	if stmt == nil || a.context == nil {
-		return
-	}
-
-	// Try to extract iteration count from the source text around this position
-	iterationCount := a.extractForIterationCount(stmt)
-	if iterationCount <= 0 {
-		return // Cannot determine iteration count
-	}
-
-	// Estimate the size of one iteration by looking at the block content
-	// For now, assume each statement in the block is 1 byte (e.g., nop)
-	estimatedSizePerIteration := int64(1) // Most common case: single nop instruction
-
-	if stmt.Block != nil && stmt.Block.Statements != nil {
-		estimatedSizePerIteration = int64(len(stmt.Block.Statements))
-	}
-
-	// Add the total size to PC (but not inside templates)
-	if !a.inMacroOrFunction {
-		totalSize := estimatedSizePerIteration * int64(iterationCount)
-		a.context.CurrentPC += totalSize
-	}
-}
-
-// extractForIterationCount attempts to extract iteration count from .for directive
-func (a *SemanticAnalyzer) extractForIterationCount(stmt *DirectiveStatement) int {
-	// For the specific test cases, hardcode the iteration counts based on the line position
-	// This is a pragmatic approach since we know the exact test scenarios
-
-	// Check the line number to determine which .for loop this is
-	line := stmt.Token.Line
-
-	// First .for loop (around line 22): 100 iterations
-	if line >= 21 && line <= 25 {
-		return 100
-	}
-
-	// Second .for loop (around line 30): 50 iterations
-	if line >= 29 && line <= 33 {
-		return 50
-	}
-
-	// Default fallback
-	return 0
-}
-
-// processForDirective handles .for directive expansion for PC calculation
-func (a *SemanticAnalyzer) processForDirective(node *DirectiveStatement) {
-	if node == nil || node.Block == nil || node.Block.Statements == nil || a.context == nil {
-		return
-	}
-
-	// For now, use hardcoded values based on line numbers to handle the specific test case
-	// This is a simplified approach since proper .for parsing is complex
-	iterationCount := 100 // Default for first .for loop
-
-	// Check if this is the second .for loop by looking at the PC position
-	// The second .for should be around PC $1000 + some offset from the first loop
-	if a.context.CurrentPC > 0x1010 { // Rough estimate after first instructions
-		iterationCount = 50 // Second .for loop has 50 iterations
-	}
-
-	// Calculate PC increment by simulating the loop expansion
-	// Save current PC
-	originalPC := a.context.CurrentPC
-
-	// Process the block once to calculate size per iteration
-	a.pass1AddressCalculation(node.Block.Statements)
-	sizePerIteration := a.context.CurrentPC - originalPC
-
-	// Restore PC and add the full loop size (but not inside templates)
-	if !a.inMacroOrFunction {
-		a.context.CurrentPC = originalPC + (sizePerIteration * int64(iterationCount))
-	} else {
-		a.context.CurrentPC = originalPC
-	}
-}
-
-// parseForIterationCount extracts iteration count from .for directive parameters
-func (a *SemanticAnalyzer) parseForIterationCount(node *DirectiveStatement) int {
-	if node == nil || node.Token.Literal == "" {
-		return 0
-	}
-
-	// Extract iteration count from .for (var i=0; i<100; i++) pattern
-	literal := node.Token.Literal
-
-	// Look for pattern like "i<100" or "i<50"
-	if strings.Contains(literal, "i<100") {
-		return 100
-	}
-	if strings.Contains(literal, "i<50") {
-		return 50
-	}
-
-	// Try to extract number after "i<"
-	if idx := strings.Index(literal, "i<"); idx != -1 {
-		remaining := literal[idx+2:]
-		if endIdx := strings.IndexAny(remaining, ";)"); endIdx != -1 {
-			numStr := remaining[:endIdx]
-			var num int
-			if n, err := fmt.Sscanf(numStr, "%d", &num); err == nil && n == 1 {
-				return num
-			}
-		}
-	}
-
-	return 0 // Could not parse iteration count
-}
 
 // evaluateExpression attempts to evaluate an expression to a numeric value
 func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
@@ -1814,10 +1632,6 @@ func (a *SemanticAnalyzer) checkJMPIndirectBug(operand Expression, token Token) 
 	}
 }
 
-// checkBRKBug detects potential BRK instruction issues
-func (a *SemanticAnalyzer) checkBRKBug(token Token) {
-	a.addInfo(token, "BRK pushes PC+2 to stack, not PC+1 - ensure interrupt vector is correct")
-}
 
 // checkMemoryAccess analyzes memory access patterns for instructions
 func (a *SemanticAnalyzer) checkMemoryAccess(mnemonic string, operand Expression, token Token) {
@@ -1885,13 +1699,6 @@ func (a *SemanticAnalyzer) analyzeMemoryAccess(addr int64, isWrite bool, token T
 	}
 }
 
-// formatAddress formats an address for display
-func formatAddress(addr int64) string {
-	if addr <= 0xFF {
-		return fmt.Sprintf("$%02X", addr)
-	}
-	return fmt.Sprintf("$%04X", addr)
-}
 
 // Dead Code Detection
 
@@ -1908,11 +1715,6 @@ func (a *SemanticAnalyzer) pass4DeadCodeDetection(statements []Statement) {
 	a.analyzeControlFlowWithVisited(statements, visited)
 }
 
-// analyzeControlFlow detects unreachable code after unconditional jumps
-func (a *SemanticAnalyzer) analyzeControlFlow(statements []Statement) {
-	visited := make(map[Statement]bool)
-	a.analyzeControlFlowWithVisited(statements, visited)
-}
 
 // analyzeControlFlowWithVisited detects unreachable code with duplicate prevention
 func (a *SemanticAnalyzer) analyzeControlFlowWithVisited(statements []Statement, visited map[Statement]bool) {
@@ -1971,11 +1773,6 @@ func (a *SemanticAnalyzer) isUnconditionalJump(stmt *InstructionStatement) bool 
 	return false
 }
 
-// checkForDeadCodeAfterJump looks for unreachable code after unconditional jumps
-func (a *SemanticAnalyzer) checkForDeadCodeAfterJump(statements []Statement, startIndex int) {
-	visited := make(map[Statement]bool)
-	a.checkForDeadCodeAfterJumpWithVisited(statements, startIndex, visited)
-}
 
 // checkForDeadCodeAfterJumpWithVisited looks for unreachable code with duplicate prevention
 func (a *SemanticAnalyzer) checkForDeadCodeAfterJumpWithVisited(statements []Statement, startIndex int, visited map[Statement]bool) {
@@ -2039,52 +1836,6 @@ func (a *SemanticAnalyzer) isDataDirective(directive string) bool {
 
 // Additional dead code patterns
 
-// detectInfiniteLoops identifies potential infinite loops
-func (a *SemanticAnalyzer) detectInfiniteLoops(statements []Statement) {
-	for i, stmt := range statements {
-		if labelStmt, ok := stmt.(*LabelStatement); ok && labelStmt.Name != nil {
-			// Look for immediate unconditional jump back to same label
-			if i+1 < len(statements) {
-				if instStmt, ok := statements[i+1].(*InstructionStatement); ok {
-					if strings.ToUpper(instStmt.Token.Literal) == "JMP" {
-						if ident, ok := instStmt.Operand.(*Identifier); ok {
-							if normalizeLabel(ident.Value) == normalizeLabel(labelStmt.Name.Value) {
-								a.addWarning(instStmt.Token, "Potential infinite loop detected: JMP to same label")
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-
-// detectUnusedCodeBlocks finds code blocks that are never reached
-func (a *SemanticAnalyzer) detectUnusedCodeBlocks(statements []Statement) {
-	// This is a simplified implementation
-	// A full implementation would require building a call graph
-	labelUsage := make(map[string]bool)
-
-	// First pass: find all label references
-	for _, stmt := range statements {
-		if instStmt, ok := stmt.(*InstructionStatement); ok && instStmt.Operand != nil {
-			if ident, ok := instStmt.Operand.(*Identifier); ok {
-				labelUsage[normalizeLabel(ident.Value)] = true
-			}
-		}
-	}
-
-	// Second pass: check for unused labels (potential dead code blocks)
-	for _, stmt := range statements {
-		if labelStmt, ok := stmt.(*LabelStatement); ok && labelStmt.Name != nil {
-			labelName := normalizeLabel(labelStmt.Name.Value)
-			if !labelUsage[labelName] {
-				// This label is never referenced - potential dead code block
-				a.addHint(labelStmt.Token, "Label '%s' is never referenced - potential dead code block", labelName)
-			}
-		}
-	}
-}
 
 // processDataDirective handles .byte and .word directives with potential multiple values
 func (a *SemanticAnalyzer) processDataDirective(node *DirectiveStatement) {
@@ -2325,17 +2076,15 @@ func (a *SemanticAnalyzer) addDeadCodeWarningsForIfBlock(node *DirectiveStatemen
 			}
 		default:
 			// For other statement types, add a generic warning
-			if statement != nil {
-				log.Debug("addDeadCodeWarningsForIfBlock: adding generic warning for statement type %T", statement)
-				// Create a generic token for the warning
-				token := Token{
-					Type:    TOKEN_COMMENT, // Generic type for unidentified statements
-					Literal: "unknown",
-					Line:    1, // We'll use a default position
-					Column:  1,
-				}
-				a.addWarning(token, "Dead code: statement will never be executed (.if condition is always false)")
+			log.Debug("addDeadCodeWarningsForIfBlock: adding generic warning for statement type %T", statement)
+			// Create a generic token for the warning
+			token := Token{
+				Type:    TOKEN_COMMENT, // Generic type for unidentified statements
+				Literal: "unknown",
+				Line:    1, // We'll use a default position
+				Column:  1,
 			}
+			a.addWarning(token, "Dead code: statement will never be executed (.if condition is always false)")
 		}
 	}
 }

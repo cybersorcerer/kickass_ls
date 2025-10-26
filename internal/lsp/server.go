@@ -855,7 +855,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "1.0.2", // Version updated
+						"version": "1.0.3", // Version updated
 					},
 				},
 			}
@@ -1237,9 +1237,9 @@ func Start() {
 															for lineIdx, line := range lines {
 																// Find all occurrences of !labelName with suffix
 																searchPatterns := []string{
-																	"!" + labelName + "+",  // Forward reference
-																	"!" + labelName + "-",  // Backward reference
-																	"!" + labelName + ":",  // Definition
+																	"!" + labelName + "+", // Forward reference
+																	"!" + labelName + "-", // Backward reference
+																	"!" + labelName + ":", // Definition
 																}
 
 																for _, pattern := range searchPatterns {
