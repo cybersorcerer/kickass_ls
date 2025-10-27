@@ -397,7 +397,7 @@ expressions:
     .byte <$1234                    // ✅ Low Byte
     .byte >$1234                    // ✅ High Byte
     .byte (5 + 3) * 2               // ✅ Parentheses
-    .byte -42                       // ✅ Negation
+    .byte -255                       // ✅ Negation
 
 // ----------------------------------------------------------------------------
 // 16. LABELS AND REFERENCES (for symbol resolution)

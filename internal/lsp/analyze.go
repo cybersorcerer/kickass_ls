@@ -1974,8 +1974,20 @@ func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum 
 			continue
 		}
 
-		// Check range
-		if value < minVal || value > maxVal {
+		// Check range - for bytes and words, accept both signed and unsigned ranges
+		inRange := false
+		if dataType == "byte" {
+			// Accept signed (-128 to +127) OR unsigned (0 to 255)
+			inRange = (value >= -128 && value <= 127) || (value >= 0 && value <= 255)
+		} else if dataType == "word" {
+			// Accept signed (-32768 to +32767) OR unsigned (0 to 65535)
+			inRange = (value >= -32768 && value <= 32767) || (value >= 0 && value <= 65535)
+		} else {
+			// For other types, use provided range
+			inRange = (value >= minVal && value <= maxVal)
+		}
+
+		if !inRange {
 			log.Debug("validateTokenLevelDataDirective: ADDING WARNING for value %d out of range", value)
 
 			// Create a token for the warning (approximate position)
@@ -1986,7 +1998,14 @@ func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum 
 				Column:  strings.Index(line, valueStr) + 1,
 			}
 
-			a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
+			// Generate appropriate warning message based on data type
+			if dataType == "byte" {
+				a.addWarning(token, "Value %d out of byte range (-128 to +127 or 0 to 255)", value)
+			} else if dataType == "word" {
+				a.addWarning(token, "Value %d out of word range (-32768 to +32767 or 0 to 65535)", value)
+			} else {
+				a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
+			}
 		}
 	}
 }
