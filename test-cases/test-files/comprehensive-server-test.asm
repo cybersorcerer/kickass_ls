@@ -11,6 +11,7 @@
 .encoding "petscii_upper"           // ✅ Valid encoding
 .encoding "screencode_mixed"        // ✅ Valid encoding
 .encoding "invalid_name"         // ⚠️ Should warn: Unknown encoding
+huhuhu
 
 // ----------------------------------------------------------------------------
 // 2. DEFINE/UNDEF DIRECTIVES (Preprocessor)

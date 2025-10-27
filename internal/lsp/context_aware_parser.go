@@ -148,7 +148,9 @@ func (p *ContextAwareParser) parseStatement() Statement {
 				return p.parsePseudocommandCallStatement()
 			}
 		}
-		// Otherwise, it's an unknown statement
+		// Otherwise, it's an unknown/invalid identifier
+		p.addError(fmt.Sprintf("Unknown identifier '%s' - not a valid mnemonic, directive, label, or macro call",
+			p.currentToken.Literal), p.currentToken.Line, p.currentToken.Column)
 		if p.debugMode {
 			log.Debug("ContextAwareParser: Unknown identifier statement '%s' at Line %d",
 				p.currentToken.Literal, p.currentToken.Line)

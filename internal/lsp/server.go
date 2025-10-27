@@ -855,7 +855,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "1.0.3", // Version updated
+						"version": "1.0.4", // Version updated
 					},
 				},
 			}
