@@ -165,6 +165,9 @@ type LSPConfiguration struct {
 		DescriptiveLabels  bool `json:"descriptiveLabels"`
 	} `json:"styleGuideEnforcement"`
 
+	// Document Formatting
+	Formatting FormattingConfig `json:"formatting"`
+
 	// Parser Feature Flags for Context-Aware Redesign
 	ParserFeatureFlags struct {
 		UseContextAware    bool `json:"useContextAware"`    // Enable new context-aware parser
@@ -252,6 +255,9 @@ var lspConfig = &LSPConfiguration{
 		UpperCaseConstants: true,
 		DescriptiveLabels:  true,
 	},
+
+	// Document Formatting - enabled by default with sensible defaults
+	Formatting: DefaultFormattingConfig(),
 
 	// Parser Feature Flags - Use context-aware parser by default
 	ParserFeatureFlags: struct {
@@ -821,9 +827,11 @@ func Start() {
 							"resolveProvider":   false,
 							"triggerCharacters": []string{" ", ".", "$"},
 						},
-						"definitionProvider":     true,
-						"referencesProvider":     true,
-						"documentSymbolProvider": true,
+						"definitionProvider":      true,
+						"referencesProvider":      true,
+						"documentSymbolProvider":  true,
+						"documentFormattingProvider":      true,
+						"documentRangeFormattingProvider": true,
 						"semanticTokensProvider": map[string]interface{}{
 							"legend": map[string]interface{}{
 								"tokenTypes": []string{
@@ -1382,6 +1390,32 @@ func Start() {
 			}
 			responseBytes, _ := json.Marshal(finalResponse)
 			writeResponse(writer, responseBytes)
+
+		case "textDocument/formatting":
+			log.Debug("Handling textDocument/formatting request.")
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				result := handleDocumentFormatting(params)
+				response := map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      message["id"],
+					"result":  result,
+				}
+				responseBytes, _ := json.Marshal(response)
+				writeResponse(writer, responseBytes)
+			}
+
+		case "textDocument/rangeFormatting":
+			log.Debug("Handling textDocument/rangeFormatting request.")
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				result := handleRangeFormatting(params)
+				response := map[string]interface{}{
+					"jsonrpc": "2.0",
+					"id":      message["id"],
+					"result":  result,
+				}
+				responseBytes, _ := json.Marshal(response)
+				writeResponse(writer, responseBytes)
+			}
 
 		default:
 			log.Warn("Unhandled method: %s", method)

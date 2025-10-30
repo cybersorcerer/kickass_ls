@@ -67,9 +67,9 @@ lda param
 
 **Features**:
 - Rename von Labels (inkl. Multi-Labels)
-- Rename von Macro/Function Namen
+- Rename von Macro/Function/pseudocommand Namen
 - Rename von Namespace-Mitgliedern
-- Rename von Variablen
+- Rename von Variablen und Konstannten
 - Preview der Änderungen vor dem Ausführen
 
 **Beispiel**:

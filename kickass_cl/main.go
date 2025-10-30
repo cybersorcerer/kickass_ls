@@ -64,6 +64,17 @@ func main() {
 			runSemanticTokensTest(*serverPath, file, line, *verbose)
 			return
 		}
+		// Special case: if file is "format", run format test
+		if filePath == "format" {
+			if flag.NArg() < 2 {
+				fmt.Println("Usage: test-client format <file>")
+				fmt.Println("Example: test-client format test.asm")
+				os.Exit(1)
+			}
+			file := flag.Arg(1)
+			runFormatTest(*serverPath, file, *verbose)
+			return
+		}
 		runQuickTest(*serverPath, filePath, *verbose)
 		return
 	}
@@ -433,6 +444,88 @@ func runSemanticTokensTest(serverPath, filePath string, detailLine int, verbose 
 	// Print details for specific line if requested
 	if detailLine >= 0 {
 		PrintTokenDetails(decodedTokens, detailLine, string(content))
+	}
+}
+
+func runFormatTest(serverPath, filePath string, verbose bool) {
+	fmt.Printf("=== Document Formatting Test ===\n")
+	fmt.Printf("File: %s\n\n", filePath)
+
+	// Read file content
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		fmt.Printf("❌ Failed to read file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Println("=== ORIGINAL ===")
+	fmt.Println(string(content))
+	fmt.Println()
+
+	// Create client
+	client := NewLSPClient(serverPath)
+
+	// Start server
+	if err := client.Start(); err != nil {
+		fmt.Printf("❌ Failed to start server: %v\n", err)
+		os.Exit(1)
+	}
+	defer client.Stop()
+
+	// Initialize
+	rootPath, _ := os.Getwd()
+	_, err = client.Initialize(rootPath)
+	if err != nil {
+		fmt.Printf("❌ Failed to initialize: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get absolute path for URI
+	absPath, _ := filepath.Abs(filePath)
+	uri := "file://" + absPath
+
+	// Open document
+	err = client.OpenDocument(uri, "kickasm", string(content))
+	if err != nil {
+		fmt.Printf("❌ Failed to open document: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Wait for document to be parsed
+	time.Sleep(200 * time.Millisecond)
+
+	// Request formatting
+	fmt.Println("Requesting document formatting...")
+	edits, err := client.FormatDocument(uri)
+	if err != nil {
+		fmt.Printf("❌ Failed to format document: %v\n", err)
+		os.Exit(1)
+	}
+
+	if edits == nil || len(edits) == 0 {
+		fmt.Println("✅ No formatting changes needed - document is already formatted correctly")
+		return
+	}
+
+	fmt.Printf("✅ Got %d text edits\n\n", len(edits))
+
+	// Apply edits to get formatted text
+	formattedContent := string(content)
+	for _, edit := range edits {
+		formattedContent = edit.NewText
+	}
+
+	fmt.Println("=== FORMATTED ===")
+	fmt.Println(formattedContent)
+	fmt.Println()
+
+	// Optionally write formatted version to file
+	outputPath := filePath + ".formatted"
+	err = os.WriteFile(outputPath, []byte(formattedContent), 0644)
+	if err != nil {
+		fmt.Printf("⚠️  Warning: Could not write formatted file: %v\n", err)
+	} else {
+		fmt.Printf("✅ Formatted file written to: %s\n", outputPath)
 	}
 }
 
