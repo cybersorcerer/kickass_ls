@@ -863,7 +863,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "1.0.4", // Version updated
+						"version": "1.0.5", // Version updated
 					},
 				},
 			}
@@ -2265,6 +2265,12 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 	log.Debug("generateCompletions called: lineNum=%d, contextType=%v, wordToComplete='%s', lineContent='%s', cursorPos=%d",
 		lineNum, contextType, wordToComplete, lineContent, cursorPos)
 
+	// If we're inside a comment, return empty list immediately
+	if contextType == ContextComment {
+		log.Debug("Context is comment, returning empty completion list")
+		return items
+	}
+
 	// Determine context: are we after a mnemonic or directive?
 	precedingName, isMnem, isDir := getPrecedingMnemonicOrDirective(lineContent, cursorPos)
 	log.Debug("Preceding context: name='%s', isMnemonic=%v, isDirective=%v", precedingName, isMnem, isDir)
@@ -2873,6 +2879,7 @@ const (
 	ContextImmediate                                     // After # - suggest constants/numbers only
 	ContextOperandGeneral                                // After other mnemonics - suggest all operands
 	ContextDirectiveOperand                              // After directive - context-specific suggestions
+	ContextComment                                       // Inside a comment - no completions should be offered
 )
 
 // getCompletionContext determines what kind of completion context we're in
@@ -2887,12 +2894,16 @@ func getCompletionContext(line string, char int) (CompletionContextType, string)
 	context := line[:char]
 	log.Debug("Context: '%s'", context)
 
-	// Ignore comments
-	if idx := strings.Index(context, ";"); idx != -1 {
-		context = context[:idx]
-	}
+	// Check if cursor is inside a comment - if so, no completions should be offered
 	if idx := strings.Index(context, "//"); idx != -1 {
-		context = context[:idx]
+		// Cursor is after "//" - we're inside a line comment
+		log.Debug("Cursor is inside a // comment, no completions offered")
+		return ContextComment, ""
+	}
+	if idx := strings.Index(context, ";"); idx != -1 {
+		// Cursor is after ";" - we're inside a semicolon comment
+		log.Debug("Cursor is inside a ; comment, no completions offered")
+		return ContextComment, ""
 	}
 
 	trimmedContext := strings.TrimSpace(context)

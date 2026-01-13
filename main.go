@@ -12,12 +12,20 @@ import (
 	lsp "c64.nvim/internal/lsp"
 )
 
+// Version information (set via ldflags during build)
+var (
+	Version   = "1.0.5"
+	BuildDate = "unknown"
+)
+
 func main() {
 	// Log file management is handled by internal/log package
 
 	// Parse command line flags
 	flag.CommandLine.Init(os.Args[0], flag.ContinueOnError)
 	flag.CommandLine.SetOutput(os.Stderr)
+	showVersion := flag.Bool("version", false, "Show version information")
+	showVersionShort := flag.Bool("v", false, "Show version information (short)")
 	debug := flag.Bool("debug", false, "Enable debug logging")
 	warnUnused := flag.Bool("warn-unused-labels", false, "Enable warnings for unused labels")
 	testFile := flag.String("test", "", "Test mode: analyze file and output diagnostics")
@@ -29,6 +37,12 @@ func main() {
 	testGotoDef := flag.String("test-goto-definition", "", "Test go-to-definition at file:line:char")
 
 	err := flag.CommandLine.Parse(os.Args[1:])
+
+	// Handle version flag
+	if *showVersion || *showVersionShort {
+		fmt.Printf("kickass_ls version %s (built: %s)\n", Version, BuildDate)
+		os.Exit(0)
+	}
 	if err != nil {
 		log.Warn("Invalid command line argument: %v. Valid flags are: --debug, --warn-unused-labels, --test, --test-completion, --test-hover, --test-signature, --test-symbols, --test-references, --test-goto-definition", err)
 	}

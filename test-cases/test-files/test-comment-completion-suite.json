@@ -1,0 +1,95 @@
+{
+  "name": "Comment Completion Suppression Test",
+  "description": "Test that completions are suppressed inside comments",
+  "version": "0.9.8",
+  "setup": {
+    "serverPath": "kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Completion - Inside // comment should be empty",
+      "description": "No completions should be offered inside // comments",
+      "type": "completion",
+      "input": {
+        "file": "test-comment-completion.asm",
+        "line": 8,
+        "character": 7
+      },
+      "expected": {
+        "maxItems": 0,
+        "completionItems": []
+      }
+    },
+    {
+      "name": "Completion - Inside ; comment should be empty",
+      "description": "No completions should be offered inside ; comments",
+      "type": "completion",
+      "input": {
+        "file": "test-comment-completion.asm",
+        "line": 11,
+        "character": 7
+      },
+      "expected": {
+        "maxItems": 0,
+        "completionItems": []
+      }
+    },
+    {
+      "name": "Completion - Inside // comment with partial word should be empty",
+      "description": "No completions should be offered inside // comments even with partial words",
+      "type": "completion",
+      "input": {
+        "file": "test-comment-completion.asm",
+        "line": 14,
+        "character": 5
+      },
+      "expected": {
+        "maxItems": 0,
+        "completionItems": []
+      }
+    },
+    {
+      "name": "Completion - Inside ; comment with partial word should be empty",
+      "description": "No completions should be offered inside ; comments even with partial words",
+      "type": "completion",
+      "input": {
+        "file": "test-comment-completion.asm",
+        "line": 17,
+        "character": 4
+      },
+      "expected": {
+        "maxItems": 0,
+        "completionItems": []
+      }
+    },
+    {
+      "name": "Completion - After lda (NOT in comment) should show completions",
+      "description": "Normal completions should still work outside comments",
+      "type": "completion",
+      "input": {
+        "file": "test-comment-completion.asm",
+        "line": 20,
+        "character": 3
+      },
+      "expected": {
+        "minItems": 1
+      }
+    },
+    {
+      "name": "Completion - At start of line (NOT in comment) should show completions",
+      "description": "Normal completions should still work at line start",
+      "type": "completion",
+      "input": {
+        "file": "test-comment-completion.asm",
+        "line": 23,
+        "character": 0
+      },
+      "expected": {
+        "minItems": 50
+      }
+    }
+  ]
+}
