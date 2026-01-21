@@ -1,6 +1,15 @@
 {
 	"directives": [
 		{
+			"directive": "BasicUpstart2",
+			"description": "To make the assembled machine code run on a C64 or in an emulator, it's useful to include a little basic program that starts your code (for example: 10 sys 4096). The BasicUpstart macro is standard macro that helps you to create programs like that.",
+			"signature": "BasicUpstart2(label)",
+			"examples":[
+				"*= $0801 'Basic Upstart'\nBasicUpstart(start) // 10 sys$0810\n*= $0810 'Program'\nstart: inc $d020\ninc $d021\njmp start",
+				"BasicUpstart2(start) // 10 sys$0810\nstart: inc $d020\ninc $d021\njmp start"
+			]
+		},
+		{
 			"directive": ".const",
 			"description": "Defines a constant. A constant can't be assigned a new value. Note that not all values are immutable. If you define a constant that points to a list, the content of the list can still change. If you want to make a mutable value immutable, you can use its lock() function, which will lock it's content",
 			"signature": ".const constant_name=value",
