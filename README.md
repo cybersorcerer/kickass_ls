@@ -25,6 +25,7 @@ Made with love for the retro computing community.
 		- [Hover Information](#hover-information)
 		- [Go to Definition](#go-to-definition)
 		- [Document Symbols](#document-symbols)
+		- [Document Formatting](#document-formatting)
 		- [Semantic Highlighting](#semantic-highlighting)
 	- [Project Structure](#project-structure)
 	- [Development](#development)
@@ -45,6 +46,7 @@ Made with love for the retro computing community.
 				- [Magic Number Detection](#magic-number-detection)
 				- [Dead Code Detection](#dead-code-detection)
 				- [Style Guide Enforcement](#style-guide-enforcement)
+			- [Formatting Options](#formatting-options)
 		- [Configuration Examples](#configuration-examples)
 			- [Neovim (nvim-lspconfig)](#neovim-nvim-lspconfig)
 			- [Minimal Profile (Only Critical Errors)](#minimal-profile-only-critical-errors)
@@ -63,13 +65,14 @@ Made with love for the retro computing community.
 
 The Kick Assembler Language Server provides comprehensive language support for 6502/6510 assembly programming with Kick Assembler syntax:
 
-- **Context-aware parsing** - Deep understanding of Kick Assembler directives, macros, functions, and namespaces
-- **Real-time diagnostics** - Instant feedback on syntax errors, invalid mnemonics, and addressing mode violations
-- **Intelligent completion** - Context-sensitive suggestions for mnemonics, directives, labels, constants, and C64 memory-mapped registers
-- **Hover documentation** - Detailed information for mnemonics, directives, functions, and hardware registers
+- **Context-aware parsing** - Deep understanding of Kick Assembler directives, preprocessor statements, macros, functions, and namespaces
+- **Real-time diagnostics** - Instant feedback on syntax errors, invalid mnemonics, addressing mode violations, and preprocessor block matching
+- **Intelligent completion** - Context-sensitive suggestions for mnemonics, directives, preprocessor statements, labels, constants, and C64 memory-mapped registers
+- **Hover documentation** - Detailed information for mnemonics, directives, preprocessor statements, functions, and hardware registers
 - **Symbol navigation** - Jump to definition for labels, constants, variables, functions, macros, and pseudocommands
+- **Document formatting** - Configurable code formatting with comment alignment, indentation management, and column-based layout
 - **Semantic highlighting** - Syntax-aware token classification for better code visualization
-- **C64 memory map integration** - Built-in knowledge of VIC-II, SID, CIA registers with hardware-specific hints
+- **C64 memory map integration** - Built-in knowledge of VIC-II, SID, CIA registers with I/O register descriptions from memory map
 - **Multi-pass analysis** - Accurate program counter tracking and forward reference resolution
 
 ## Installation
@@ -225,6 +228,8 @@ Real-time error detection and validation:
 - **Addressing mode violations** - Instructions used with unsupported addressing modes
 - **Branch distance errors** - Relative branches exceeding +127/-128 byte range
 - **Invalid encodings** - Unrecognized encoding names in `.encoding` directive
+- **Preprocessor block matching** - Detects unmatched `#if`/`#endif` blocks, orphaned `#else`/`#elif`
+- **I/O register info** - Shows register descriptions from C64 memory map when accessing hardware registers
 - **Syntax errors** - Malformed expressions, directives, or statements
 
 ### Code Completion
@@ -232,21 +237,26 @@ Real-time error detection and validation:
 Context-aware completions for:
 
 - **Mnemonics** - All standard and illegal 6502/6510 opcodes with addressing mode hints
-- **Directives** - Kick Assembler directives (`.byte`, `.word`, `.const`, `.var`, `.macro`, etc.)
+- **Directives** - All 54 Kick Assembler directives (`.byte`, `.word`, `.const`, `.var`, `.macro`, `.segment`, etc.)
+- **Preprocessor statements** - All 9 preprocessor directives (`#import`, `#importif`, `#importonce`, `#define`, `#undef`, `#if`, `#elif`, `#else`, `#endif`)
 - **Labels** - Local and namespace-qualified labels
 - **Constants and variables** - Defined with `.const` and `.var`
 - **Functions and macros** - User-defined and built-in functions
 - **C64 memory map** - VIC-II registers ($D000-$D02E), SID registers ($D400-$D418), CIA, Color RAM ($D800)
 - **Built-in constants** - Predefined colors, screen codes, and system constants
 
+Trigger characters: `.` (directives), `$` (memory addresses), `#` (preprocessor/immediate), ` ` (operands)
+
 ### Hover Information
 
 Detailed documentation on hover:
 
 - **Mnemonics** - Instruction description, addressing modes, cycle counts
-- **Directives** - Syntax and usage examples
+- **Directives** - Syntax, description, and usage examples
+- **Preprocessor statements** - Syntax and description for `#import`, `#define`, `#if`, etc.
 - **Hardware registers** - Register function, bit fields, hardware-specific warnings (e.g., "CLEARED ON READ" for collision registers)
-- **Functions** - Parameter types, return values, and descriptions
+- **Built-in functions** - Parameter types, return values, and descriptions
+- **Built-in constants** - Value and description for predefined constants
 - **Labels and symbols** - Value, type, and scope information
 
 ### Go to Definition
@@ -271,12 +281,22 @@ Hierarchical symbol outline showing:
 - Labels
 - Organized by scope and nesting
 
+### Document Formatting
+
+Configurable code formatting with:
+
+- **Comment alignment** - Aligns end-of-line comments to a configurable column (default: column 40)
+- **Indentation management** - Automatic indent/dedent for block structures (`.macro { }`, `.if { }`, etc.)
+- **Origin line handling** - `*=` directives and `BasicUpstart2` always left-aligned at column 0
+- **Configurable indent** - Choose between spaces or tabs, with configurable indent size
+- **Range formatting** - Format entire document or selected range
+
 ### Semantic Highlighting
 
 Syntax-aware token classification for:
 
 - Mnemonics (standard, illegal, control flow)
-- Directives
+- Directives and preprocessor statements
 - Labels
 - Constants and variables
 - Functions and macros
@@ -447,6 +467,19 @@ All settings are organized under the `kickass_ls` namespace:
   - Suggests UPPER_CASE naming for constants
   - Warns about very short label names (< 3 characters)
 
+#### Formatting Options
+
+- **formatting.enabled** (boolean, default: `true`)
+  - Master switch for document formatting
+- **formatting.indentSize** (integer, default: `4`)
+  - Number of spaces per indent level
+- **formatting.useSpaces** (boolean, default: `true`)
+  - Use spaces (`true`) or tabs (`false`) for indentation
+- **formatting.alignComments** (boolean, default: `true`)
+  - Align end-of-line comments to a common column
+- **formatting.commentColumn** (integer, default: `40`)
+  - Column for comment alignment (0 = auto-calculate based on longest code line)
+
 ### Configuration Examples
 
 #### Neovim (nvim-lspconfig)
@@ -563,12 +596,14 @@ The server will automatically use project-specific settings when found.
 
 When starting the server directly (outside LSP mode):
 
+- `--version` / `-v` - Show version information and exit
 - `--debug` - Enable debug logging to `~/.local/share/kickass_ls/log/kickass_ls.log`
 - `--warn-unused-labels` - Enable unused label warnings (can also be set via LSP settings)
 
 Example:
 
 ```bash
+kickass_ls --version
 kickass_ls --debug
 ```
 
@@ -622,7 +657,7 @@ Contributions are welcome! Please:
 
 ## License
 
-Copyright 2025 Ronny Funk
+Copyright 2025-2026 Ronny Funk
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

@@ -70,7 +70,7 @@ func main() {
 		log.Error("Failed to get user home directory: %v", err)
 		os.Exit(1)
 	}
-	configDir := filepath.Join(homeDir, ".config", "6510lsp")
+	configDir := filepath.Join(homeDir, ".config", "kickass_ls")
 
 	// Set paths for configuration files
 	mnemonicPath := filepath.Join(configDir, "mnemonic.json")
@@ -206,7 +206,7 @@ func initTestMode() error {
 	if err != nil {
 		return fmt.Errorf("failed to get user home directory: %v", err)
 	}
-	configDir := filepath.Join(homeDir, ".config", "6510lsp")
+	configDir := filepath.Join(homeDir, ".config", "kickass_ls")
 
 	// Initialize LSP components with config directory paths
 	lsp.SetKickassJSONPath(filepath.Join(configDir, "kickass.json"))

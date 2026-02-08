@@ -1339,8 +1339,8 @@ func (p *ContextAwareParser) parseEncodingDirective() *DirectiveStatement {
 	return stmt
 }
 
-// parseDefineDirective handles #define and #undef (symbol-only, no value)
-// Format: #define DEBUG
+// parseDefineDirective handles preprocessor directives
+// Format: #define DEBUG, #import "file.asm", #importonce, #if EXPR, #elif EXPR, #else, #endif
 func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
 	directiveToken := p.currentToken
@@ -1352,6 +1352,39 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 			Line:    directiveToken.Line,
 			Column:  directiveToken.Column,
 		},
+	}
+
+	// Directives that take no arguments
+	if directiveName == "#importonce" || directiveName == "#else" || directiveName == "#endif" {
+		if p.debugMode {
+			log.Debug("ContextAwareParser: Parsed %s directive at Line %d", directiveName, stmt.Token.Line)
+		}
+		return stmt
+	}
+
+	// Directives that take an expression argument (#if, #elif)
+	if directiveName == "#if" || directiveName == "#elif" {
+		// Check if next token is on the same line
+		if p.peekToken == nil || p.peekToken.Line != directiveToken.Line {
+			p.addError(fmt.Sprintf("Expected expression after %s directive", directiveName), directiveToken.Line, directiveToken.Column)
+			return stmt
+		}
+		// Consume the expression token (symbol name used as condition)
+		p.nextToken()
+		stmt.Name = &Identifier{
+			Token: Token{
+				Type:    p.currentToken.Type,
+				Literal: p.currentToken.Literal,
+				Line:    p.currentToken.Line,
+				Column:  p.currentToken.Column,
+			},
+			Value: p.currentToken.Literal,
+		}
+		if p.debugMode {
+			log.Debug("ContextAwareParser: Parsed %s directive with expression '%s' at Line %d",
+				directiveName, stmt.Name.Value, stmt.Token.Line)
+		}
+		return stmt
 	}
 
 	// Check if next token is on the same line using peekToken (don't consume it yet)

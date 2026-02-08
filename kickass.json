@@ -312,6 +312,240 @@
     			"    .eval i++;",
 				"}"
 			]
+		},
+		{
+			"directive": ".by",
+			"description": "An alias for '.byte'. Outputs bytes.",
+			"signature": ".by bytevalue1, bytevalue2, bytevalueN",
+			"examples": [
+				".by $01,$02,$03"
+			]
+		},
+		{
+			"directive": ".wo",
+			"description": "An alias for '.word'. Outputs words (two byte values).",
+			"signature": ".wo wordvalue1, wordvalue2, wordvalueN",
+			"examples": [
+				".wo $1000,$1012"
+			]
+		},
+		{
+			"directive": ".dw",
+			"description": "An alias for '.dword'. Outputs doublewords (4 byte values).",
+			"signature": ".dw dwordvalue1, dwordvalue2, dwordvalueN",
+			"examples": [
+				".dw $12341234"
+			]
+		},
+		{
+			"directive": ".te",
+			"description": "An alias for '.text'. Dumps text bytes to memory.",
+			"signature": ".te \"string\"",
+			"examples": [
+				".te \"hello\""
+			]
+		},
+		{
+			"directive": ".define",
+			"description": "Executes a block of directives in 'functionmode' (faster) to define values. In functionmode, only non-byte-generating directives are allowed. This is useful for defining many constants or variables efficiently.",
+			"signature": ".define width, height {...}",
+			"examples": [
+				".define width, height {",
+				"    .var width = 320",
+				"    .var height = 200",
+				"}"
+			]
+		},
+		{
+			"directive": ".disk",
+			"description": "Creates a d64 image file. You can specify disk parameters such as name and id, and include files in the disk image.",
+			"signature": ".disk [..disk parameters..] {..fileparameters..}",
+			"examples": [
+				".disk [filename=\"MyDisk.d64\", name=\"MY DISK\", id=\"AB\"] {",
+				"    [name=\"INTRO\", type=\"prg\", segments=\"Intro\"],",
+				"    [name=\"MAIN\", type=\"prg\", segments=\"Main\"]",
+				"}"
+			]
+		},
+		{
+			"directive": ".encoding",
+			"description": "Sets the character encoding used by the .text directive. Kick Assembler supports several encodings including petscii_mixed, petscii_upper, screencode_mixed, and screencode_upper.",
+			"signature": ".encoding \"encoding_name\"",
+			"examples": [
+				".encoding \"screencode_upper\"",
+				".encoding \"petscii_mixed\""
+			]
+		},
+		{
+			"directive": ".error",
+			"description": "Creates a user raised error. Use this directive to stop the assembler with an error message when an invalid condition is detected.",
+			"signature": ".error \"message\"",
+			"examples": [
+				".error \"not good!\"",
+				".if (tableSize > 256) .error \"Table too large!\""
+			]
+		},
+		{
+			"directive": ".errorif",
+			"description": "Creates a user raised error if the given condition is evaluated to true. This is a shorthand for .if(condition) .error \"message\".",
+			"signature": ".errorif condition, \"message\"",
+			"examples": [
+				".errorif x>10, \"x is too large!\"",
+				".errorif *>$ffff, \"Program too large!\""
+			]
+		},
+		{
+			"directive": ".file",
+			"description": "Creates a prg or bin file from the given segments. This directive is used when working with segments to control which segments are written to which output files.",
+			"signature": ".file [name=\"filename\" segments=\"segment1, segment2\"]",
+			"examples": [
+				".file [name=\"myfile.prg\", segments=\"Code, Data\"]",
+				".file [name=\"output.bin\", type=\"bin\", segments=\"RawData\"]"
+			]
+		},
+		{
+			"directive": ".filemodify",
+			"description": "Modifies the output of the current source file with the given modifier. This can be used to apply transformations like encryption or compression to the entire file output.",
+			"signature": ".filemodify modifier(args)",
+			"examples": [
+				".filemodify Encrypt(33)"
+			]
+		},
+		{
+			"directive": ".filenamespace",
+			"description": "Creates a namespace for all the following directives in the current source file. This is often more convenient than the .namespace directive when you want an entire file to be in a namespace.",
+			"signature": ".filenamespace namespace_name",
+			"examples": [
+				".filenamespace mylib",
+				"// All labels, macros, functions in this file are now in 'mylib'"
+			]
+		},
+		{
+			"directive": ".fillword",
+			"description": "Fills a number of words with the value of a given expression. Works like .fill but generates 16-bit word values instead of bytes.",
+			"signature": ".fillword count, expression",
+			"examples": [
+				".fillword 10, i*$102",
+				".fillword 256, i*40"
+			]
+		},
+		{
+			"directive": ".importonce",
+			"description": "Makes the assembler skip the current file if it has already been imported. Place this at the top of library files to prevent duplicate inclusion. (Deprecated, use #importonce instead)",
+			"signature": ".importonce",
+			"examples": [
+				".importonce",
+				"// Rest of the library file follows"
+			]
+		},
+		{
+			"directive": ".lohifill",
+			"description": "Fills two tables with the hi and lo byte of the given expression. This is very useful for creating address lookup tables commonly needed in C64 programming.",
+			"signature": ".lohifill count, expression",
+			"examples": [
+				".lohifill $100, i*40",
+				"// Creates a lo-byte table followed by a hi-byte table"
+			]
+		},
+		{
+			"directive": ".memblock",
+			"description": "Defines a new memoryblock at the current memory position. Memory blocks are used to organize output data.",
+			"signature": ".memblock \"name\"",
+			"examples": [
+				".memblock \"New block\""
+			]
+		},
+		{
+			"directive": ".modify",
+			"description": "Modifies the output of a codeblock using the given modifier. Unlike .filemodify which affects the whole file, .modify only affects the enclosed code block.",
+			"signature": ".modify modifier(args) {...}",
+			"examples": [
+				".modify Encrypt(27) {",
+				"    .text \"Secret message\"",
+				"    .byte 1,2,3,4",
+				"}"
+			]
+		},
+		{
+			"directive": ".pc",
+			"description": "Sets the program counter to a given value. This is an alternative syntax for '*=' (set memory position).",
+			"signature": ".pc = address",
+			"examples": [
+				".pc = $1000",
+				".pc = $c000 \"Main Program\""
+			]
+		},
+		{
+			"directive": ".plugin",
+			"description": "Tells the assembler to look for a plugin at the given Java package path. Plugins can extend Kick Assembler with custom functionality written in Java.",
+			"signature": ".plugin \"java.package.path\"",
+			"examples": [
+				".plugin \"plugins.macros.MyMacro\""
+			]
+		},
+		{
+			"directive": ".pseudopc",
+			"description": "Sets the program counter to something else than the actual memory position. This is useful when code will be relocated at runtime to a different address than where it is initially loaded.",
+			"signature": ".pseudopc address {...}",
+			"examples": [
+				"// Code assembled at current position but addresses calculated for $2000",
+				".pseudopc $2000 {",
+				"    jmp start",
+				"start:",
+				"    lda #0",
+				"}"
+			]
+		},
+		{
+			"directive": ".segment",
+			"description": "Switches to another segment. Segments allow you to organize your code and data into logical blocks that can be placed at different memory locations.",
+			"signature": ".segment segment_name [\"description\"]",
+			"examples": [
+				".segment Code",
+				".segment Data \"My Data\"",
+				".segment Code []  // Switch back to Code segment"
+			]
+		},
+		{
+			"directive": ".segmentdef",
+			"description": "Defines a segment. You must define a segment before you can switch to it. Segment definitions specify properties like start address, maximum size, and whether it should be written to the output.",
+			"signature": ".segmentdef segment_name [parameters]",
+			"examples": [
+				".segmentdef Code [start=$0810]",
+				".segmentdef Data [start=$c000, max=$cfff]",
+				".segmentdef Combined [segments=\"Code, Data\"]"
+			]
+		},
+		{
+			"directive": ".segmentout",
+			"description": "Outputs the bytes of an intermediate segment to the current memoryblock. This is used to embed one segment's output within another segment.",
+			"signature": ".segmentout [segments=\"segment_name\"]",
+			"examples": [
+				".segmentout [segments=\"DRIVE_CODE\"]"
+			]
+		},
+		{
+			"directive": ".struct",
+			"description": "Creates a user defined structure. Structures group related data fields together and can be used to create organized data layouts.",
+			"signature": ".struct name {fields}",
+			"examples": [
+				".struct Point { x, y }",
+				".struct Sprite { ptr, x, y, color }",
+				"",
+				".var p = Point(10, 20)",
+				".print \"x=\" + p.x + \" y=\" + p.y"
+			]
+		},
+		{
+			"directive": ".zp",
+			"description": "Marks unresolved labels as being in the zeropage. This allows the assembler to use the more efficient zeropage addressing mode for labels whose address is not yet known at the time of use.",
+			"signature": ".zp { ... }",
+			"examples": [
+				".zp {",
+				"    ptr: .byte 0,0",
+				"    counter: .byte 0",
+				"}"
+			]
 		}
 	],
 	"builtinFunctions": [
@@ -799,6 +1033,58 @@
 			"signature": "#undef symbol",
 			"examples": [
 				"#undef TEST"
+			]
+		},
+		{
+			"directive": "#importonce",
+			"description": "Ensures that the current file will only be imported once. Place this at the top of library files to prevent duplicate imports when the file is referenced from multiple sources.",
+			"signature": "#importonce",
+			"examples": [
+				"#importonce  // Place at top of library file"
+			]
+		},
+		{
+			"directive": "#if",
+			"description": "Conditional compilation. Excludes the following source code if the given expression evaluates to false. The expression can test preprocessor symbols defined with #define or from the command line.",
+			"signature": "#if expression",
+			"examples": [
+				"#if STAND_ALONE",
+				"  BasicUpstart2(main)",
+				"#endif"
+			]
+		},
+		{
+			"directive": "#elif",
+			"description": "Combines #else and #if for chained conditional compilation. Tests a new condition if the previous #if or #elif was false.",
+			"signature": "#elif expression",
+			"examples": [
+				"#if DEBUG",
+				"  .print \"Debug mode\"",
+				"#elif VERBOSE",
+				"  .print \"Verbose mode\"",
+				"#endif"
+			]
+		},
+		{
+			"directive": "#else",
+			"description": "Introduces an alternative block within a conditional compilation structure. The code after #else is compiled only when the preceding #if or #elif condition was false.",
+			"signature": "#else",
+			"examples": [
+				"#if STAND_ALONE",
+				"  BasicUpstart2(main)",
+				"#else",
+				"  *=$2000",
+				"#endif"
+			]
+		},
+		{
+			"directive": "#endif",
+			"description": "Closes an active #if, #elif, or #else conditional compilation block.",
+			"signature": "#endif",
+			"examples": [
+				"#if DEBUG",
+				"  .print \"Debug build\"",
+				"#endif"
 			]
 		}
 	]

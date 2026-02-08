@@ -1208,6 +1208,2238 @@
         ],
         "related": ["0xDC0D", "0xFFFA", "0xFFFB"],
         "tips": ["CIA2 generates NMI instead of IRQ", "Used for RS232 and user port"]
+      },
+
+      "0x0002": {
+        "name": "Unused Zero Page",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Free zero page location for user programs",
+        "access": "read/write",
+        "tips": ["Safe to use in your programs", "Fast access via zero page addressing"]
+      },
+      "0x0003": {
+        "name": "ADRAY1 - Float to Integer Vector",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to routine converting float to integer",
+        "access": "read/write",
+        "related": ["0x0005"],
+        "tips": ["Used by BASIC interpreter"]
+      },
+      "0x0005": {
+        "name": "ADRAY2 - Integer to Float Vector",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to routine converting integer to float",
+        "access": "read/write",
+        "related": ["0x0003"],
+        "tips": ["Used by BASIC interpreter"]
+      },
+      "0x0007": {
+        "name": "SEARCH",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Search character for BASIC",
+        "access": "read/write"
+      },
+      "0x000D": {
+        "name": "TESSION",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Flag: 0=LOAD, 1=VERIFY",
+        "access": "read/write",
+        "tips": ["Set before calling LOAD routine"]
+      },
+      "0x0014": {
+        "name": "LINNUM",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Temporary storage for line number",
+        "access": "read/write"
+      },
+      "0x0016": {
+        "name": "TEMPPT",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to next string in temporary string stack",
+        "access": "read/write"
+      },
+      "0x0022": {
+        "name": "TEMPF1",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 5,
+        "description": "Temporary floating point storage",
+        "access": "read/write",
+        "tips": ["Used by BASIC math routines", "Can be used when BASIC not needed"]
+      },
+      "0x002B": {
+        "name": "TXTTAB",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to start of BASIC program text",
+        "access": "read/write",
+        "values": {
+          "0x0801": "Default BASIC start"
+        },
+        "tips": ["Change to relocate BASIC programs"]
+      },
+      "0x002D": {
+        "name": "VARTAB",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to start of BASIC variables",
+        "access": "read/write",
+        "related": ["0x002B", "0x002F"],
+        "tips": ["Set automatically by BASIC"]
+      },
+      "0x002F": {
+        "name": "ARYTAB",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to start of BASIC arrays",
+        "access": "read/write",
+        "related": ["0x002D", "0x0031"]
+      },
+      "0x0031": {
+        "name": "STREND",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to end of BASIC arrays (+1)",
+        "access": "read/write",
+        "related": ["0x002F", "0x0033"]
+      },
+      "0x0033": {
+        "name": "FRETOP",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to bottom of string storage",
+        "access": "read/write"
+      },
+      "0x0037": {
+        "name": "MEMSIZ",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to top of BASIC memory",
+        "access": "read/write",
+        "values": {
+          "0xA000": "Default (40K BASIC)"
+        },
+        "tips": ["Lower to protect memory from BASIC"]
+      },
+      "0x0039": {
+        "name": "CURLIN",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Current BASIC line number",
+        "access": "read/write",
+        "tips": ["$FF in high byte means direct mode"]
+      },
+      "0x003B": {
+        "name": "OLDLIN",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Previous BASIC line number (for CONT)",
+        "access": "read/write"
+      },
+      "0x003D": {
+        "name": "OLDTXT",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to previous BASIC statement (for CONT)",
+        "access": "read/write"
+      },
+      "0x0043": {
+        "name": "DATPTR",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to current DATA item",
+        "access": "read/write"
+      },
+      "0x0045": {
+        "name": "INPPTR",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to source of GET/READ/INPUT",
+        "access": "read/write"
+      },
+      "0x0061": {
+        "name": "FAC1",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 6,
+        "description": "Floating Point Accumulator #1",
+        "access": "read/write",
+        "tips": ["Used by BASIC math", "5-byte mantissa + 1 byte exponent"]
+      },
+      "0x0069": {
+        "name": "FAC2",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 6,
+        "description": "Floating Point Accumulator #2",
+        "access": "read/write",
+        "related": ["0x0061"],
+        "tips": ["Used for second operand in math"]
+      },
+      "0x0073": {
+        "name": "CHRGET",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "CHRGET subroutine entry point",
+        "access": "execute",
+        "examples": [
+          "jsr $0073    ; Get next BASIC character"
+        ],
+        "tips": ["Self-modifying code - pointer at $7A/$7B"]
+      },
+      "0x007A": {
+        "name": "TXTPTR",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to current BASIC text character",
+        "access": "read/write",
+        "tips": ["Modified by CHRGET routine"]
+      },
+      "0x0090": {
+        "name": "STATUS",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "KERNAL I/O status word (ST)",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Timeout on write",
+          "1": "Timeout on read",
+          "4": "Verify error",
+          "5": "Logical end of file",
+          "6": "End of file",
+          "7": "Device not present"
+        },
+        "tips": ["Check after I/O operations"]
+      },
+      "0x0091": {
+        "name": "STKEY",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Flag: STOP key pressed",
+        "access": "read/write",
+        "values": {
+          "0x7F": "STOP pressed",
+          "0xFF": "Not pressed"
+        }
+      },
+      "0x0096": {
+        "name": "LDTND",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Number of open files / Index to file table",
+        "access": "read/write"
+      },
+      "0x0097": {
+        "name": "DTEFLN",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Current I/O device number (default 0=keyboard)",
+        "access": "read/write"
+      },
+      "0x009A": {
+        "name": "DTEFLO",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Current output device (default 3=screen)",
+        "access": "read/write"
+      },
+      "0x00A3": {
+        "name": "JITEFM",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 3,
+        "description": "24-bit jiffy clock (1/60 sec increments)",
+        "access": "read/write",
+        "tips": ["Updated every interrupt", "Rolls over every 24 hours"]
+      },
+      "0x00B2": {
+        "name": "POINTER1",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Tape I/O buffer pointer",
+        "access": "read/write",
+        "tips": ["Free when not using tape"]
+      },
+      "0x00B4": {
+        "name": "POINTER2",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Tape I/O buffer pointer 2",
+        "access": "read/write",
+        "tips": ["Free when not using tape"]
+      },
+      "0x00C1": {
+        "name": "STTEFR",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Start address for tape operations",
+        "access": "read/write"
+      },
+      "0x00C3": {
+        "name": "ENDTAD",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "End address for tape/load operations",
+        "access": "read/write",
+        "tips": ["Set after LOAD to show end of loaded data"]
+      },
+      "0x00C5": {
+        "name": "LSTX",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Matrix coordinate of last key pressed",
+        "access": "read/write",
+        "values": {
+          "0x40": "No key pressed"
+        }
+      },
+      "0x00C6": {
+        "name": "NDX",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Number of characters in keyboard buffer",
+        "access": "read/write",
+        "related": ["0x0277"],
+        "tips": ["Max 10 characters", "Set to 0 to clear buffer"]
+      },
+      "0x00C7": {
+        "name": "RVS",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Flag: Reverse character mode",
+        "access": "read/write",
+        "values": {
+          "0x00": "Normal",
+          "0x12": "Reverse on"
+        }
+      },
+      "0x00C8": {
+        "name": "INDX",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "End of logical line for input pointer",
+        "access": "read/write"
+      },
+      "0x00C9": {
+        "name": "LXSP",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Cursor X/Y position at start of input",
+        "access": "read/write"
+      },
+      "0x00CB": {
+        "name": "SFDX",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Flag: Which key is pressed (matrix value)",
+        "access": "read/write"
+      },
+      "0x00CC": {
+        "name": "BLNSW",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Cursor blink enable (0=blink)",
+        "access": "read/write",
+        "values": {
+          "0x00": "Cursor blinks",
+          "0x01": "Cursor solid"
+        },
+        "tips": ["Set to 1 to disable cursor blink"]
+      },
+      "0x00CD": {
+        "name": "BLNCT",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Countdown timer for cursor blink",
+        "access": "read/write"
+      },
+      "0x00CE": {
+        "name": "GDBLN",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Character under cursor",
+        "access": "read/write"
+      },
+      "0x00CF": {
+        "name": "BLNON",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Flag: Cursor in blink phase",
+        "access": "read/write"
+      },
+      "0x00D1": {
+        "name": "PNT",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to current screen line",
+        "access": "read/write",
+        "tips": ["Points to start of current cursor line in screen RAM"]
+      },
+      "0x00D3": {
+        "name": "PNTR",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Cursor column position (0-39)",
+        "access": "read/write"
+      },
+      "0x00D4": {
+        "name": "QTSW",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Flag: Editor in quote mode",
+        "access": "read/write",
+        "values": {
+          "0x00": "Normal mode",
+          "0x01": "Quote mode"
+        }
+      },
+      "0x00D5": {
+        "name": "LNMX",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Maximum length of physical line",
+        "access": "read/write",
+        "values": {
+          "0x27": "39 (normal)",
+          "0x4F": "79 (extended line)"
+        }
+      },
+      "0x00D6": {
+        "name": "TBLX",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Cursor row position (0-24)",
+        "access": "read/write"
+      },
+      "0x00D8": {
+        "name": "INSRT",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Insert mode counter",
+        "access": "read/write",
+        "tips": ["Number of insert spaces remaining"]
+      },
+      "0x00F3": {
+        "name": "USER",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Color RAM pointer for current line",
+        "access": "read/write",
+        "related": ["0x00D1"]
+      },
+      "0x00F5": {
+        "name": "KEYTAB",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 2,
+        "description": "Pointer to current keyboard decode table",
+        "access": "read/write"
+      },
+      "0x00FB": {
+        "name": "Free Zero Page 1",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Free for user programs",
+        "access": "read/write",
+        "tips": ["Absolutely safe to use!", "Fast zero page addressing"]
+      },
+      "0x00FC": {
+        "name": "Free Zero Page 2",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Free for user programs",
+        "access": "read/write",
+        "tips": ["Absolutely safe to use!", "Fast zero page addressing"]
+      },
+      "0x00FD": {
+        "name": "Free Zero Page 3",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Free for user programs",
+        "access": "read/write",
+        "tips": ["Absolutely safe to use!", "Fast zero page addressing"]
+      },
+      "0x00FE": {
+        "name": "Free Zero Page 4",
+        "category": "Zero Page",
+        "type": "ram",
+        "size": 1,
+        "description": "Free for user programs",
+        "access": "read/write",
+        "tips": ["Absolutely safe to use!", "Fast zero page addressing"]
+      },
+
+      "0x0100": {
+        "name": "Processor Stack",
+        "category": "System",
+        "type": "ram",
+        "size": 256,
+        "description": "6510 processor stack ($0100-$01FF)",
+        "access": "read/write",
+        "tips": ["Stack grows downward from $01FF", "Used by JSR, PHA, PHP, interrupts"]
+      },
+
+      "0x0200": {
+        "name": "BUF",
+        "category": "System",
+        "type": "ram",
+        "size": 89,
+        "description": "BASIC input buffer ($0200-$0258)",
+        "access": "read/write",
+        "tips": ["Used for BASIC line input", "Can use when not in BASIC"]
+      },
+      "0x0259": {
+        "name": "LAT",
+        "category": "System",
+        "type": "ram",
+        "size": 10,
+        "description": "Logical file number table",
+        "access": "read/write",
+        "related": ["0x0263", "0x026D"]
+      },
+      "0x0263": {
+        "name": "FAT",
+        "category": "System",
+        "type": "ram",
+        "size": 10,
+        "description": "Device number table",
+        "access": "read/write",
+        "related": ["0x0259", "0x026D"]
+      },
+      "0x026D": {
+        "name": "SAT",
+        "category": "System",
+        "type": "ram",
+        "size": 10,
+        "description": "Secondary address table",
+        "access": "read/write",
+        "related": ["0x0259", "0x0263"]
+      },
+      "0x0277": {
+        "name": "KEYD",
+        "category": "System",
+        "type": "ram",
+        "size": 10,
+        "description": "Keyboard buffer ($0277-$0280)",
+        "access": "read/write",
+        "related": ["0x00C6"],
+        "examples": [
+          "lda #'A'     ; Character to stuff",
+          "sta $0277   ; Put in keyboard buffer",
+          "lda #1",
+          "sta $c6     ; Set buffer count"
+        ],
+        "tips": ["Holds up to 10 keystrokes", "FIFO buffer"]
+      },
+      "0x0281": {
+        "name": "MEMSTR",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Start of memory for operating system",
+        "access": "read/write",
+        "values": {
+          "0x0800": "Default"
+        }
+      },
+      "0x0283": {
+        "name": "MEMSIZ2",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Top of memory for operating system",
+        "access": "read/write",
+        "values": {
+          "0xA000": "Default"
+        }
+      },
+      "0x0286": {
+        "name": "COLOR",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Current foreground color for text",
+        "access": "read/write",
+        "tips": ["Set this to change text color"]
+      },
+      "0x0287": {
+        "name": "GDCOL",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Color under cursor",
+        "access": "read/write"
+      },
+      "0x0288": {
+        "name": "HIBASE",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "High byte of screen memory address",
+        "access": "read/write",
+        "values": {
+          "0x04": "Default ($0400)"
+        },
+        "tips": ["Change to relocate screen memory"]
+      },
+      "0x028A": {
+        "name": "SHFLAG",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Shift key flag",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Shift pressed",
+          "1": "Commodore key pressed",
+          "2": "Control pressed"
+        }
+      },
+      "0x028B": {
+        "name": "LSTSHF",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Last shift pattern",
+        "access": "read/write"
+      },
+      "0x028C": {
+        "name": "KEYLOG",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to keyboard decode logic",
+        "access": "read/write"
+      },
+      "0x028E": {
+        "name": "MODE",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Shift-Commodore toggle flag (charset)",
+        "access": "read/write",
+        "values": {
+          "0x00": "Enabled (default)",
+          "0x80": "Disabled"
+        },
+        "tips": ["Set $80 to disable Shift-C= charset switching"]
+      },
+      "0x028F": {
+        "name": "AUTODN",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Auto scroll down flag",
+        "access": "read/write"
+      },
+      "0x0291": {
+        "name": "RPTFLA",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Key repeat flag",
+        "access": "read/write",
+        "values": {
+          "0x00": "Only cursor keys repeat",
+          "0x40": "No keys repeat",
+          "0x80": "All keys repeat"
+        }
+      },
+      "0x0292": {
+        "name": "KOUNT",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Repeat speed counter",
+        "access": "read/write"
+      },
+      "0x0293": {
+        "name": "DELAY",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Repeat delay counter",
+        "access": "read/write"
+      },
+      "0x0295": {
+        "name": "RSSTAT",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "RS-232 status register",
+        "access": "read/write"
+      },
+      "0x0298": {
+        "name": "RODBS",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Number of RS-232 output bytes",
+        "access": "read/write"
+      },
+      "0x029B": {
+        "name": "FREEZP",
+        "category": "System",
+        "type": "ram",
+        "size": 4,
+        "description": "Free zero page space saved here during RS-232",
+        "access": "read/write"
+      },
+      "0x02A1": {
+        "name": "PAL",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "PAL/NTSC flag",
+        "access": "read",
+        "values": {
+          "0x00": "NTSC",
+          "0x01": "PAL"
+        },
+        "tips": ["Read to detect PAL or NTSC system"]
+      },
+
+      "0x0314": {
+        "name": "CINV - IRQ Vector",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Hardware IRQ interrupt vector",
+        "access": "read/write",
+        "values": {
+          "0xEA31": "Default KERNAL IRQ handler"
+        },
+        "examples": [
+          "sei          ; Disable interrupts",
+          "lda #<myirq  ; Low byte of new handler",
+          "sta $0314",
+          "lda #>myirq  ; High byte",
+          "sta $0315",
+          "cli          ; Enable interrupts"
+        ],
+        "related": ["0x0316", "0x0318", "0xFFFE"],
+        "tips": ["Most common way to hook interrupts!", "Always SEI before modifying", "JMP to $EA31 to chain to KERNAL"]
+      },
+      "0x0316": {
+        "name": "CBINV - BRK Vector",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "BRK instruction interrupt vector",
+        "access": "read/write",
+        "values": {
+          "0xFE66": "Default handler"
+        },
+        "related": ["0x0314"],
+        "tips": ["Called when BRK instruction executes"]
+      },
+      "0x0318": {
+        "name": "NMINV - NMI Vector",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Non-Maskable Interrupt vector",
+        "access": "read/write",
+        "values": {
+          "0xFE47": "Default handler"
+        },
+        "examples": [
+          "lda #<mynmi",
+          "sta $0318",
+          "lda #>mynmi",
+          "sta $0319"
+        ],
+        "related": ["0x0314", "0xFFFA"],
+        "tips": ["NMI cannot be disabled!", "Triggered by RESTORE key or CIA2"]
+      },
+      "0x031A": {
+        "name": "IOPEN",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL OPEN routine",
+        "access": "read/write",
+        "values": {
+          "0xF34A": "Default"
+        }
+      },
+      "0x031C": {
+        "name": "ICLOSE",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CLOSE routine",
+        "access": "read/write",
+        "values": {
+          "0xF291": "Default"
+        }
+      },
+      "0x031E": {
+        "name": "ICHKIN",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CHKIN routine",
+        "access": "read/write",
+        "values": {
+          "0xF20E": "Default"
+        }
+      },
+      "0x0320": {
+        "name": "ICKOUT",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CHKOUT routine",
+        "access": "read/write",
+        "values": {
+          "0xF250": "Default"
+        }
+      },
+      "0x0322": {
+        "name": "ICLRCH",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CLRCHN routine",
+        "access": "read/write",
+        "values": {
+          "0xF333": "Default"
+        }
+      },
+      "0x0324": {
+        "name": "IBASIN",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CHRIN routine",
+        "access": "read/write",
+        "values": {
+          "0xF157": "Default"
+        }
+      },
+      "0x0326": {
+        "name": "IBSOUT",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CHROUT routine",
+        "access": "read/write",
+        "values": {
+          "0xF1CA": "Default"
+        },
+        "tips": ["Hook to intercept screen output"]
+      },
+      "0x0328": {
+        "name": "ISTOP",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL STOP routine",
+        "access": "read/write",
+        "values": {
+          "0xF6ED": "Default"
+        }
+      },
+      "0x032A": {
+        "name": "IGETIN",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL GETIN routine",
+        "access": "read/write",
+        "values": {
+          "0xF13E": "Default"
+        },
+        "tips": ["Hook to intercept keyboard input"]
+      },
+      "0x032C": {
+        "name": "ICLALL",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL CLALL routine",
+        "access": "read/write",
+        "values": {
+          "0xF32F": "Default"
+        }
+      },
+      "0x032E": {
+        "name": "USRCMD",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "User-defined vector (unused by KERNAL)",
+        "access": "read/write",
+        "tips": ["Free for user programs"]
+      },
+      "0x0330": {
+        "name": "ILOAD",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL LOAD routine",
+        "access": "read/write",
+        "values": {
+          "0xF4A5": "Default"
+        }
+      },
+      "0x0332": {
+        "name": "ISAVE",
+        "category": "System",
+        "type": "ram",
+        "size": 2,
+        "description": "Vector to KERNAL SAVE routine",
+        "access": "read/write",
+        "values": {
+          "0xF5ED": "Default"
+        }
+      },
+      "0x033C": {
+        "name": "TBUFFR",
+        "category": "System",
+        "type": "ram",
+        "size": 192,
+        "description": "Tape I/O buffer ($033C-$03FB)",
+        "access": "read/write",
+        "tips": ["192 bytes free when not using tape!", "Popular location for small ML routines"]
+      },
+
+      "0x0400": {
+        "name": "Default Screen Memory",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1000,
+        "description": "Default screen character memory ($0400-$07E7)",
+        "access": "read/write",
+        "examples": [
+          "lda #$01     ; 'A' in screen code",
+          "sta $0400    ; Top-left corner",
+          "ldx #$00",
+          "lda #$20     ; Space",
+          "clrloop:",
+          "sta $0400,x  ; Clear screen",
+          "sta $0500,x",
+          "sta $0600,x",
+          "sta $06e8,x",
+          "inx",
+          "bne clrloop"
+        ],
+        "related": ["0xD800", "0x0288"],
+        "tips": ["1000 bytes for 40x25 screen", "Each byte is screen code (not PETSCII!)"]
+      },
+      "0x07E8": {
+        "name": "Unused Screen Area",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 16,
+        "description": "Unused bytes after screen memory ($07E8-$07F7)",
+        "access": "read/write",
+        "tips": ["24 free bytes when using default screen"]
+      },
+      "0x07F8": {
+        "name": "Sprite 0 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 0 data block",
+        "access": "read/write",
+        "examples": [
+          "lda #$0D     ; Sprite data at $0340",
+          "sta $07f8    ; Set sprite 0 pointer"
+        ],
+        "related": ["0x07F9", "0xD015"],
+        "tips": ["Value * 64 = sprite data address", "Within current VIC bank"]
+      },
+      "0x07F9": {
+        "name": "Sprite 1 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 1 data block",
+        "access": "read/write",
+        "related": ["0x07F8", "0x07FA"]
+      },
+      "0x07FA": {
+        "name": "Sprite 2 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 2 data block",
+        "access": "read/write",
+        "related": ["0x07F9", "0x07FB"]
+      },
+      "0x07FB": {
+        "name": "Sprite 3 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 3 data block",
+        "access": "read/write",
+        "related": ["0x07FA", "0x07FC"]
+      },
+      "0x07FC": {
+        "name": "Sprite 4 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 4 data block",
+        "access": "read/write",
+        "related": ["0x07FB", "0x07FD"]
+      },
+      "0x07FD": {
+        "name": "Sprite 5 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 5 data block",
+        "access": "read/write",
+        "related": ["0x07FC", "0x07FE"]
+      },
+      "0x07FE": {
+        "name": "Sprite 6 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 6 data block",
+        "access": "read/write",
+        "related": ["0x07FD", "0x07FF"]
+      },
+      "0x07FF": {
+        "name": "Sprite 7 Data Pointer",
+        "category": "VIC-II",
+        "type": "ram",
+        "size": 1,
+        "description": "Pointer to sprite 7 data block",
+        "access": "read/write",
+        "related": ["0x07FE", "0x07F8"]
+      },
+
+      "0x0801": {
+        "name": "BASIC Program Start",
+        "category": "System",
+        "type": "ram",
+        "size": 1,
+        "description": "Default start of BASIC program area",
+        "access": "read/write",
+        "tips": ["Machine language programs often start here with SYS 2049"]
+      },
+
+      "0xA000": {
+        "name": "BASIC ROM Start",
+        "category": "ROM",
+        "type": "rom",
+        "size": 8192,
+        "description": "BASIC interpreter ROM ($A000-$BFFF)",
+        "access": "read",
+        "tips": ["Can be switched out via $0001", "8KB of BASIC interpreter"]
+      },
+
+      "0xD402": {
+        "name": "SID Voice 1 Pulse Width Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 pulse width (low byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Pulse width bits 0-7"
+        },
+        "related": ["0xD403"],
+        "tips": ["12-bit total with $D403", "50% duty = $800"]
+      },
+      "0xD403": {
+        "name": "SID Voice 1 Pulse Width High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 pulse width (high nibble)",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Pulse width bits 8-11"
+        },
+        "related": ["0xD402"]
+      },
+      "0xD405": {
+        "name": "SID Voice 1 Attack/Decay",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 envelope attack and decay rates",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Decay rate (0-15)",
+          "4-7": "Attack rate (0-15)"
+        },
+        "examples": [
+          "lda #$09     ; Attack=0, Decay=9",
+          "sta $d405"
+        ],
+        "related": ["0xD406"],
+        "tips": ["Higher = slower attack/decay"]
+      },
+      "0xD406": {
+        "name": "SID Voice 1 Sustain/Release",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 1 envelope sustain level and release rate",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Release rate (0-15)",
+          "4-7": "Sustain level (0-15)"
+        },
+        "examples": [
+          "lda #$00     ; Sustain=0, Release=0 (fastest)",
+          "sta $d406"
+        ],
+        "related": ["0xD405"]
+      },
+      "0xD409": {
+        "name": "SID Voice 2 Pulse Width Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 pulse width (low byte)",
+        "access": "write",
+        "related": ["0xD40A"]
+      },
+      "0xD40A": {
+        "name": "SID Voice 2 Pulse Width High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 pulse width (high nibble)",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Pulse width bits 8-11"
+        },
+        "related": ["0xD409"]
+      },
+      "0xD40C": {
+        "name": "SID Voice 2 Attack/Decay",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 envelope attack and decay rates",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Decay rate (0-15)",
+          "4-7": "Attack rate (0-15)"
+        },
+        "related": ["0xD40D"]
+      },
+      "0xD40D": {
+        "name": "SID Voice 2 Sustain/Release",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 2 envelope sustain level and release rate",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Release rate (0-15)",
+          "4-7": "Sustain level (0-15)"
+        },
+        "related": ["0xD40C"]
+      },
+      "0xD410": {
+        "name": "SID Voice 3 Pulse Width Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 pulse width (low byte)",
+        "access": "write",
+        "related": ["0xD411"]
+      },
+      "0xD411": {
+        "name": "SID Voice 3 Pulse Width High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 pulse width (high nibble)",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Pulse width bits 8-11"
+        },
+        "related": ["0xD410"]
+      },
+      "0xD413": {
+        "name": "SID Voice 3 Attack/Decay",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 envelope attack and decay rates",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Decay rate (0-15)",
+          "4-7": "Attack rate (0-15)"
+        },
+        "related": ["0xD414"]
+      },
+      "0xD414": {
+        "name": "SID Voice 3 Sustain/Release",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Voice 3 envelope sustain level and release rate",
+        "access": "write",
+        "bitFields": {
+          "0-3": "Release rate (0-15)",
+          "4-7": "Sustain level (0-15)"
+        },
+        "related": ["0xD413"]
+      },
+      "0xD415": {
+        "name": "SID Filter Cutoff Low",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Filter cutoff frequency (low 3 bits)",
+        "access": "write",
+        "bitFields": {
+          "0-2": "Cutoff bits 0-2"
+        },
+        "related": ["0xD416"],
+        "tips": ["11-bit total cutoff frequency"]
+      },
+      "0xD416": {
+        "name": "SID Filter Cutoff High",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Filter cutoff frequency (high byte)",
+        "access": "write",
+        "bitFields": {
+          "0-7": "Cutoff bits 3-10"
+        },
+        "related": ["0xD415"]
+      },
+      "0xD417": {
+        "name": "SID Filter Resonance/Voice Select",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Filter resonance and voice routing",
+        "access": "write",
+        "bitFields": {
+          "0": "Filter voice 1",
+          "1": "Filter voice 2",
+          "2": "Filter voice 3",
+          "3": "Filter external input",
+          "4-7": "Resonance (0-15)"
+        },
+        "examples": [
+          "lda #$F1     ; Max resonance, filter voice 1",
+          "sta $d417"
+        ],
+        "related": ["0xD418"]
+      },
+      "0xD419": {
+        "name": "SID Paddle X / ADC 1",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Analog-to-digital converter for paddle/potentiometer X",
+        "access": "read",
+        "tips": ["Read for paddle/potentiometer input", "Also used for mouse input"]
+      },
+      "0xD41A": {
+        "name": "SID Paddle Y / ADC 2",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Analog-to-digital converter for paddle/potentiometer Y",
+        "access": "read",
+        "related": ["0xD419"]
+      },
+      "0xD41B": {
+        "name": "SID Voice 3 Oscillator Output",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Current output value of voice 3 oscillator",
+        "access": "read",
+        "examples": [
+          "; Random number generator:",
+          "lda #$FF",
+          "sta $d40e    ; Max frequency",
+          "sta $d40f",
+          "lda #$80     ; Noise waveform",
+          "sta $d412",
+          "lda $d41b    ; Read random value"
+        ],
+        "related": ["0xD412", "0xD41C"],
+        "tips": ["Commonly used for random numbers!", "Use noise waveform + high frequency"]
+      },
+      "0xD41C": {
+        "name": "SID Voice 3 Envelope Output",
+        "category": "SID",
+        "type": "register",
+        "size": 1,
+        "description": "Current output value of voice 3 envelope generator",
+        "access": "read",
+        "related": ["0xD41B"],
+        "tips": ["Can be used for envelope-controlled effects"]
+      },
+
+      "0xDC02": {
+        "name": "CIA1 Data Direction Register A",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 port A data direction (1=output, 0=input)",
+        "access": "read/write",
+        "values": {
+          "0xFF": "All outputs (default for keyboard)"
+        },
+        "related": ["0xDC00", "0xDC03"]
+      },
+      "0xDC03": {
+        "name": "CIA1 Data Direction Register B",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 port B data direction (1=output, 0=input)",
+        "access": "read/write",
+        "values": {
+          "0x00": "All inputs (default for keyboard)"
+        },
+        "related": ["0xDC01", "0xDC02"]
+      },
+      "0xDC04": {
+        "name": "CIA1 Timer A Low Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 timer A value/latch (low byte)",
+        "access": "read/write",
+        "related": ["0xDC05", "0xDC0E"],
+        "tips": ["Read: current value, Write: latch value"]
+      },
+      "0xDC05": {
+        "name": "CIA1 Timer A High Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 timer A value/latch (high byte)",
+        "access": "read/write",
+        "related": ["0xDC04", "0xDC0E"],
+        "tips": ["Writing high byte loads latch to timer (if stopped)"]
+      },
+      "0xDC06": {
+        "name": "CIA1 Timer B Low Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 timer B value/latch (low byte)",
+        "access": "read/write",
+        "related": ["0xDC07", "0xDC0F"]
+      },
+      "0xDC07": {
+        "name": "CIA1 Timer B High Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 timer B value/latch (high byte)",
+        "access": "read/write",
+        "related": ["0xDC06", "0xDC0F"]
+      },
+      "0xDC08": {
+        "name": "CIA1 Time of Day - Tenths",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 TOD clock - tenths of seconds",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Tenths (0-9)"
+        },
+        "related": ["0xDC09", "0xDC0A", "0xDC0B"],
+        "tips": ["Reading latches TOD, reading hours unlatches"]
+      },
+      "0xDC09": {
+        "name": "CIA1 Time of Day - Seconds",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 TOD clock - seconds (BCD)",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Seconds low digit (0-9)",
+          "4-6": "Seconds high digit (0-5)"
+        },
+        "related": ["0xDC08", "0xDC0A", "0xDC0B"]
+      },
+      "0xDC0A": {
+        "name": "CIA1 Time of Day - Minutes",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 TOD clock - minutes (BCD)",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Minutes low digit (0-9)",
+          "4-6": "Minutes high digit (0-5)"
+        },
+        "related": ["0xDC08", "0xDC09", "0xDC0B"]
+      },
+      "0xDC0B": {
+        "name": "CIA1 Time of Day - Hours",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 TOD clock - hours (BCD)",
+        "access": "read/write",
+        "bitFields": {
+          "0-3": "Hours low digit (0-9)",
+          "4": "Hours high digit (0-1)",
+          "7": "AM/PM flag (0=AM, 1=PM)"
+        },
+        "related": ["0xDC08", "0xDC09", "0xDC0A"],
+        "tips": ["Reading hours unlatches TOD"]
+      },
+      "0xDC0C": {
+        "name": "CIA1 Serial Data Register",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 synchronous serial I/O data register",
+        "access": "read/write",
+        "tips": ["Used for fast serial communication"]
+      },
+      "0xDC0E": {
+        "name": "CIA1 Control Register A",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 timer A control",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Start timer (1=start)",
+          "1": "Port B bit 6 output mode",
+          "2": "Port B toggle/pulse select",
+          "3": "One-shot/continuous",
+          "4": "Force latch load",
+          "5": "Timer A input mode",
+          "6": "Serial port direction",
+          "7": "TOD frequency (0=60Hz, 1=50Hz)"
+        },
+        "examples": [
+          "lda #$11     ; Start, continuous",
+          "sta $dc0e"
+        ],
+        "related": ["0xDC04", "0xDC05", "0xDC0F"]
+      },
+      "0xDC0F": {
+        "name": "CIA1 Control Register B",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA1 timer B control",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Start timer (1=start)",
+          "1": "Port B bit 7 output mode",
+          "2": "Port B toggle/pulse select",
+          "3": "One-shot/continuous",
+          "4": "Force latch load",
+          "5-6": "Timer B input mode",
+          "7": "TOD alarm/clock write select"
+        },
+        "related": ["0xDC06", "0xDC07", "0xDC0E"]
+      },
+
+      "0xDD02": {
+        "name": "CIA2 Data Direction Register A",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 port A data direction (1=output, 0=input)",
+        "access": "read/write",
+        "values": {
+          "0x3F": "Default (serial bus + VIC bank)"
+        },
+        "related": ["0xDD00", "0xDD03"]
+      },
+      "0xDD03": {
+        "name": "CIA2 Data Direction Register B",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 port B data direction (user port)",
+        "access": "read/write",
+        "related": ["0xDD01", "0xDD02"]
+      },
+      "0xDD04": {
+        "name": "CIA2 Timer A Low Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 timer A value/latch (low byte)",
+        "access": "read/write",
+        "related": ["0xDD05", "0xDD0E"]
+      },
+      "0xDD05": {
+        "name": "CIA2 Timer A High Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 timer A value/latch (high byte)",
+        "access": "read/write",
+        "related": ["0xDD04", "0xDD0E"]
+      },
+      "0xDD06": {
+        "name": "CIA2 Timer B Low Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 timer B value/latch (low byte)",
+        "access": "read/write",
+        "related": ["0xDD07", "0xDD0F"]
+      },
+      "0xDD07": {
+        "name": "CIA2 Timer B High Byte",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 timer B value/latch (high byte)",
+        "access": "read/write",
+        "related": ["0xDD06", "0xDD0F"]
+      },
+      "0xDD0E": {
+        "name": "CIA2 Control Register A",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 timer A control",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Start timer (1=start)",
+          "1": "Port B bit 6 output mode",
+          "2": "Port B toggle/pulse select",
+          "3": "One-shot/continuous",
+          "4": "Force latch load",
+          "5": "Timer A input mode",
+          "6": "Serial port direction",
+          "7": "TOD frequency"
+        },
+        "related": ["0xDD04", "0xDD05", "0xDD0F"]
+      },
+      "0xDD0F": {
+        "name": "CIA2 Control Register B",
+        "category": "CIA",
+        "type": "register",
+        "size": 1,
+        "description": "CIA2 timer B control",
+        "access": "read/write",
+        "bitFields": {
+          "0": "Start timer (1=start)",
+          "1": "Port B bit 7 output mode",
+          "2": "Port B toggle/pulse select",
+          "3": "One-shot/continuous",
+          "4": "Force latch load",
+          "5-6": "Timer B input mode",
+          "7": "TOD alarm/clock write select"
+        },
+        "related": ["0xDD06", "0xDD07", "0xDD0E"]
+      },
+
+      "0xE000": {
+        "name": "KERNAL ROM Start",
+        "category": "ROM",
+        "type": "rom",
+        "size": 8192,
+        "description": "KERNAL operating system ROM ($E000-$FFFF)",
+        "access": "read",
+        "tips": ["Can be switched out via $0001", "8KB of OS routines"]
+      },
+
+      "0xE544": {
+        "name": "CLRSCR - Clear Screen",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Clear screen and home cursor",
+        "access": "execute",
+        "examples": [
+          "jsr $e544    ; Clear the screen"
+        ],
+        "related": ["0xE566", "0xFF81"],
+        "tips": ["Very commonly used!", "Also homes cursor"]
+      },
+      "0xE566": {
+        "name": "HOME - Cursor Home",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Move cursor to home position (top-left)",
+        "access": "execute",
+        "examples": [
+          "jsr $e566    ; Cursor to home"
+        ],
+        "related": ["0xE544", "0xFFF0"]
+      },
+      "0xEA31": {
+        "name": "Default IRQ Handler",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Default KERNAL IRQ service routine",
+        "access": "execute",
+        "examples": [
+          "myirq:",
+          "    ; Your code here",
+          "    jmp $ea31   ; Chain to KERNAL IRQ"
+        ],
+        "related": ["0x0314"],
+        "tips": ["JMP here to chain IRQ to KERNAL", "Handles keyboard, cursor blink, etc."]
+      },
+      "0xEA81": {
+        "name": "Default NMI Handler",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Default KERNAL NMI service routine",
+        "access": "execute",
+        "related": ["0x0318"],
+        "tips": ["Handles RESTORE key"]
+      },
+
+      "0xFF81": {
+        "name": "CINT - Initialize Screen Editor",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Initialize VIC-II and screen editor",
+        "access": "execute",
+        "examples": [
+          "jsr $ff81    ; Initialize screen"
+        ],
+        "related": ["0xFF84", "0xE544"],
+        "tips": ["Resets screen to defaults"]
+      },
+      "0xFF84": {
+        "name": "IOINIT - Initialize I/O",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Initialize CIA chips and I/O",
+        "access": "execute",
+        "examples": [
+          "jsr $ff84    ; Initialize I/O devices"
+        ],
+        "related": ["0xFF81", "0xFF87"]
+      },
+      "0xFF87": {
+        "name": "RAMTAS - RAM Test and Initialize",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Test RAM and initialize memory pointers",
+        "access": "execute",
+        "related": ["0xFF84"],
+        "tips": ["Part of system reset sequence"]
+      },
+      "0xFF8A": {
+        "name": "RESTOR - Restore Vectors",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Restore default I/O vectors",
+        "access": "execute",
+        "examples": [
+          "jsr $ff8a    ; Reset all vectors to default"
+        ],
+        "related": ["0xFF8D", "0x0314"],
+        "tips": ["Resets $0314-$0333 to defaults"]
+      },
+      "0xFF8D": {
+        "name": "VECTOR - Read/Set Vectors",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Read or set system vectors",
+        "access": "execute",
+        "examples": [
+          "; Read vectors:",
+          "sec          ; Carry set = read",
+          "jsr $ff8d",
+          "; Set vectors:",
+          "clc          ; Carry clear = set",
+          "jsr $ff8d"
+        ],
+        "related": ["0xFF8A"],
+        "tips": ["X/Y point to vector table", "C=0: write, C=1: read"]
+      },
+      "0xFF90": {
+        "name": "SETMSG - Set KERNAL Messages",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Enable/disable KERNAL messages",
+        "access": "execute",
+        "examples": [
+          "lda #$00",
+          "jsr $ff90    ; Disable messages",
+          "lda #$80",
+          "jsr $ff90    ; Enable messages"
+        ],
+        "tips": ["A=$00: no messages, A=$80: messages on"]
+      },
+      "0xFF93": {
+        "name": "SECOND - Send Secondary Address",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send secondary address after LISTEN",
+        "access": "execute",
+        "related": ["0xFFB1"],
+        "tips": ["A = secondary address"]
+      },
+      "0xFF96": {
+        "name": "TKSA - Send Secondary After TALK",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send secondary address after TALK",
+        "access": "execute",
+        "related": ["0xFFB4"],
+        "tips": ["A = secondary address"]
+      },
+      "0xFF99": {
+        "name": "MEMTOP - Read/Set Top of Memory",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Read or set top of RAM pointer",
+        "access": "execute",
+        "examples": [
+          "sec          ; Read",
+          "jsr $ff99    ; X/Y = top of memory",
+          "clc          ; Write",
+          "ldx #$00",
+          "ldy #$80     ; Set to $8000",
+          "jsr $ff99"
+        ],
+        "related": ["0xFF9C"],
+        "tips": ["X=low, Y=high", "C=0: set, C=1: read"]
+      },
+      "0xFF9C": {
+        "name": "MEMBOT - Read/Set Bottom of Memory",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Read or set bottom of RAM pointer",
+        "access": "execute",
+        "related": ["0xFF99"],
+        "tips": ["X=low, Y=high", "C=0: set, C=1: read"]
+      },
+      "0xFF9F": {
+        "name": "SCNKEY - Scan Keyboard",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Scan keyboard matrix",
+        "access": "execute",
+        "related": ["0xFFE4"],
+        "tips": ["Called during IRQ", "Updates keyboard buffer"]
+      },
+      "0xFFA2": {
+        "name": "SETTMO - Set IEEE Timeout",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set timeout for IEEE-488 bus",
+        "access": "execute",
+        "tips": ["Not used on C64 (no IEEE)"]
+      },
+      "0xFFA5": {
+        "name": "ACPTR - Input from Serial Bus",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Get byte from serial bus",
+        "access": "execute",
+        "examples": [
+          "jsr $ffa5    ; A = byte from serial bus"
+        ],
+        "related": ["0xFFA8"],
+        "tips": ["Returns byte in A"]
+      },
+      "0xFFA8": {
+        "name": "CIOUT - Output to Serial Bus",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send byte to serial bus",
+        "access": "execute",
+        "examples": [
+          "lda #$41     ; 'A'",
+          "jsr $ffa8    ; Send to serial bus"
+        ],
+        "related": ["0xFFA5"],
+        "tips": ["A = byte to send"]
+      },
+      "0xFFAB": {
+        "name": "UNTLK - Send UNTALK",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send UNTALK command on serial bus",
+        "access": "execute",
+        "related": ["0xFFB4", "0xFFAE"]
+      },
+      "0xFFAE": {
+        "name": "UNLSN - Send UNLISTEN",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send UNLISTEN command on serial bus",
+        "access": "execute",
+        "related": ["0xFFB1", "0xFFAB"]
+      },
+      "0xFFB1": {
+        "name": "LISTEN - Send LISTEN",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send LISTEN command on serial bus",
+        "access": "execute",
+        "examples": [
+          "lda #$08     ; Device 8 (disk)",
+          "jsr $ffb1    ; Send LISTEN"
+        ],
+        "related": ["0xFFAE", "0xFF93"],
+        "tips": ["A = device number"]
+      },
+      "0xFFB4": {
+        "name": "TALK - Send TALK",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Send TALK command on serial bus",
+        "access": "execute",
+        "examples": [
+          "lda #$08     ; Device 8",
+          "jsr $ffb4    ; Send TALK"
+        ],
+        "related": ["0xFFAB", "0xFF96"],
+        "tips": ["A = device number"]
+      },
+      "0xFFB7": {
+        "name": "READST - Read I/O Status",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Read status byte (ST variable)",
+        "access": "execute",
+        "examples": [
+          "jsr $ffb7    ; A = status",
+          "and #$40     ; Check EOF",
+          "bne eof"
+        ],
+        "related": ["0x0090"],
+        "tips": ["Returns $90 (ST) in A"]
+      },
+      "0xFFBA": {
+        "name": "SETLFS - Set Logical File",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set logical file parameters",
+        "access": "execute",
+        "examples": [
+          "lda #$01     ; Logical file number",
+          "ldx #$08     ; Device (disk)",
+          "ldy #$00     ; Secondary address",
+          "jsr $ffba    ; Set file parameters"
+        ],
+        "related": ["0xFFBD", "0xFFC0"],
+        "tips": ["A=logical#, X=device, Y=secondary"]
+      },
+      "0xFFBD": {
+        "name": "SETNAM - Set Filename",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set filename for I/O operation",
+        "access": "execute",
+        "examples": [
+          "lda #$08     ; Filename length",
+          "ldx #<fname  ; Filename address low",
+          "ldy #>fname  ; Filename address high",
+          "jsr $ffbd    ; Set filename"
+        ],
+        "related": ["0xFFBA", "0xFFC0"],
+        "tips": ["A=length, X/Y=address of name"]
+      },
+      "0xFFC0": {
+        "name": "OPEN - Open File",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Open a logical file",
+        "access": "execute",
+        "examples": [
+          "; Open file on disk:",
+          "lda #$01",
+          "ldx #$08",
+          "ldy #$00",
+          "jsr $ffba    ; SETLFS",
+          "lda #$05     ; Name length",
+          "ldx #<name",
+          "ldy #>name",
+          "jsr $ffbd    ; SETNAM",
+          "jsr $ffc0    ; OPEN"
+        ],
+        "related": ["0xFFC3", "0xFFBA", "0xFFBD"],
+        "tips": ["Call SETLFS and SETNAM first!"]
+      },
+      "0xFFC3": {
+        "name": "CLOSE - Close File",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Close a logical file",
+        "access": "execute",
+        "examples": [
+          "lda #$01     ; Logical file number",
+          "jsr $ffc3    ; Close file"
+        ],
+        "related": ["0xFFC0", "0xFFE7"],
+        "tips": ["A = logical file number"]
+      },
+      "0xFFC6": {
+        "name": "CHKIN - Set Input Channel",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set input channel for CHRIN",
+        "access": "execute",
+        "examples": [
+          "ldx #$01     ; Logical file number",
+          "jsr $ffc6    ; Set input"
+        ],
+        "related": ["0xFFC9", "0xFFCC", "0xFFCF"],
+        "tips": ["X = logical file number"]
+      },
+      "0xFFC9": {
+        "name": "CHKOUT - Set Output Channel",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set output channel for CHROUT",
+        "access": "execute",
+        "examples": [
+          "ldx #$04     ; Printer (device 4)",
+          "jsr $ffc9    ; Set output"
+        ],
+        "related": ["0xFFC6", "0xFFCC", "0xFFD2"],
+        "tips": ["X = logical file number"]
+      },
+      "0xFFCC": {
+        "name": "CLRCHN - Clear I/O Channels",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Reset I/O to default (keyboard/screen)",
+        "access": "execute",
+        "examples": [
+          "jsr $ffcc    ; Reset to keyboard/screen"
+        ],
+        "related": ["0xFFC6", "0xFFC9"],
+        "tips": ["Call after file I/O to restore defaults"]
+      },
+      "0xFFCF": {
+        "name": "CHRIN - Input Character",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Get character from input channel",
+        "access": "execute",
+        "examples": [
+          "jsr $ffcf    ; A = character"
+        ],
+        "related": ["0xFFC6", "0xFFE4"],
+        "tips": ["Returns character in A", "Waits for input"]
+      },
+      "0xFFD2": {
+        "name": "CHROUT - Output Character",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Output character to current channel",
+        "access": "execute",
+        "examples": [
+          "lda #'H'     ; Character to print",
+          "jsr $ffd2    ; Print it",
+          "lda #$0d     ; Carriage return",
+          "jsr $ffd2    ; New line"
+        ],
+        "related": ["0xFFC9"],
+        "tips": ["A = character to output", "Most common KERNAL call!"]
+      },
+      "0xFFD5": {
+        "name": "LOAD - Load File",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Load file from device",
+        "access": "execute",
+        "examples": [
+          "lda #$01",
+          "ldx #$08",
+          "ldy #$01     ; Use address in file",
+          "jsr $ffba    ; SETLFS",
+          "lda #$08",
+          "ldx #<name",
+          "ldy #>name",
+          "jsr $ffbd    ; SETNAM",
+          "lda #$00     ; 0=load, 1=verify",
+          "jsr $ffd5    ; LOAD"
+        ],
+        "related": ["0xFFD8", "0xFFBA", "0xFFBD"],
+        "tips": ["A=0: load, A=1: verify", "X/Y = load address if secondary=0"]
+      },
+      "0xFFD8": {
+        "name": "SAVE - Save File",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Save memory to file",
+        "access": "execute",
+        "examples": [
+          "lda #<start  ; Start address",
+          "sta $c1",
+          "lda #>start",
+          "sta $c2",
+          "ldx #<end    ; End address",
+          "ldy #>end",
+          "lda #$c1     ; ZP pointer",
+          "jsr $ffd8    ; SAVE"
+        ],
+        "related": ["0xFFD5"],
+        "tips": ["A = ZP pointer to start", "X/Y = end address+1"]
+      },
+      "0xFFDB": {
+        "name": "SETTIM - Set Time",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set jiffy clock (24-hour clock)",
+        "access": "execute",
+        "examples": [
+          "lda #$00     ; Set to 00:00:00",
+          "tay",
+          "tax",
+          "jsr $ffdb"
+        ],
+        "related": ["0xFFDE"],
+        "tips": ["A/X/Y = 24-bit jiffy count"]
+      },
+      "0xFFDE": {
+        "name": "RDTIM - Read Time",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Read jiffy clock",
+        "access": "execute",
+        "examples": [
+          "jsr $ffde    ; A/X/Y = time"
+        ],
+        "related": ["0xFFDB", "0x00A3"],
+        "tips": ["Returns 24-bit jiffy count in A/X/Y"]
+      },
+      "0xFFE1": {
+        "name": "STOP - Check STOP Key",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Check if STOP key pressed",
+        "access": "execute",
+        "examples": [
+          "jsr $ffe1",
+          "beq stopped  ; Z=1 if STOP pressed"
+        ],
+        "related": ["0x0091"],
+        "tips": ["Z flag set if STOP pressed"]
+      },
+      "0xFFE4": {
+        "name": "GETIN - Get Character",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Get character from keyboard buffer",
+        "access": "execute",
+        "examples": [
+          "jsr $ffe4    ; A = character (or 0)",
+          "beq nokey   ; No key pressed"
+        ],
+        "related": ["0xFFCF", "0x0277"],
+        "tips": ["Returns 0 if no key", "Non-blocking!"]
+      },
+      "0xFFE7": {
+        "name": "CLALL - Close All Files",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Close all open files",
+        "access": "execute",
+        "examples": [
+          "jsr $ffe7    ; Close all files"
+        ],
+        "related": ["0xFFC3"],
+        "tips": ["Resets all file tables"]
+      },
+      "0xFFEA": {
+        "name": "UDTIM - Update Jiffy Clock",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Increment jiffy clock",
+        "access": "execute",
+        "related": ["0xFFDE"],
+        "tips": ["Called during IRQ"]
+      },
+      "0xFFED": {
+        "name": "SCREEN - Get Screen Size",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Return screen dimensions",
+        "access": "execute",
+        "examples": [
+          "jsr $ffed    ; X=columns, Y=rows"
+        ],
+        "related": ["0xFFF0"],
+        "tips": ["Returns X=40, Y=25"]
+      },
+      "0xFFF0": {
+        "name": "PLOT - Set/Read Cursor Position",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Set or read cursor position",
+        "access": "execute",
+        "examples": [
+          "; Read position:",
+          "sec",
+          "jsr $fff0    ; X=column, Y=row",
+          "; Set position:",
+          "ldx #$05     ; Column 5",
+          "ldy #$10     ; Row 16",
+          "clc",
+          "jsr $fff0"
+        ],
+        "related": ["0xE566"],
+        "tips": ["C=0: set, C=1: read", "Y=row, X=column"]
+      },
+      "0xFFF3": {
+        "name": "IOBASE - Return I/O Base",
+        "category": "KERNAL",
+        "type": "routine",
+        "size": 1,
+        "description": "Return base address of I/O devices",
+        "access": "execute",
+        "examples": [
+          "jsr $fff3    ; X/Y = $DC00"
+        ],
+        "tips": ["Returns $DC00 in X/Y"]
+      },
+
+      "0xFFFA": {
+        "name": "NMI Vector (Hardware)",
+        "category": "System",
+        "type": "vector",
+        "size": 2,
+        "description": "Hardware NMI vector in ROM",
+        "access": "read",
+        "values": {
+          "0xFE43": "Default handler"
+        },
+        "related": ["0x0318"],
+        "tips": ["Points to ROM routine that JMPs via $0318"]
+      },
+      "0xFFFC": {
+        "name": "RESET Vector (Hardware)",
+        "category": "System",
+        "type": "vector",
+        "size": 2,
+        "description": "Hardware reset vector",
+        "access": "read",
+        "values": {
+          "0xFCE2": "Cold start"
+        },
+        "tips": ["CPU jumps here on power-on/reset"]
+      },
+      "0xFFFE": {
+        "name": "IRQ/BRK Vector (Hardware)",
+        "category": "System",
+        "type": "vector",
+        "size": 2,
+        "description": "Hardware IRQ and BRK vector in ROM",
+        "access": "read",
+        "values": {
+          "0xFF48": "Default handler"
+        },
+        "related": ["0x0314", "0x0316"],
+        "tips": ["Points to ROM that JMPs via $0314 or $0316"]
       }
     }
   }

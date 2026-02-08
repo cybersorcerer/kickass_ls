@@ -375,6 +375,25 @@ func UpdateLSPConfig(settings map[string]interface{}) {
 		lspConfig.StyleGuideEnforcement.DescriptiveLabels = getBool(sge, "descriptiveLabels", lspConfig.StyleGuideEnforcement.DescriptiveLabels)
 	}
 
+	// Update formatting
+	if fmt := getObject(settings, "formatting"); len(fmt) > 0 {
+		lspConfig.Formatting.Enabled = getBool(fmt, "enabled", lspConfig.Formatting.Enabled)
+		lspConfig.Formatting.AlignComments = getBool(fmt, "alignComments", lspConfig.Formatting.AlignComments)
+		if val, ok := fmt["commentColumn"]; ok {
+			if f, ok := val.(float64); ok {
+				lspConfig.Formatting.CommentColumn = int(f)
+			}
+		}
+		if val, ok := fmt["indentSize"]; ok {
+			if f, ok := val.(float64); ok {
+				lspConfig.Formatting.IndentSize = int(f)
+			}
+		}
+		lspConfig.Formatting.UseSpaces = getBool(fmt, "useSpaces", lspConfig.Formatting.UseSpaces)
+		log.Debug("Formatting config updated: AlignComments=%v, CommentColumn=%d",
+			lspConfig.Formatting.AlignComments, lspConfig.Formatting.CommentColumn)
+	}
+
 	// Update parser feature flags
 	if pff := getObject(settings, "parserFeatureFlags"); len(pff) > 0 {
 		// Main feature flags
@@ -825,7 +844,7 @@ func Start() {
 						"hoverProvider": true,
 						"completionProvider": map[string]interface{}{
 							"resolveProvider":   false,
-							"triggerCharacters": []string{" ", ".", "$"},
+							"triggerCharacters": []string{" ", ".", "$", "#"},
 						},
 						"definitionProvider":      true,
 						"referencesProvider":      true,
@@ -2420,6 +2439,9 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 	if memoryPrefix != "" {
 		log.Debug("Memory address completion requested with prefix: '%s'", memoryPrefix)
 
+		// Determine if $ is already part of wordToComplete or found separately in the line
+		dollarInWord := strings.HasPrefix(wordToComplete, "$")
+
 		// Add all memory registers that match the prefix
 		for address, region := range c64MemoryMap.MemoryMap.Regions {
 			// Convert 0xD000 format to $D000 format for matching
@@ -2428,7 +2450,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			if strings.HasPrefix(strings.ToUpper(addressWithDollar), strings.ToUpper(memoryPrefix)) {
 				// Create documentation string
 				documentation := fmt.Sprintf("**%s** - %s\n\n*%s %s*\n\n%s",
-					"0x"+address, region.Name, region.Category, region.Type, region.Description)
+					addressWithDollar, region.Name, region.Category, region.Type, region.Description)
 
 				// Add access information
 				if region.Access != "" {
@@ -2443,13 +2465,19 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					}
 				}
 
+				// insertText: only include $ if it's part of wordToComplete,
+				// otherwise the $ is already in the line and would be duplicated
+				insertText := addressWithDollar
+				if !dollarInWord {
+					insertText = addressHex
+				}
+
 				item := map[string]interface{}{
 					"label":         addressWithDollar,
 					"kind":          float64(12), // Value/Constant
 					"detail":        fmt.Sprintf("%s - %s", region.Category, region.Name),
 					"documentation": documentation,
-					"insertText":    addressWithDollar,
-					// Removed sortText to avoid duplicate menu grouping in nvim-cmp
+					"insertText":    insertText,
 				}
 				items = append(items, item)
 			}
@@ -2474,6 +2502,35 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					"detail": symbol.Value,
 				}
 				items = append(items, item)
+			}
+		}
+
+	case ContextPreprocessor:
+		// After # at line start - suggest preprocessor statements
+		log.Debug("ContextPreprocessor: suggesting preprocessor statements")
+		wordWithoutHash := strings.TrimPrefix(wordToComplete, "#")
+		hashInWord := strings.HasPrefix(wordToComplete, "#")
+
+		if ctx := GetProcessorContext(); ctx != nil {
+			for name, info := range ctx.PreprocessorStatements {
+				displayName := strings.TrimPrefix(name, "#")
+				if strings.HasPrefix(strings.ToLower(displayName), strings.ToLower(wordWithoutHash)) {
+					documentation := ""
+					if info != nil {
+						documentation = info.Description
+					}
+					insertText := "#" + displayName
+					if !hashInWord {
+						insertText = displayName
+					}
+					items = append(items, map[string]interface{}{
+						"label":         "#" + displayName,
+						"kind":          float64(14), // Keyword
+						"detail":        "Preprocessor Statement",
+						"documentation": documentation,
+						"insertText":    insertText,
+					})
+				}
 			}
 		}
 
@@ -2639,6 +2696,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		// After . - suggest directives only
 		log.Debug("ContextDirective: suggesting directives only")
 		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
+		dotInWord := strings.HasPrefix(wordToComplete, ".")
 
 		// Try ProcessorContext first (Context-Aware Parser)
 		if ctx := GetProcessorContext(); ctx != nil {
@@ -2650,11 +2708,17 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					if directiveInfo != nil {
 						documentation = directiveInfo.Description
 					}
+					// insertText without dot if dot is already in the line but not part of wordToComplete
+					insertText := "." + displayName
+					if !dotInWord {
+						insertText = displayName
+					}
 					items = append(items, map[string]interface{}{
 						"label":         "." + displayName,
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": documentation,
+						"insertText":    insertText,
 					})
 				}
 			}
@@ -2662,11 +2726,16 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			// Fallback to old kickassDirectives array (legacy parser)
 			for _, d := range kickassDirectives {
 				if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+					insertText := applyCase(wordToComplete, d.Directive)
+					if !dotInWord {
+						insertText = strings.TrimPrefix(insertText, ".")
+					}
 					items = append(items, map[string]interface{}{
 						"label":         applyCase(wordToComplete, d.Directive),
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": d.Description,
+						"insertText":    insertText,
 					})
 				}
 			}
@@ -2676,6 +2745,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		// Offer directives
 		// Strip leading dot from wordToComplete for matching (user types "." or ".by" etc.)
 		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
+		dotInMnemonic := strings.HasPrefix(wordToComplete, ".")
 
 		// Try ProcessorContext first (Context-Aware Parser)
 		if ctx := GetProcessorContext(); ctx != nil {
@@ -2688,12 +2758,17 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					if directiveInfo != nil {
 						documentation = directiveInfo.Description
 					}
-					// Always include the dot in the label
+					// insertText without dot if dot is already in the line but not part of wordToComplete
+					insertText := "." + displayName
+					if !dotInMnemonic {
+						insertText = displayName
+					}
 					items = append(items, map[string]interface{}{
 						"label":         "." + displayName,
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": documentation,
+						"insertText":    insertText,
 					})
 				}
 			}
@@ -2701,11 +2776,42 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			// Fallback to old kickassDirectives array (legacy parser)
 			for _, d := range kickassDirectives {
 				if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
+					insertText := applyCase(wordToComplete, d.Directive)
+					if !dotInMnemonic {
+						insertText = strings.TrimPrefix(insertText, ".")
+					}
 					items = append(items, map[string]interface{}{
 						"label":         applyCase(wordToComplete, d.Directive),
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": d.Description,
+						"insertText":    insertText,
+					})
+				}
+			}
+		}
+
+		// Offer preprocessor statements
+		if ctx := GetProcessorContext(); ctx != nil {
+			wordWithoutHash := strings.TrimPrefix(wordToComplete, "#")
+			hashInMnemonic := strings.HasPrefix(wordToComplete, "#")
+			for name, info := range ctx.PreprocessorStatements {
+				displayName := strings.TrimPrefix(name, "#")
+				if strings.HasPrefix(strings.ToLower(displayName), strings.ToLower(wordWithoutHash)) {
+					documentation := ""
+					if info != nil {
+						documentation = info.Description
+					}
+					insertText := "#" + displayName
+					if !hashInMnemonic {
+						insertText = displayName
+					}
+					items = append(items, map[string]interface{}{
+						"label":         "#" + displayName,
+						"kind":          float64(14), // Keyword
+						"detail":        "Preprocessor Statement",
+						"documentation": documentation,
+						"insertText":    insertText,
 					})
 				}
 			}
@@ -2850,8 +2956,9 @@ func extractWordAtPosition(text string, pos int) string {
 
 	// Define word character set for assembly language identifiers
 	// Include '.' for directive names like .byte, .const, .macro
+	// Include '#' for preprocessor directives like #import, #define
 	isWordChar := func(r rune) bool {
-		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.'
+		return unicode.IsLetter(r) || unicode.IsDigit(r) || r == '_' || r == '.' || r == '#'
 	}
 
 	// Find start of word by going backwards
@@ -2880,6 +2987,7 @@ const (
 	ContextOperandGeneral                                // After other mnemonics - suggest all operands
 	ContextDirectiveOperand                              // After directive - context-specific suggestions
 	ContextComment                                       // Inside a comment - no completions should be offered
+	ContextPreprocessor                                  // After # at line start - suggest preprocessor statements
 )
 
 // getCompletionContext determines what kind of completion context we're in
@@ -2971,9 +3079,15 @@ func getCompletionContext(line string, char int) (CompletionContextType, string)
 		return ContextDirective, wordToComplete
 	}
 
-	// Special case: if word starts with '#', it's immediate addressing (constants only)
+	// Special case: if word starts with '#', check if it's a preprocessor directive or immediate addressing
 	if strings.HasPrefix(wordToComplete, "#") {
-		log.Debug("Word starts with '#', immediate addressing - constants only.")
+		// If # is the first non-whitespace on the line, it's a preprocessor directive
+		beforeWord := strings.TrimSpace(context[:len(context)-len(wordToComplete)])
+		if beforeWord == "" {
+			log.Debug("Word starts with '#' at line start, preprocessor context.")
+			return ContextPreprocessor, wordToComplete
+		}
+		log.Debug("Word starts with '#' after code, immediate addressing - constants only.")
 		return ContextImmediate, wordToComplete
 	}
 

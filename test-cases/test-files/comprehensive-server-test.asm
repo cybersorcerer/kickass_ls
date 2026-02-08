@@ -8,9 +8,9 @@
 // ----------------------------------------------------------------------------
 // 1. ENCODING DIRECTIVE
 // ----------------------------------------------------------------------------
-.encoding "petscii_upper"  // ✅ Valid encoding
-.encoding "screencode_mixed"  // ✅ Valid encoding
-.encoding "invalid_name"  // ⚠️ Should warn: Unknown encoding
+.encoding "petscii_upper"               // ✅ Valid encoding
+.encoding "screencode_mixed"            // ✅ Valid encoding
+.encoding "invalid_name"                // ⚠️ Should warn: Unknown encoding
     huhuhu
 
 // ----------------------------------------------------------------------------
@@ -18,33 +18,33 @@
 // ----------------------------------------------------------------------------
 .define test
     #define
-    #define DEBUG  // ✅ Symbol-only define
-    #define RELEASE  // ✅ Another define
-    #define DEBUG  // ⚠️ Should warn: Redefinition
+    #define DEBUG                       // ✅ Symbol-only define
+    #define RELEASE                     // ✅ Another define
+    #define DEBUG                       // ⚠️ Should warn: Redefinition
 
     #undef
-    #undef RELEASE  // ✅ Undefine symbol
-    #undef UNKNOWN  // ⚠️ Could warn: Symbol not defined
+    #undef RELEASE                      // ✅ Undefine symbol
+    #undef UNKNOWN                      // ⚠️ Could warn: Symbol not defined
 
 // ----------------------------------------------------------------------------
 // 3. IMPORT DIRECTIVE
 // ----------------------------------------------------------------------------
     #import
-.import source "lib/macros.asm"  // ✅ Import source file
-.import binary "data/charset.bin"  // ✅ Import binary data
-.import c64 "music/tune.sid"  // ✅ Import C64 file
+.import source "lib/macros.asm"         // ✅ Import source file
+.import binary "data/charset.bin"       // ✅ Import binary data
+.import c64 "music/tune.sid"            // ✅ Import C64 file
 
 // ----------------------------------------------------------------------------
 // 4. CONSTANTS AND VARIABLES
 // ----------------------------------------------------------------------------
-.const SCREEN = $0400  // ✅ Constant definition
-.const CHARSET = $2000  // ✅ Another constant
-.const BORDER = $d020  // ✅ C64 memory address
-.const BACKGROUND = $d021  // ✅ C64 memory address
+.const SCREEN = $0400                   // ✅ Constant definition
+.const CHARSET = $2000                  // ✅ Another constant
+.const BORDER = $d020                   // ✅ C64 memory address
+.const BACKGROUND = $d021               // ✅ C64 memory address
 .const new_background = $d021
 
-.var counter = 0  // ✅ Variable definition
-.var temp = $ff  // ✅ Variable with hex value
+.var counter = 0                        // ✅ Variable definition
+.var temp = $ff                         // ✅ Variable with hex value
 
 // ----------------------------------------------------------------------------
 // 5. NAMESPACE DIRECTIVE
@@ -72,7 +72,7 @@
 
     init:
         lda #$0f
-        sta SID_VOL
+        sta SI <ScrollWheelUp>VOL
         rts
 }
 
@@ -129,13 +129,13 @@
     .return n * n
 }
 
-.function noReturn(x) {  // ⚠️ Should warn: No .return statement
+.function noReturn(x) {                 // ⚠️ Should warn: No .return statement
     .var temp = x * 2
 }
 
 .function sumRange(start, end) {
     .var result = 0
-    .for (var i = start  ; i < end; i++) {
+    .for (var i = start                 ; i < end; i++) {
     .eval result = result + i
 }
 .return result
@@ -209,16 +209,16 @@
 .pc = $1000 "Data Section"
 
 text:
-.text "HELLO WORLD!"  // ✅ Text directive
-.byte 0  // ✅ Single byte
+.text "HELLO WORLD!"                    // ✅ Text directive
+.byte 0                                 // ✅ Single byte
 
 numbers:
-.byte $00, $01, $02, $03  // ✅ Multiple bytes
-.word $1234, $5678  // ✅ Word values
+.byte $00, $01, $02, $03                // ✅ Multiple bytes
+.word $1234, $5678                      // ✅ Word values
 
 fillData:
-.fill 256, $00  // ✅ Fill with zeros
-.fill 16, i  // ✅ Fill with counter
+.fill 256, $00                          // ✅ Fill with zeros
+.fill 16, i                             // ✅ Fill with counter
 
 // ----------------------------------------------------------------------------
 // 11. MAIN PROGRAM
@@ -231,8 +231,8 @@ fillData:
 
 start:
 // Test macro calls
-    clearScreen()  // ✅ Correct: 0 arguments
-    setColor(Colors.BLUE)  // ✅ Correct: 1 argument
+    clearScreen()                       // ✅ Correct: 0 arguments
+    setColor(Colors.BLUE)               // ✅ Correct: 1 argument
     setBorderAndBackground(Colors.CYAN, Colors.BLACK)  // ✅ Correct: 2 arguments
 
 // Invalid macro calls (commented to avoid errors)
@@ -240,23 +240,23 @@ start:
 // setBorderAndBackground(1)    // ⚠️ Should warn: Too few arguments
 
 // Test function calls
-.var sum = add(5, 3)  // ✅ Function call: 5 + 3 = 8
-.var product = multiply(4, 7)  // ✅ Function call: 4 * 7 = 28
-.var squared = square(9)  // ✅ Function call: 9 * 9 = 81
-.var rangeSum = sumRange(1, 5)  // ✅ Function with .for loop: 1+2+3+4 = 10
+.var sum = add(5, 3)                    // ✅ Function call: 5 + 3 = 8
+.var product = multiply(4, 7)           // ✅ Function call: 4 * 7 = 28
+.var squared = square(9)                // ✅ Function call: 9 * 9 = 81
+.var rangeSum = sumRange(1, 5)          // ✅ Function with .for loop: 1+2+3+4 = 10
 
 // Test pseudocommand calls
-    mov #Colors.RED : BORDER  // ✅ Correct: 2 arguments
-    add16 $fb : $fd : $c0  // ✅ Correct: 3 arguments
-    inc16 counter  // ✅ Correct: 1 argument
+    mov #Colors.RED : BORDER            // ✅ Correct: 2 arguments
+    add16 $fb : $fd : $c0               // ✅ Correct: 3 arguments
+    inc16 counter                       // ✅ Correct: 1 argument
 
 // Invalid pseudocommand calls (commented)
 // mov #$05                     // ⚠️ Should warn: Too few arguments
 // add16 $fb : $fd             // ⚠️ Should warn: Too few arguments
 
 // Test namespace member access
-    jsr graphics.clear  // ✅ Namespace member
-    jsr sound.init  // ✅ Namespace member
+    jsr graphics.clear                  // ✅ Namespace member
+    jsr sound.init                      // ✅ Namespace member
 
 // Test enum values
     lda #Colors.GREEN
@@ -269,135 +269,135 @@ start:
 // ----------------------------------------------------------------------------
 instructions:
 // Load/Store
-    lda #$00  // ✅ Load Accumulator
-    ldx #$00  // ✅ Load X
-    ldy #$00  // ✅ Load Y
-    sta $1000  // ✅ Store Accumulator
-    stx $1001  // ✅ Store X
-    sty $1002  // ✅ Store Y
+    lda #$00                            // ✅ Load Accumulator
+    ldx #$00                            // ✅ Load X
+    ldy #$00                            // ✅ Load Y
+    sta $1000                           // ✅ Store Accumulator
+    stx $1001                           // ✅ Store X
+    sty $1002                           // ✅ Store Y
 
 // Transfer
-    tax  // ✅ Transfer A to X
-    tay  // ✅ Transfer A to Y
-    txa  // ✅ Transfer X to A
-    tya  // ✅ Transfer Y to A
-    tsx  // ✅ Transfer Stack to X
-    txs  // ✅ Transfer X to Stack
+    tax                                 // ✅ Transfer A to X
+    tay                                 // ✅ Transfer A to Y
+    txa                                 // ✅ Transfer X to A
+    tya                                 // ✅ Transfer Y to A
+    tsx                                 // ✅ Transfer Stack to X
+    txs                                 // ✅ Transfer X to Stack
 
 // Stack operations
-    pha  // ✅ Push Accumulator
-    php  // ✅ Push Processor Status
-    pla  // ✅ Pull Accumulator
-    plp  // ✅ Pull Processor Status
+    pha                                 // ✅ Push Accumulator
+    php                                 // ✅ Push Processor Status
+    pla                                 // ✅ Pull Accumulator
+    plp                                 // ✅ Pull Processor Status
 
 // Arithmetic
-    adc #$01  // ✅ Add with Carry
-    sbc #$01  // ✅ Subtract with Carry
-    inc $1000  // ✅ Increment Memory
-    inx  // ✅ Increment X
-    iny  // ✅ Increment Y
-    dec $1000  // ✅ Decrement Memory
-    dex  // ✅ Decrement X
-    dey  // ✅ Decrement Y
+    adc #$01                            // ✅ Add with Carry
+    sbc #$01                            // ✅ Subtract with Carry
+    inc $1000                           // ✅ Increment Memory
+    inx                                 // ✅ Increment X
+    iny                                 // ✅ Increment Y
+    dec $1000                           // ✅ Decrement Memory
+    dex                                 // ✅ Decrement X
+    dey                                 // ✅ Decrement Y
 
 // Logical
-    and #$0f  // ✅ AND
-    ora #$80  // ✅ OR
-    eor #$ff  // ✅ Exclusive OR
-    bit $1000  // ✅ Bit Test
+    and #$0f                            // ✅ AND
+    ora #$80                            // ✅ OR
+    eor #$ff                            // ✅ Exclusive OR
+    bit $1000                           // ✅ Bit Test
 
 // Shift/Rotate
-    asl  // ✅ Arithmetic Shift Left (Accumulator)
-    asl $1000  // ✅ Arithmetic Shift Left (Memory)
-    lsr  // ✅ Logical Shift Right (Accumulator)
-    lsr $1000  // ✅ Logical Shift Right (Memory)
-    rol  // ✅ Rotate Left (Accumulator)
-    rol $1000  // ✅ Rotate Left (Memory)
-    ror  // ✅ Rotate Right (Accumulator)
-    ror $1000  // ✅ Rotate Right (Memory)
+    asl                                 // ✅ Arithmetic Shift Left (Accumulator)
+    asl $1000                           // ✅ Arithmetic Shift Left (Memory)
+    lsr                                 // ✅ Logical Shift Right (Accumulator)
+    lsr $1000                           // ✅ Logical Shift Right (Memory)
+    rol                                 // ✅ Rotate Left (Accumulator)
+    rol $1000                           // ✅ Rotate Left (Memory)
+    ror                                 // ✅ Rotate Right (Accumulator)
+    ror $1000                           // ✅ Rotate Right (Memory)
 
 // Compare
-    cmp #$00  // ✅ Compare Accumulator
-    cpx #$00  // ✅ Compare X
-    cpy #$00  // ✅ Compare Y
+    cmp #$00                            // ✅ Compare Accumulator
+    cpx #$00                            // ✅ Compare X
+    cpy #$00                            // ✅ Compare Y
 
 // Branch
-    bcc *+2  // ✅ Branch if Carry Clear
-    bcs *+2  // ✅ Branch if Carry Set
-    beq *+2  // ✅ Branch if Equal
-    bne *+2  // ✅ Branch if Not Equal
-    bmi *+2  // ✅ Branch if Minus
-    bpl *+2  // ✅ Branch if Plus
-    bvc *+2  // ✅ Branch if Overflow Clear
-    bvs *+2  // ✅ Branch if Overflow Set
+    bcc *+2                             // ✅ Branch if Carry Clear
+    bcs *+2                             // ✅ Branch if Carry Set
+    beq *+2                             // ✅ Branch if Equal
+    bne *+2                             // ✅ Branch if Not Equal
+    bmi *+2                             // ✅ Branch if Minus
+    bpl *+2                             // ✅ Branch if Plus
+    bvc *+2                             // ✅ Branch if Overflow Clear
+    bvs *+2                             // ✅ Branch if Overflow Set
 
 // Jump/Subroutine
-    jmp loop  // ✅ Jump
-    jsr subroutine  // ✅ Jump to Subroutine
-    rts  // ✅ Return from Subroutine
+    jmp loop                            // ✅ Jump
+    jsr subroutine                      // ✅ Jump to Subroutine
+    rts                                 // ✅ Return from Subroutine
 
 // Flags
-    clc  // ✅ Clear Carry
-    sec  // ✅ Set Carry
-    cli  // ✅ Clear Interrupt Disable
-    sei  // ✅ Set Interrupt Disable
-    clv  // ✅ Clear Overflow
-    cld  // ✅ Clear Decimal Mode
-    sed  // ✅ Set Decimal Mode
+    clc                                 // ✅ Clear Carry
+    sec                                 // ✅ Set Carry
+    cli                                 // ✅ Clear Interrupt Disable
+    sei                                 // ✅ Set Interrupt Disable
+    clv                                 // ✅ Clear Overflow
+    cld                                 // ✅ Clear Decimal Mode
+    sed                                 // ✅ Set Decimal Mode
 
 // System
-    brk  // ✅ Break
-    nop  // ✅ No Operation
-    rti  // ✅ Return from Interrupt
+    brk                                 // ✅ Break
+    nop                                 // ✅ No Operation
+    rti                                 // ✅ Return from Interrupt
 
 // ----------------------------------------------------------------------------
 // 13. ALL ADDRESSING MODES (for parser testing)
 // ----------------------------------------------------------------------------
 addressingModes:
-    lda #$42  // ✅ Immediate
-    lda $42  // ✅ Zero Page
-    lda $42,x  // ✅ Zero Page, X
-    ldy $42,x  // ✅ Zero Page, X (with LDY)
-    ldx $42,y  // ✅ Zero Page, Y
-    lda $1234  // ✅ Absolute
-    lda $1234,x  // ✅ Absolute, X
-    lda $1234,y  // ✅ Absolute, Y
-    lda ($42,x)  // ✅ Indexed Indirect (X)
-    lda ($42),y  // ✅ Indirect Indexed (Y)
-    jmp ($1234)  // ✅ Indirect (JMP only)
-    asl  // ✅ Accumulator
-    nop  // ✅ Implied
+    lda #$42                            // ✅ Immediate
+    lda $42                             // ✅ Zero Page
+    lda $42,x                           // ✅ Zero Page, X
+    ldy $42,x                           // ✅ Zero Page, X (with LDY)
+    ldx $42,y                           // ✅ Zero Page, Y
+    lda $1234                           // ✅ Absolute
+    lda $1234,x                         // ✅ Absolute, X
+    lda $1234,y                         // ✅ Absolute, Y
+    lda ($42,x)                         // ✅ Indexed Indirect (X)
+    lda ($42),y                         // ✅ Indirect Indexed (Y)
+    jmp ($1234)                         // ✅ Indirect (JMP only)
+    asl                                 // ✅ Accumulator
+    nop                                 // ✅ Implied
 
 // ----------------------------------------------------------------------------
 // 14. NUMBER LITERALS (for lexer testing)
 // ----------------------------------------------------------------------------
 numberFormats:
-.byte $ff  // ✅ Hexadecimal
-.byte 255  // ✅ Decimal
-.byte %11111111  // ✅ Binary
-.byte 'A'  // ✅ Character literal
-.word $1234  // ✅ Hex word
-.word 4660  // ✅ Decimal word
-.word %0001001000110100  // ✅ Binary word
+.byte $ff                               // ✅ Hexadecimal
+.byte 255                               // ✅ Decimal
+.byte %11111111                         // ✅ Binary
+.byte 'A'                               // ✅ Character literal
+.word $1234                             // ✅ Hex word
+.word 4660                              // ✅ Decimal word
+.word %0001001000110100                 // ✅ Binary word
 
 // ----------------------------------------------------------------------------
 // 15. EXPRESSIONS (for expression evaluation)
 // ----------------------------------------------------------------------------
 expressions:
-.byte 5 + 3  // ✅ Addition
-.byte 10 - 4  // ✅ Subtraction
-.byte 6 * 7  // ✅ Multiplication
-.byte 20 / 4  // ✅ Division
-.byte 17 % 5  // ✅ Modulo
-.byte $ff & $0f  // ✅ Bitwise AND
-.byte $f0 | $0f  // ✅ Bitwise OR
-.byte $ff ^ $aa  // ✅ Bitwise XOR
-.byte $01 << 4  // ✅ Left Shift
-.byte $80 >> 2  // ✅ Right Shift
-.byte <$1234  // ✅ Low Byte
-.byte >$1234  // ✅ High Byte
-.byte (5 + 3) * 2  // ✅ Parentheses
-.byte -255  // ✅ Negation
+.byte 5 + 3                             // ✅ Addition
+.byte 10 - 4                            // ✅ Subtraction
+.byte 6 * 7                             // ✅ Multiplication
+.byte 20 / 4                            // ✅ Division
+.byte 17 % 5                            // ✅ Modulo
+.byte $ff & $0f                         // ✅ Bitwise AND
+.byte $f0 | $0f                         // ✅ Bitwise OR
+.byte $ff ^ $aa                         // ✅ Bitwise XOR
+.byte $01 << 4                          // ✅ Left Shift
+.byte $80 >> 2                          // ✅ Right Shift
+.byte <$1234                            // ✅ Low Byte
+.byte >$1234                            // ✅ High Byte
+.byte (5 + 3) * 2                       // ✅ Parentheses
+.byte -255                              // ✅ Negation
 
 // ----------------------------------------------------------------------------
 // 16. LABELS AND REFERENCES (for symbol resolution)
@@ -406,7 +406,7 @@ loop:
     ldx #10
 innerLoop:
     dex
-    bne innerLoop  // ✅ Valid: ~-3 bytes backward
+    bne innerLoop                       // ✅ Valid: ~-3 bytes backward
     rts
 
 subroutine:
@@ -421,10 +421,10 @@ validBackwardBranch:
     nop
     nop
     nop
-    bne validBackwardBranch  // ✅ Valid: ~-6 bytes backward
+    bne validBackwardBranch             // ✅ Valid: ~-6 bytes backward
 
 validForwardBranch:
-    beq skipAhead  // ✅ Valid: ~+6 bytes forward
+    beq skipAhead                       // ✅ Valid: ~+6 bytes forward
     nop
     nop
     nop
@@ -433,12 +433,12 @@ skipAhead:
 
 // ⚠️ Invalid branch distance tests (should generate errors)
 tooFarBackward:
-.fill 130, $ea  // Fill 130 NOPs
-    bne tooFarBackward  // ❌ Error: -132 bytes (out of -128 to +127 range)
+.fill 130, $ea                          // Fill 130 NOPs
+    bne tooFarBackward                  // ❌ Error: -132 bytes (out of -128 to +127 range)
 
 tooFarForward:
-    beq wayAhead  // ❌ Error: +132 bytes (out of -128 to +127 range)
-.fill 130, $ea  // Fill 130 NOPs
+    beq wayAhead                        // ❌ Error: +132 bytes (out of -128 to +127 range)
+.fill 130, $ea                          // Fill 130 NOPs
 wayAhead:
     nop
 
@@ -477,29 +477,29 @@ illegalOpcodes:
 
 ; Semicolon comment (assembly style)
 
-    nop  // Inline comment
+    nop                                 // Inline comment
 
 // ----------------------------------------------------------------------------
 // 20. C64 MEMORY-MAPPED REGISTERS (for hover info)
 // ----------------------------------------------------------------------------
 c64Registers:
 // VIC-II Chip
-    lda $d000  // Sprite 0 X
-    lda $d001  // Sprite 0 Y
-    lda $d020  // Border Color
-    lda $d021  // Background Color
+    lda $d000                           // Sprite 0 X
+    lda $d001                           // Sprite 0 Y
+    lda $d020                           // Border Color
+    lda $d021                           // Background Color
     lda $
     huhuh
 // SID Chip
-    lda $d400  // Voice 1 Frequency Low
-    lda $d401  // Voice 1 Frequency High
-    lda $d418  // Volume and Filter
+    lda $d400                           // Voice 1 Frequency Low
+    lda $d401                           // Voice 1 Frequency High
+    lda $d418                           // Volume and Filter
 
 // CIA Chips
-    lda $dc00  // CIA1 Data Port A
-    lda $dc01  // CIA1 Data Port B
-    lda $dd00  // CIA2 Data Port A
-    lda $dd01  // CIA2 Data Port B
+    lda $dc00                           // CIA1 Data Port A
+    lda $dc01                           // CIA1 Data Port B
+    lda $dd00                           // CIA2 Data Port A
+    lda $dd01                           // CIA2 Data Port B
 
 // ----------------------------------------------------------------------------
 // TEST SUMMARY
@@ -528,6 +528,8 @@ c64Registers:
 // 6. Test find references: Find all references to a symbol
 // 7. Uncomment lines marked with ⚠️ to see warnings
 // ============================================================================
+
+
 
 
 

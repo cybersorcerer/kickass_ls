@@ -58,10 +58,11 @@ type AnalysisContext struct {
 	DefinedSymbols     map[string]bool             // Symbols defined via .define directive
 	ForwardRefs        []ForwardReference          // Unresolved references
 	MacroDefinitions   map[string]*MacroDefinition // Macro definitions
-	MemoryMap          *MemoryMap                  // C64/6502 memory layout
-	CPUFlags           *CPUFlags                   // Processor flags state
-	CurrentNamespace   string                      // Current namespace context for label resolution
-	NamespaceStack     []string                    // Stack for nested namespaces
+	MemoryMap              *MemoryMap                  // C64/6502 memory layout
+	CPUFlags               *CPUFlags                   // Processor flags state
+	CurrentNamespace       string                      // Current namespace context for label resolution
+	NamespaceStack         []string                    // Stack for nested namespaces
+	PreprocessorIfDepth    int                         // Nesting depth for #if/#endif matching
 }
 
 // NewAnalysisContext creates a new enhanced analysis context
@@ -251,6 +252,19 @@ func (a *SemanticAnalyzer) Analyze(program *Program) []Diagnostic {
 
 	// Pass 4: Dead code detection
 	a.pass4DeadCodeDetection(program.Statements)
+
+	// Check for unclosed #if blocks
+	if a.context != nil && a.context.PreprocessorIfDepth > 0 {
+		a.diagnostics = append(a.diagnostics, Diagnostic{
+			Range: Range{
+				Start: Position{Line: 0, Character: 0},
+				End:   Position{Line: 0, Character: 0},
+			},
+			Severity: 1, // Error
+			Source:   "kickass-ls",
+			Message:  fmt.Sprintf("Unclosed #if block (%d unclosed)", a.context.PreprocessorIfDepth),
+		})
+	}
 
 	// After walking the whole tree, check for unused symbols.
 	config := GetLSPConfig()
@@ -897,13 +911,41 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 	}
 	if node.Name == nil {
 		log.Debug("processDirective: node.Name is nil, token=%s", node.Token.Literal)
-		// Special handling for data directives like .byte and .word that don't have names
 		directive := strings.ToLower(node.Token.Literal)
+
+		// Special handling for data directives like .byte and .word that don't have names
 		if directive == ".byte" || directive == ".word" {
 			log.Debug("processDirective: handling data directive %s without name", directive)
 			if isPass1 {
 				a.processDataDirective(node)
 			}
+			return
+		}
+
+		// Preprocessor statements without arguments (#importonce, #else, #endif)
+		// Fall through to the main switch block for processing
+		if strings.HasPrefix(directive, "#") && a.context != nil {
+			switch directive {
+			case "#importonce":
+				// No special diagnostic needed for now
+				log.Debug("processDirective: #importonce at line %d", node.Token.Line)
+			case "#else":
+				if isPass1 {
+					if a.context.PreprocessorIfDepth == 0 {
+						a.addError(node.Token, "#else without matching #if")
+					}
+				}
+			case "#endif":
+				if isPass1 {
+					if a.context.PreprocessorIfDepth == 0 {
+						a.addError(node.Token, "#endif without matching #if")
+					} else {
+						a.context.PreprocessorIfDepth--
+						log.Debug("processDirective #endif: depth now %d", a.context.PreprocessorIfDepth)
+					}
+				}
+			}
+			return
 		}
 		return
 	}
@@ -913,9 +955,43 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 	}
 
 	directive := strings.ToLower(node.Token.Literal)
-	log.Debug("processDirective: directive=%s, name=%s, pass1=%v", directive, node.Name.Value, isPass1)
+	nameValue := ""
+	if node.Name != nil {
+		nameValue = node.Name.Value
+	}
+	log.Debug("processDirective: directive=%s, name=%s, pass1=%v", directive, nameValue, isPass1)
 
 	switch directive {
+	case "#if":
+		// Conditional compilation - track in Pass 1
+		if isPass1 {
+			a.context.PreprocessorIfDepth++
+			log.Debug("processDirective #if: depth now %d", a.context.PreprocessorIfDepth)
+		}
+	case "#elif":
+		// Chained conditional - validate we're inside an #if block
+		if isPass1 {
+			if a.context.PreprocessorIfDepth == 0 {
+				a.addError(node.Token, "#elif without matching #if")
+			}
+		}
+	case "#else":
+		// Alternative block - validate we're inside an #if block
+		if isPass1 {
+			if a.context.PreprocessorIfDepth == 0 {
+				a.addError(node.Token, "#else without matching #if")
+			}
+		}
+	case "#endif":
+		// Close conditional block
+		if isPass1 {
+			if a.context.PreprocessorIfDepth == 0 {
+				a.addError(node.Token, "#endif without matching #if")
+			} else {
+				a.context.PreprocessorIfDepth--
+				log.Debug("processDirective #endif: depth now %d", a.context.PreprocessorIfDepth)
+			}
+		}
 	case "#define":
 		// Define directive - ONLY process in Pass 1
 		if isPass1 && node.Name != nil {
@@ -1686,7 +1762,13 @@ func (a *SemanticAnalyzer) analyzeMemoryAccess(addr int64, isWrite bool, token T
 	}
 
 	if a.context.MemoryMap.IsIOArea(addr) && config.MemoryLayoutAnalysis.ShowIOAccess {
-		a.addInfo(token, "I/O register access: $%04X - ensure correct timing", addr)
+		addrKey := fmt.Sprintf("0x%04X", addr)
+		displayAddr := fmt.Sprintf("$%04X", addr)
+		if region, ok := c64MemoryMap.MemoryMap.Regions[addrKey]; ok {
+			a.addInfo(token, "%s (%s): %s", displayAddr, region.Name, region.Description)
+		} else {
+			a.addInfo(token, "I/O register access: %s", displayAddr)
+		}
 	}
 
 	// Check for stack area usage

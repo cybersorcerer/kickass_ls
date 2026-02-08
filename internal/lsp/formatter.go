@@ -26,12 +26,12 @@ func DefaultFormattingConfig() FormattingConfig {
 		Enabled:           true,
 		IndentSize:        4,
 		UseSpaces:         true,
-		AlignComments:     false,
+		AlignComments:     true,
 		AlignInstructions: false,
 		LabelColumn:       0,
 		InstructionColumn: 4,
 		OperandColumn:     0,
-		CommentColumn:     0,
+		CommentColumn:     40,
 	}
 }
 
@@ -48,12 +48,14 @@ type FormattedLine struct {
 	IsDirective   bool   // .macro, .function, .namespace, etc.
 	BlockStart    bool   // Line ends with '{'
 	BlockEnd      bool   // Line starts with '}'
+	IsOrigin      bool   // Origin directive (*= or * =)
 }
 
 // Formatter handles document formatting
 type Formatter struct {
-	config FormattingConfig
-	lines  []FormattedLine
+	config     FormattingConfig
+	lines      []FormattedLine
+	commentCol int // Calculated column for comment alignment
 }
 
 // Regular expressions for parsing lines
@@ -181,6 +183,33 @@ func (f *Formatter) phase1ParseLines(text string) {
 			continue
 		}
 
+		// Check for origin directive (*= or * =)
+		originTrimmed := strings.ReplaceAll(workingLine, " ", "")
+		if strings.HasPrefix(originTrimmed, "*=") {
+			formatted.IsOrigin = true
+			formatted.Instruction = "*="
+			// Extract operand: everything after *= (with original spacing preserved)
+			idx := strings.Index(workingLine, "=")
+			if idx >= 0 {
+				formatted.Operands = strings.TrimSpace(workingLine[idx+1:])
+			}
+			f.lines = append(f.lines, formatted)
+			continue
+		}
+
+		// Check for BasicUpstart2 macro (always left-aligned)
+		if strings.HasPrefix(workingLine, "BasicUpstart2") {
+			formatted.IsOrigin = true
+			parts := strings.Fields(workingLine)
+			formatted.Instruction = parts[0]
+			if len(parts) > 1 {
+				instrEnd := strings.Index(workingLine, parts[0]) + len(parts[0])
+				formatted.Operands = strings.TrimSpace(workingLine[instrEnd:])
+			}
+			f.lines = append(f.lines, formatted)
+			continue
+		}
+
 		// Check for label at start of line
 		if matches := labelRegex.FindStringSubmatch(workingLine); matches != nil {
 			formatted.Label = matches[2] + ":" // Include the colon
@@ -257,9 +286,13 @@ func (f *Formatter) phase3AlignColumns() {
 	maxLabelWidth := 0
 	maxInstructionWidth := 0
 	maxOperandWidth := 0
+	maxCodeWidth := 0
+
+	indentStr := f.makeIndentString(1)
+	indentSize := len(indentStr)
 
 	for _, line := range f.lines {
-		if line.IsBlank || line.IsCommentOnly {
+		if line.IsBlank || line.IsCommentOnly || line.BlockEnd {
 			continue
 		}
 
@@ -277,13 +310,52 @@ func (f *Formatter) phase3AlignColumns() {
 		if operandWidth > maxOperandWidth {
 			maxOperandWidth = operandWidth
 		}
+
+		// Calculate total code width (without comment) for comment alignment
+		if line.Comment != "" {
+			codeWidth := 0
+
+			// Calculate effective indent
+			effectiveIndent := line.IndentLevel
+			if line.Label == "" && line.Instruction != "" && !line.IsDirective {
+				effectiveIndent++
+			}
+			codeWidth += effectiveIndent * indentSize
+
+			if line.Label != "" {
+				codeWidth += len(line.Label)
+				if line.Instruction != "" {
+					codeWidth++ // space after label
+				}
+			}
+			if line.Instruction != "" {
+				codeWidth += len(line.Instruction)
+				if line.Operands != "" {
+					codeWidth += 1 + len(line.Operands) // space + operands
+				}
+				if line.BlockStart {
+					codeWidth += 2 // " {"
+				}
+			}
+
+			if codeWidth > maxCodeWidth {
+				maxCodeWidth = codeWidth
+			}
+		}
 	}
 
-	log.Debug("Formatter Phase 3: Max widths - Label: %d, Instruction: %d, Operand: %d",
-		maxLabelWidth, maxInstructionWidth, maxOperandWidth)
+	log.Debug("Formatter Phase 3: Max widths - Label: %d, Instruction: %d, Operand: %d, Code: %d",
+		maxLabelWidth, maxInstructionWidth, maxOperandWidth, maxCodeWidth)
 
-	// Store these for reconstruction
-	// For now, we'll use them in phase4, but we could store them in the struct if needed
+	// Determine comment column
+	if f.config.CommentColumn > 0 {
+		f.commentCol = f.config.CommentColumn
+	} else {
+		// Auto-calculate: longest code line + 2 spaces minimum
+		f.commentCol = maxCodeWidth + 2
+	}
+
+	log.Debug("Formatter Phase 3: Comment column set to %d", f.commentCol)
 }
 
 // phase4Reconstruct builds the final formatted text
@@ -322,6 +394,29 @@ func (f *Formatter) phase4Reconstruct() string {
 				result.WriteString(line.Comment)
 			}
 			result.WriteString("\n")
+			continue
+		}
+
+		// Origin directives always at column 0
+		if line.IsOrigin {
+			lineStr := line.Instruction + " " + line.Operands
+			if line.Comment != "" {
+				currentLen := len(lineStr)
+				if f.config.AlignComments && f.commentCol > 0 {
+					padding := f.commentCol - currentLen
+					if padding < 2 {
+						padding = 2
+					}
+					lineStr += strings.Repeat(" ", padding)
+				} else {
+					lineStr += "  "
+				}
+				lineStr += line.Comment
+			}
+			result.WriteString(lineStr)
+			if i < len(f.lines)-1 {
+				result.WriteString("\n")
+			}
 			continue
 		}
 
@@ -367,7 +462,17 @@ func (f *Formatter) phase4Reconstruct() string {
 		// Add comment
 		if line.Comment != "" {
 			if lineStr != "" {
-				lineStr += "  " // Two spaces before comment
+				currentLen := len(lineStr)
+				if f.config.AlignComments && f.commentCol > 0 {
+					// Pad to comment column, minimum 2 spaces
+					padding := f.commentCol - currentLen
+					if padding < 2 {
+						padding = 2
+					}
+					lineStr += strings.Repeat(" ", padding)
+				} else {
+					lineStr += "  " // Default: two spaces before comment
+				}
 			}
 			lineStr += line.Comment
 		}
