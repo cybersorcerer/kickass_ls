@@ -2401,7 +2401,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 	log.Debug("Checking for memory completion: wordToComplete='%s', lineContent='%s', cursorPos=%d", wordToComplete, lineContent, cursorPos)
 
 	if strings.HasPrefix(wordToComplete, "$") {
-		memoryPrefix = strings.ToUpper(wordToComplete)
+		memoryPrefix = wordToComplete
 		log.Debug("Found $ prefix in wordToComplete: '%s'", memoryPrefix)
 	} else if lineContent != "" && cursorPos <= len(lineContent) {
 		// Look backwards in the line to see if we're completing a memory address
@@ -2414,7 +2414,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			log.Debug("Checking character at position %d: '%c'", i, lineContent[i])
 			if i < len(lineContent) && lineContent[i] == '$' {
 				// Found $, extract from $ to cursor position
-				memoryPrefix = strings.ToUpper(lineContent[i:startPos])
+				memoryPrefix = lineContent[i:startPos]
 				log.Debug("Found $ in line at position %d, extracted: '%s'", i, memoryPrefix)
 				break
 			} else if i < len(lineContent) && lineContent[i] == '#' {
@@ -2465,15 +2465,18 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					}
 				}
 
+				// Apply the user's case style to the address
+				casedAddress := applyCase(memoryPrefix, addressWithDollar)
+
 				// insertText: only include $ if it's part of wordToComplete,
 				// otherwise the $ is already in the line and would be duplicated
-				insertText := addressWithDollar
+				insertText := casedAddress
 				if !dollarInWord {
-					insertText = addressHex
+					insertText = applyCase(memoryPrefix, addressHex)
 				}
 
 				item := map[string]interface{}{
-					"label":         addressWithDollar,
+					"label":         casedAddress,
 					"kind":          float64(12), // Value/Constant
 					"detail":        fmt.Sprintf("%s - %s", region.Category, region.Name),
 					"documentation": documentation,

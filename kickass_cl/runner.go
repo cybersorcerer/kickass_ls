@@ -138,7 +138,7 @@ func NewTestRunner() *TestRunner {
 	}
 }
 
-func (tr *TestRunner) RunTestSuite(suitePath string) error {
+func (tr *TestRunner) RunTestSuite(suitePath string, serverPathOverride string) error {
 	// Load test suite
 	suite, err := tr.loadTestSuite(suitePath)
 	if err != nil {
@@ -148,8 +148,11 @@ func (tr *TestRunner) RunTestSuite(suitePath string) error {
 	fmt.Printf("Running test suite: %s\n", suite.Name)
 	fmt.Printf("Description: %s\n\n", suite.Description)
 
-	// Setup LSP client
-	serverPath := suite.Setup.ServerPath
+	// Setup LSP client - use override if provided, otherwise use suite config
+	serverPath := serverPathOverride
+	if serverPath == "" || serverPath == "kickass_ls" {
+		serverPath = suite.Setup.ServerPath
+	}
 
 	// First try to resolve via PATH
 	if resolvedPath, err := exec.LookPath(serverPath); err == nil {

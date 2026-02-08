@@ -38,6 +38,7 @@ type LSPClient struct {
 	// Shutdown handling
 	shutdown chan bool
 	done     chan bool
+	stopping bool
 }
 
 type DocumentState struct {
@@ -91,23 +92,44 @@ func (c *LSPClient) Start() error {
 }
 
 func (c *LSPClient) Stop() error {
-	// Send shutdown request
-	c.SendRequest("shutdown", nil)
+	if c.cmd == nil || c.cmd.Process == nil {
+		return nil
+	}
 
-	// Send exit notification
+	// Mark as stopping so goroutines suppress read errors
+	c.stopping = true
+
+	// Try graceful shutdown first
+	c.SendRequest("shutdown", nil)
 	c.SendNotification("exit", nil)
 
-	// Close pipes
+	// Close all pipes so readMessages/readStderr goroutines exit
+	// and cmd.Wait() can return
 	if c.stdin != nil {
 		c.stdin.Close()
 	}
-
-	// Wait for process to exit
-	if c.cmd != nil && c.cmd.Process != nil {
-		return c.cmd.Wait()
+	if c.stdout != nil {
+		c.stdout.Close()
+	}
+	if c.stderr != nil {
+		c.stderr.Close()
 	}
 
-	return nil
+	// Wait for process to exit with a timeout
+	done := make(chan error, 1)
+	go func() {
+		done <- c.cmd.Wait()
+	}()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(3 * time.Second):
+		// Graceful shutdown failed, force kill
+		c.cmd.Process.Kill()
+		<-done // Wait for Wait() to return after kill
+		return fmt.Errorf("server did not exit gracefully, killed")
+	}
 }
 
 func (c *LSPClient) readMessages() {
@@ -119,18 +141,8 @@ func (c *LSPClient) readMessages() {
 		for {
 			line, _, err := reader.ReadLine()
 			if err != nil {
-				if err == io.EOF {
-					fmt.Printf("Server closed connection (EOF)\n")
-					// Check if server process is still running
-					if c.cmd != nil && c.cmd.Process != nil {
-						if state := c.cmd.ProcessState; state != nil && state.Exited() {
-							fmt.Printf("Server process exited with code: %d\n", state.ExitCode())
-						} else {
-							fmt.Printf("Server process terminated unexpectedly\n")
-						}
-					}
-				} else {
-					fmt.Printf("Error reading header line: %v\n", err)
+				if err != io.EOF && !c.stopping {
+					fmt.Printf("Error reading from server: %v\n", err)
 				}
 				// Signal shutdown to prevent broken pipe errors
 				if c.done != nil {

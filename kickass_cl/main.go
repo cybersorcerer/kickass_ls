@@ -96,7 +96,7 @@ func main() {
 
 	// Run test suite
 	runner := NewTestRunner()
-	err := runner.RunTestSuite(*testSuite)
+	err := runner.RunTestSuite(*testSuite, *serverPath)
 
 	// Save results if requested
 	if *outputFile != "" {
