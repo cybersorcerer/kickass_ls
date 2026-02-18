@@ -1162,6 +1162,26 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			qualifiedName := a.context.getQualifiedLabelName(normalizeLabel(node.Name.Value))
 			a.context.DefinedLabels[qualifiedName] = symbol
 		}
+	case ".label", "label":
+		// Label definition with value - add to symbol table
+		if node.Name != nil && node.Value != nil {
+			symbol := &Symbol{
+				Name:     node.Name.Value,
+				Kind:     Label,
+				Position: Position{Line: node.Name.Token.Line - 1, Character: node.Name.Token.Column - 1},
+			}
+
+			// Try to evaluate the label value
+			addr := a.evaluateExpression(node.Value)
+			if addr != -1 {
+				symbol.Address = addr
+				symbol.Value = fmt.Sprintf("$%04X", addr)
+			}
+
+			// Add to symbol table with namespace prefix
+			qualifiedName := a.context.getQualifiedLabelName(normalizeLabel(node.Name.Value))
+			a.context.DefinedLabels[qualifiedName] = symbol
+		}
 	case ".byte", ".byt":
 		// Single byte data
 		log.Debug("processDirective .byte: node.Value type=%T, value=%+v", node.Value, node.Value)
