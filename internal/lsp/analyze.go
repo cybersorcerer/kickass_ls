@@ -1896,8 +1896,8 @@ func (a *SemanticAnalyzer) checkForDeadCodeAfterJumpWithVisited(statements []Sta
 			// Most directives in dead code are also unreachable
 			if statement != nil && statement.Name != nil && statement.Token.Literal != "" {
 				directive := strings.ToLower(statement.Name.Value)
-				// Skip some directives that might be intentional (like data)
-				if !a.isDataDirective(directive) {
+				// Skip directives that are always valid regardless of control flow
+				if !a.isAlwaysReachableDirective(directive) {
 					a.addWarning(statement.Token, "Unreachable directive after unconditional jump")
 				}
 			}
@@ -1905,11 +1905,25 @@ func (a *SemanticAnalyzer) checkForDeadCodeAfterJumpWithVisited(statements []Sta
 	}
 }
 
-// isDataDirective checks if a directive is for data definition (which might be intentional in dead code)
-func (a *SemanticAnalyzer) isDataDirective(directive string) bool {
-	dataDirectives := []string{".byte", ".word", ".text", ".data", ".byt", ".wo", ".tx"}
-	for _, dataDir := range dataDirectives {
-		if directive == dataDir {
+// isAlwaysReachableDirective returns true for directives that define symbols or data
+// and are always valid regardless of control flow position.
+func (a *SemanticAnalyzer) isAlwaysReachableDirective(directive string) bool {
+	alwaysReachable := []string{
+		// Data definition - intentional in dead code sections
+		".byte", ".word", ".text", ".data", ".byt", ".wo", ".tx", ".fill", ".fillword",
+		// Symbol/constant definitions - scope-wide, not flow-dependent
+		".const", ".var", ".label", ".define",
+		// Structure definitions - not flow-dependent
+		".macro", ".function", ".pseudocommand", ".namespace", ".struct", ".enum",
+		// Import directives - always processed
+		".import", ".importonce",
+		// Encoding - file-level setting
+		".encoding",
+		// Segment directives - layout, not flow-dependent
+		".segment", ".segmentdef", ".segmentout",
+	}
+	for _, d := range alwaysReachable {
+		if directive == d {
 			return true
 		}
 	}
