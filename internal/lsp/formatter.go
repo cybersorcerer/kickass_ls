@@ -24,7 +24,7 @@ type FormattingConfig struct {
 func DefaultFormattingConfig() FormattingConfig {
 	return FormattingConfig{
 		Enabled:           true,
-		IndentSize:        4,
+		IndentSize:        8,
 		UseSpaces:         true,
 		AlignComments:     true,
 		AlignInstructions: false,

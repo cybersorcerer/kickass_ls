@@ -2,9 +2,30 @@
 
 A Language Server Protocol (LSP) implementation for Kick Assembler, providing modern IDE features for 6502/6510 assembly development on Commodore 64.
 
-**Note:** This is the first release of the Kick Assembler Language Server. While the server has been extensively tested on macOS, installation and functionality on Windows and Linux have not been thoroughly tested yet. Your feedback and bug reports are greatly appreciated!
+Current version: v1.0.7
+
+While the server has been extensively tested on macOS, installation and functionality on Windows and Linux have not been thoroughly tested yet. Your feedback and bug reports are greatly appreciated!
 
 Made with love for the retro computing community.
+
+## Changelog
+
+### v1.0.7
+
+- Fixed double prefix characters (`.`, `$`, `#`) appearing in completions when selecting from the completion menu in VSCode and Neovim — completions now use LSP `textEdit` with an explicit replacement range instead of `insertText`
+- Changed default indent size from 4 to 8 spaces (classic 6502 convention)
+
+### v1.0.6
+
+- Added Kick Assembler preprocessor statements (`#import`, `#importif`, `#importonce`, `#define`, `#undef`, `#if`, `#elif`, `#else`, `#endif`) to completions, hover, and diagnostics
+- Fixed completion triggering inside comments (completions are now suppressed in comment context)
+- Added `--version` / `-v` flag
+- Fixed zombie process issue in test client
+
+### v1.0.5
+
+- Added document formatting support with configurable comment alignment, indentation, and column layout
+- Suppress completions inside comments
 
 ## Table of Contents
 
@@ -471,7 +492,7 @@ All settings are organized under the `kickass_ls` namespace:
 
 - **formatting.enabled** (boolean, default: `true`)
   - Master switch for document formatting
-- **formatting.indentSize** (integer, default: `4`)
+- **formatting.indentSize** (integer, default: `8`)
   - Number of spaces per indent level
 - **formatting.useSpaces** (boolean, default: `true`)
   - Use spaces (`true`) or tabs (`false`) for indentation

@@ -882,7 +882,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "1.0.5", // Version updated
+						"version": "1.0.7", // Version updated
 					},
 				},
 			}
@@ -2290,6 +2290,23 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		return items
 	}
 
+	// Calculate the exact replacement range for textEdit.
+	// This ensures editors replace exactly wordToComplete (including . $ # prefix chars)
+	// instead of using their own word boundary detection which ignores those chars.
+	wordStart := cursorPos - len(wordToComplete)
+	if wordStart < 0 {
+		wordStart = 0
+	}
+	makeTextEdit := func(newText string) map[string]interface{} {
+		return map[string]interface{}{
+			"range": map[string]interface{}{
+				"start": map[string]interface{}{"line": lineNum, "character": wordStart},
+				"end":   map[string]interface{}{"line": lineNum, "character": cursorPos},
+			},
+			"newText": newText,
+		}
+	}
+
 	// Determine context: are we after a mnemonic or directive?
 	precedingName, isMnem, isDir := getPrecedingMnemonicOrDirective(lineContent, cursorPos)
 	log.Debug("Preceding context: name='%s', isMnemonic=%v, isDirective=%v", precedingName, isMnem, isDir)
@@ -2439,8 +2456,21 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 	if memoryPrefix != "" {
 		log.Debug("Memory address completion requested with prefix: '%s'", memoryPrefix)
 
-		// Determine if $ is already part of wordToComplete or found separately in the line
-		dollarInWord := strings.HasPrefix(wordToComplete, "$")
+		// The textEdit range must cover the full memory prefix (including $ even if
+		// $ is in the line but not part of wordToComplete)
+		memWordStart := cursorPos - len(memoryPrefix)
+		if memWordStart < 0 {
+			memWordStart = 0
+		}
+		makeMemTextEdit := func(newText string) map[string]interface{} {
+			return map[string]interface{}{
+				"range": map[string]interface{}{
+					"start": map[string]interface{}{"line": lineNum, "character": memWordStart},
+					"end":   map[string]interface{}{"line": lineNum, "character": cursorPos},
+				},
+				"newText": newText,
+			}
+		}
 
 		// Add all memory registers that match the prefix
 		for address, region := range c64MemoryMap.MemoryMap.Regions {
@@ -2452,12 +2482,10 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 				documentation := fmt.Sprintf("**%s** - %s\n\n*%s %s*\n\n%s",
 					addressWithDollar, region.Name, region.Category, region.Type, region.Description)
 
-				// Add access information
 				if region.Access != "" {
 					documentation += fmt.Sprintf("\n\n**Access:** %s", region.Access)
 				}
 
-				// Add bit fields if available
 				if len(region.BitFields) > 0 {
 					documentation += "\n\n**Bit Fields:**"
 					for bits, desc := range region.BitFields {
@@ -2468,19 +2496,12 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 				// Apply the user's case style to the address
 				casedAddress := applyCase(memoryPrefix, addressWithDollar)
 
-				// insertText: only include $ if it's part of wordToComplete,
-				// otherwise the $ is already in the line and would be duplicated
-				insertText := casedAddress
-				if !dollarInWord {
-					insertText = applyCase(memoryPrefix, addressHex)
-				}
-
 				item := map[string]interface{}{
 					"label":         casedAddress,
 					"kind":          float64(12), // Value/Constant
 					"detail":        fmt.Sprintf("%s - %s", region.Category, region.Name),
 					"documentation": documentation,
-					"insertText":    insertText,
+					"textEdit":      makeMemTextEdit(casedAddress),
 				}
 				items = append(items, item)
 			}
@@ -2512,7 +2533,6 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		// After # at line start - suggest preprocessor statements
 		log.Debug("ContextPreprocessor: suggesting preprocessor statements")
 		wordWithoutHash := strings.TrimPrefix(wordToComplete, "#")
-		hashInWord := strings.HasPrefix(wordToComplete, "#")
 
 		if ctx := GetProcessorContext(); ctx != nil {
 			for name, info := range ctx.PreprocessorStatements {
@@ -2522,16 +2542,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					if info != nil {
 						documentation = info.Description
 					}
-					insertText := "#" + displayName
-					if !hashInWord {
-						insertText = displayName
-					}
+					label := "#" + displayName
 					items = append(items, map[string]interface{}{
-						"label":         "#" + displayName,
+						"label":         label,
 						"kind":          float64(14), // Keyword
 						"detail":        "Preprocessor Statement",
 						"documentation": documentation,
-						"insertText":    insertText,
+						"textEdit":      makeTextEdit(label),
 					})
 				}
 			}
@@ -2598,7 +2615,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 							"detail": symbol.Value,
 						}
 						if symbol.Kind == Function {
-							item["insertText"] = symbol.Name
+							item["textEdit"] = makeTextEdit(symbol.Name)
 						}
 						items = append(items, item)
 					}
@@ -2626,7 +2643,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 							"kind":             float64(3), // Function
 							"detail":           fn.Signature,
 							"documentation":    fmt.Sprintf("**%s**\n\n%s", fn.Category, fn.Description),
-							"insertText":       fn.Name + "(${1})",
+							"textEdit":         makeTextEdit(fn.Name + "(${1})"),
 							"insertTextFormat": 2, // Snippet
 						}
 						if len(fn.Examples) > 0 {
@@ -2688,7 +2705,7 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 						"documentation": doc,
 					}
 					if symbol.Kind == Function {
-						item["insertText"] = symbol.Name
+						item["textEdit"] = makeTextEdit(symbol.Name)
 					}
 					items = append(items, item)
 				}
@@ -2699,7 +2716,6 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		// After . - suggest directives only
 		log.Debug("ContextDirective: suggesting directives only")
 		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
-		dotInWord := strings.HasPrefix(wordToComplete, ".")
 
 		// Try ProcessorContext first (Context-Aware Parser)
 		if ctx := GetProcessorContext(); ctx != nil {
@@ -2711,17 +2727,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					if directiveInfo != nil {
 						documentation = directiveInfo.Description
 					}
-					// insertText without dot if dot is already in the line but not part of wordToComplete
-					insertText := "." + displayName
-					if !dotInWord {
-						insertText = displayName
-					}
+					label := "." + displayName
 					items = append(items, map[string]interface{}{
-						"label":         "." + displayName,
+						"label":         label,
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": documentation,
-						"insertText":    insertText,
+						"textEdit":      makeTextEdit(label),
 					})
 				}
 			}
@@ -2729,16 +2741,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			// Fallback to old kickassDirectives array (legacy parser)
 			for _, d := range kickassDirectives {
 				if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
-					insertText := applyCase(wordToComplete, d.Directive)
-					if !dotInWord {
-						insertText = strings.TrimPrefix(insertText, ".")
-					}
+					label := applyCase(wordToComplete, d.Directive)
 					items = append(items, map[string]interface{}{
-						"label":         applyCase(wordToComplete, d.Directive),
+						"label":         label,
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": d.Description,
-						"insertText":    insertText,
+						"textEdit":      makeTextEdit(label),
 					})
 				}
 			}
@@ -2746,14 +2755,11 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 
 	case ContextMnemonic:
 		// Offer directives
-		// Strip leading dot from wordToComplete for matching (user types "." or ".by" etc.)
 		wordWithoutDot := strings.TrimPrefix(wordToComplete, ".")
-		dotInMnemonic := strings.HasPrefix(wordToComplete, ".")
 
 		// Try ProcessorContext first (Context-Aware Parser)
 		if ctx := GetProcessorContext(); ctx != nil {
 			for _, directiveName := range ctx.DirectiveNames {
-				// Remove the dot prefix for matching (directives stored as ".byte" etc.)
 				displayName := strings.TrimPrefix(directiveName, ".")
 				if strings.HasPrefix(strings.ToLower(displayName), strings.ToLower(wordWithoutDot)) {
 					directiveInfo := ctx.GetDirectiveInfo(directiveName)
@@ -2761,17 +2767,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					if directiveInfo != nil {
 						documentation = directiveInfo.Description
 					}
-					// insertText without dot if dot is already in the line but not part of wordToComplete
-					insertText := "." + displayName
-					if !dotInMnemonic {
-						insertText = displayName
-					}
+					label := "." + displayName
 					items = append(items, map[string]interface{}{
-						"label":         "." + displayName,
+						"label":         label,
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": documentation,
-						"insertText":    insertText,
+						"textEdit":      makeTextEdit(label),
 					})
 				}
 			}
@@ -2779,16 +2781,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 			// Fallback to old kickassDirectives array (legacy parser)
 			for _, d := range kickassDirectives {
 				if strings.HasPrefix(strings.ToLower(d.Directive), strings.ToLower(wordToComplete)) {
-					insertText := applyCase(wordToComplete, d.Directive)
-					if !dotInMnemonic {
-						insertText = strings.TrimPrefix(insertText, ".")
-					}
+					label := applyCase(wordToComplete, d.Directive)
 					items = append(items, map[string]interface{}{
-						"label":         applyCase(wordToComplete, d.Directive),
+						"label":         label,
 						"kind":          float64(14), // Keyword
 						"detail":        "Kick Assembler Directive",
 						"documentation": d.Description,
-						"insertText":    insertText,
+						"textEdit":      makeTextEdit(label),
 					})
 				}
 			}
@@ -2797,7 +2796,6 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		// Offer preprocessor statements
 		if ctx := GetProcessorContext(); ctx != nil {
 			wordWithoutHash := strings.TrimPrefix(wordToComplete, "#")
-			hashInMnemonic := strings.HasPrefix(wordToComplete, "#")
 			for name, info := range ctx.PreprocessorStatements {
 				displayName := strings.TrimPrefix(name, "#")
 				if strings.HasPrefix(strings.ToLower(displayName), strings.ToLower(wordWithoutHash)) {
@@ -2805,16 +2803,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 					if info != nil {
 						documentation = info.Description
 					}
-					insertText := "#" + displayName
-					if !hashInMnemonic {
-						insertText = displayName
-					}
+					label := "#" + displayName
 					items = append(items, map[string]interface{}{
-						"label":         "#" + displayName,
+						"label":         label,
 						"kind":          float64(14), // Keyword
 						"detail":        "Preprocessor Statement",
 						"documentation": documentation,
-						"insertText":    insertText,
+						"textEdit":      makeTextEdit(label),
 					})
 				}
 			}
@@ -2879,11 +2874,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 								detail = "6502/6510 Illegal Opcode"
 							}
 						}
+						label := applyCase(wordToComplete, mnemonicName)
 						items = append(items, map[string]interface{}{
-							"label":         applyCase(wordToComplete, mnemonicName),
+							"label":         label,
 							"kind":          float64(14), // Keyword
 							"detail":        detail,
 							"documentation": documentation,
+							"textEdit":      makeTextEdit(label),
 						})
 					}
 				}
@@ -2891,11 +2888,13 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 				// Fallback to old mnemonics array (legacy parser)
 				for _, m := range mnemonics {
 					if strings.HasPrefix(strings.ToUpper(m.Mnemonic), strings.ToUpper(wordToComplete)) {
+						label := applyCase(wordToComplete, m.Mnemonic)
 						items = append(items, map[string]interface{}{
-							"label":         applyCase(wordToComplete, m.Mnemonic),
+							"label":         label,
 							"kind":          float64(14), // Keyword
 							"detail":        "6502/6510 Opcode",
 							"documentation": m.Description,
+							"textEdit":      makeTextEdit(label),
 						})
 					}
 				}

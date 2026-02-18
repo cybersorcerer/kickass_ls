@@ -2799,7 +2799,136 @@
         },
         "related": ["0xDD06", "0xDD07", "0xDD0E"]
       },
-
+      "0xDF00": {
+        "name": "REU Status Register",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "This register provides information about the current state of the REC and the results of the last operation",
+        "access": "read",
+        "bitFields": {
+           "0-3": "(Version): Contains the version number of the REC chip.",
+           "4": "(Size): Indicates the capacity of the REU (1 = 256K).",
+           "5": "(Fault): Indicates an error occurred during a Verify operation (1 = error).",
+           "6": "(End of Block): Signals that a data transfer has successfully completed (1 = complete).",
+           "7": "(Interrupt Pending): Indicates that an interrupt is waiting to be serviced (1 = active)."
+        },
+		"tips": ["Reading this register automatically clears bits 5 to 7"],
+        "related": ["0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF01": {
+        "name": "REU Command Register",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "This register defines the specific operation the REC should perform.",
+        "access": "read/write",
+        "bitFields": {
+           "0-1": "(Transfer Type): Determines the mode of operation:\n   - 00: Transfer C64 RAM -> REU RAM\n   - 01: Transfer REU RAM -> C64 RAM\n   - 10: Swap (exchange) data between C64 and REU RAM\n   - 11: Verify (compare) data between C64 and REU RAM",
+           "2": "Reserved.",
+           "3": "Reserved.",
+           "4": "(FF00): Determines the execution trigger. If set to 1, the DMA transfer does not start until a write access is made to address $FF00. This allows the REC to access RAM hidden behind I/O registers.",
+           "5": "(Load): Enables the AUTOLOAD feature. When active (1), the starting addresses and transfer length are automatically reset to their original values after completion.",
+           "6": "Reserved.",
+           "7": "(Execute): Setting this bit to 1 triggers the DMA transfer based on the current configuration."
+        },
+        "related": ["0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF02": {
+        "name": "REU C64 Base Address.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Specifies the least significant byte of the 16-bit starting address in the C64's main memory.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF03": {
+        "name": "REU C64 Base Address.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Specifies the most significant byte of the 16-bit starting address in the C64's main memory.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF02", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF04": {
+        "name": "REU Expansion RAM Address.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Specifies the least significant byte of the starting address within a 64K bank of the REU.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF05": {
+        "name": "REU Expansion RAM Address.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Specifies the most significant byte of the starting address within a 64K bank of the REU.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF04", "0xDF06", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF06": {
+        "name": "REU Expansion RAM Bank.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Selects the target bank within the REU. Bits 0–2 act as the bank pointer.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF07", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF07": {
+        "name": "REU Transfer Length.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Defines the least significant byte of the number of bytes to transfer. A value of $0000 indicates a full 64 KB transfer.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF08", "0xDF09", "0xDF0A"]
+      },
+      "0xDF08": {
+        "name": "REU Transfer Length.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Defines the most significant byte of the number of bytes to transfer. A value of $0000 indicates a full 64 KB transfer.",
+        "access": "read/write",
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF09", "0xDF0A"]
+      },
+      "0xDF09": {
+        "name": "REU Interrupt Mask Register.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Manages interrupt behavior.",
+        "access": "read/write",
+		"bitFields": {
+           "0": "Undocumented",
+           "1": "Undocumented",
+           "2": "Undocumented",
+           "3": "Undocumented",
+           "4": "Undocumented",
+           "5": "Triggers an interrupt if a Verify error occurs.",
+           "6": "Triggers an interrupt when a block transfer finishes.",
+           "7": "Master interrupt enable (1 = On)."
+        },
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF0A"]
+      },
+      "0xDF0A": {
+        "name": "REU Address Control Register.",
+        "category": "REU",
+        "type": "register",
+        "size": 1,
+        "description": "Controls how addresses behave during the DMA process.",
+        "access": "read/write",
+		"bitFields": {
+           "0-5": "Undocumented",
+           "6-7": "\n- 00: Both C64 and REU addresses increment after every byte (Standard)\n- 01: REU address is fixed; only the C64 address increments\n- 10: C64 address is fixed; only the REU address increments\n- 11: Both addresses remain fixed"
+        },
+        "related": ["0xDF01", "0xDF02", "0xDF03", "0xDF04", "0xDF05", "0xDF06", "0xDF07", "0xDF08", "0xDF09"]
+      },
       "0xE000": {
         "name": "KERNAL ROM Start",
         "category": "ROM",
@@ -2861,6 +2990,51 @@
         "tips": ["Handles RESTORE key"]
       },
 
+      "0xFF00": {
+        "name": "DMA execution trigger",
+        "category": "REU",
+        "type": "Trigger",
+        "size": 1,
+        "description": "Under normal operation, a data transfer begins immediately once the **Execute bit** (Bit 7) in the Command Register ($DF01) is set. However, the REU provides an alternative start mechanism known as the FF00 option.When this option is active (enabled by setting Bit 4 of $DF01 to 0), the RAM Expansion Controller (REC) prepares the transfer according to your configuration but does not execute it immediately. Instead, the DMA transfer is only triggered at the exact moment the CPU performs a write access to address $FF00",
+        "access": "execute",
+        "examples": [
+           "// 1. Configure the data transfer (e.g., move 1024 bytes from C64 $d000 to REU)",
+           "lda #$00",
+           "sta REC_C64_ADDR      // Set C64 base address LSB [1]",
+           "lda #$d0",
+           "sta REC_C64_ADDR + 1  // Set C64 base address MSB ($d0) -> points to $d000",
+           "lda #$00",
+           "sta REC_REU_ADDR      // Set target REU address within the bank (LSB)",
+           "sta REC_REU_ADDR + 1  // Set target REU address within the bank (MSB)",
+           "sta REC_BANK          // Select target REU memory Bank 0",
+           "lda #$00",
+           "sta REC_LENGTH        // Set number of bytes to transfer (LSB)",
+           "lda #$04",
+           "sta REC_LENGTH + 1    // Set number of bytes to transfer (MSB) -> $0400 = 1024 bytes [1]",
+           "// 2. Arm the REC Command Register",
+           "// Bit 7 (Execute): Set to 1 to authorize the configured transfer",
+           "// Bit 4 (FF00): Set to 0 to enable the delayed $ff00 trigger option",
+           "// Bits 1-0 (Transfer Type): 00 = Transfer C64 RAM to expansion module",
+           "// The value $80 (%10000000) arms the REC to wait for a write access to $ff00.",
+           "lda #%10000000",
+           "sta REC_COMMAND",
+           "// 3. Bank out the I/O area to expose the underlying RAM",
+           "// This is the primary use case for the $ff00 trigger, as REU registers",
+           "// reside in the I/O space ($d000-$dfff) which must be replaced by RAM",
+           "// if you wish to transfer data to/from those specific addresses.",
+           "lda $01               // Read 6510 processor on-chip I/O port",
+           "pha                   // Push current port value to stack to save banking",
+           "and #%11111011        // Clear bit 2 to disable I/O and enable RAM at $d000-$dfff",
+           "sta $01               // Write updated configuration to processor port",
+           "// 4. Trigger the DMA transfer by writing to address $ff00",
+           "// Once the REC detects a write to $ff00, it takes over the bus immediately.",
+           "sta $ff00",
+           "// 5. Restore original banking configuration",
+           "pla                   // Pull previous processor port value from stack",
+           "sta $01               // Re-enable the I/O area",
+           "rts                   // Return from Subroutine"
+        ]
+      },
       "0xFF81": {
         "name": "CINT - Initialize Screen Editor",
         "category": "KERNAL",
@@ -2869,7 +3043,7 @@
         "description": "Initialize VIC-II and screen editor",
         "access": "execute",
         "examples": [
-          "jsr $ff81    ; Initialize screen"
+           "jsr $ff81"
         ],
         "related": ["0xFF84", "0xE544"],
         "tips": ["Resets screen to defaults"]
