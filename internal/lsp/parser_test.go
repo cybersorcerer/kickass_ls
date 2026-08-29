@@ -174,6 +174,81 @@ func TestParserEnumRequiresBrace(t *testing.T) {
 	}
 }
 
+// --- multi labels --------------------------------------------------------
+
+// TestAnonymousMultiLabels covers the anonymous form from manual 2.4. The lexer
+// required a name after the '!', so "!:" and "!+" fell through to the boolean
+// not operator. A "jmp !-" then consumed the following line as its operand,
+// which cascaded into "Unexpected token" errors, undefined symbols and a flood
+// of unreachable code warnings.
+func TestAnonymousMultiLabels(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "skip forward over an instruction",
+			src:  "*=$0801\n        bcc !+\n        eor #$c5\n!:      sta $02\n        rts\n",
+		},
+		{
+			name: "loop backwards",
+			src:  "*=$0801\n        ldx #0\n!:      inx\n        bne !-\n        rts\n",
+		},
+		{
+			name: "named and anonymous side by side",
+			src: "*=$0801\n" +
+				"        ldx #0\n" +
+				"!:      lda $1000,x\n" +
+				"        beq !done+\n" +
+				"        inx\n" +
+				"        jmp !-\n" +
+				"!done:\n" +
+				"        rts\n",
+		},
+		{
+			name: "manual example",
+			src: "*=$0801\n" +
+				"        ldx #10\n" +
+				"!loop:\n" +
+				"        jmp !+\n" +
+				"        nop\n" +
+				"        nop\n" +
+				"!:      jmp !+\n" +
+				"        nop\n" +
+				"        nop\n" +
+				"!:\n" +
+				"        dex\n" +
+				"        bne !loop-\n",
+		},
+		{
+			name: "repeated sign",
+			src:  "*=$0801\n        jmp !+++\n!:      nop\n!:      nop\n!:\n        rts\n",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertNoErrors(t, tc.src)
+		})
+	}
+}
+
+// TestBooleanNotIsNotAMultiLabel is the counterpart: making '!' start a multi
+// label must not swallow the boolean not operator.
+func TestBooleanNotIsNotAMultiLabel(t *testing.T) {
+	tests := []string{
+		"#define DEBUG\n#if !DEBUG\n    nop\n#endif\n",
+		".const A = 1\n.const B = !A\n",
+		".const A = 1\n.const B = A != 2\n",
+	}
+
+	for _, src := range tests {
+		t.Run(src, func(t *testing.T) {
+			assertNoErrors(t, src)
+		})
+	}
+}
+
 // --- symbol kinds --------------------------------------------------------
 
 // TestBuildScopeSymbolKinds guards the rule that a symbol's kind follows from

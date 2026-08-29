@@ -873,6 +873,7 @@ func (p *ContextAwareParser) isStatementTerminator() bool {
 	return p.currentToken.Type == TOKEN_EOF ||
 		p.currentToken.Type == TOKEN_RBRACE ||
 		p.currentToken.Type == TOKEN_LABEL ||
+		p.currentToken.Type == TOKEN_MULTILABEL ||
 		p.currentToken.Type == TOKEN_MNEMONIC_STD ||
 		p.currentToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.currentToken.Type == TOKEN_MNEMONIC_ILL ||
@@ -1045,8 +1046,9 @@ func (p *ContextAwareParser) parseMultiLabelReference() Expression {
 	// Direction is preserved in Token.Type (TOKEN_MULTILABEL_FWD or TOKEN_MULTILABEL_BACK)
 	literal := p.currentToken.Literal
 	name := strings.TrimPrefix(literal, "!")
-	name = strings.TrimSuffix(name, "+")
-	name = strings.TrimSuffix(name, "-")
+	// TrimRight, not TrimSuffix: repeating the sign skips labels, so "!loop++"
+	// and the anonymous "!+++" both have more than one.
+	name = strings.TrimRight(name, "+-")
 
 	// Store the direction in the token literal for later analysis
 	// We'll create an Identifier with metadata about the direction

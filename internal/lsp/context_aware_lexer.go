@@ -982,18 +982,14 @@ func (l *ContextAwareLexer) tryTokenizeMultiLabel() *ContextToken {
 	saved := l.position
 	savedCol := l.column
 
-	// Consume '!'
-	l.advance()
-
-	// Read identifier
-	if !isAlpha(l.peek()) && l.peek() != '_' {
-		// Not a multi-label, restore
-		l.position = saved
-		l.column = savedCol
+	// The name is optional. Anonymous multi labels carry none: "!:" defines
+	// one, "!+" and "!-" reference the next and the previous one, and repeating
+	// the sign skips labels — "!+++" refers to the third one (manual 2.4).
+	tempPos := saved + 1
+	if tempPos < len(l.input) && isDigit(l.input[tempPos]) {
+		// A name must not start with a digit.
 		return nil
 	}
-
-	tempPos := l.position
 	for tempPos < len(l.input) {
 		ch := l.input[tempPos]
 		if isAlphaNumeric(ch) || ch == '_' {
@@ -1003,34 +999,35 @@ func (l *ContextAwareLexer) tryTokenizeMultiLabel() *ContextToken {
 		}
 	}
 
-	// Check what follows the identifier
+	// Check what follows the (possibly empty) name
 	if tempPos >= len(l.input) {
 		// End of input, not a multi-label
-		l.position = saved
-		l.column = savedCol
 		return nil
 	}
 
 	nextChar := l.input[tempPos]
 	var tokenType TokenType
-	var endPos int
+	endPos := tempPos
 
-	if nextChar == ':' {
-		// Multi-label definition: !label:
+	switch nextChar {
+	case ':':
+		// Multi-label definition: !label: or the anonymous !:
 		tokenType = TOKEN_MULTILABEL
 		endPos = tempPos + 1
-	} else if nextChar == '+' {
-		// Multi-label forward reference: !label+
+	case '+':
+		// Forward reference: !label+, !+, !++ …
 		tokenType = TOKEN_MULTILABEL_FWD
-		endPos = tempPos + 1
-	} else if nextChar == '-' {
-		// Multi-label backward reference: !label-
+		for endPos < len(l.input) && l.input[endPos] == '+' {
+			endPos++
+		}
+	case '-':
+		// Backward reference: !label-, !-, !-- …
 		tokenType = TOKEN_MULTILABEL_BACK
-		endPos = tempPos + 1
-	} else {
-		// Not a multi-label (just ! followed by identifier)
-		l.position = saved
-		l.column = savedCol
+		for endPos < len(l.input) && l.input[endPos] == '-' {
+			endPos++
+		}
+	default:
+		// Just '!' followed by something else — the boolean not operator.
 		return nil
 	}
 

@@ -105,6 +105,61 @@ func TestLexerValidInput(t *testing.T) {
 			},
 		},
 		{
+			// Anonymous multi labels have no name at all (manual 2.4).
+			name:  "anonymous multi label definition",
+			input: "!:      sta $d020",
+			want: []wantToken{
+				{TOKEN_MULTILABEL, "!:", 1, 1},
+				{TOKEN_MNEMONIC_STD, "sta", 1, 9},
+				{TOKEN_NUMBER_HEX, "$d020", 1, 13},
+			},
+		},
+		{
+			name:  "anonymous forward reference",
+			input: "        bcc !+",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_STD, "bcc", 1, 9},
+				{TOKEN_MULTILABEL_FWD, "!+", 1, 13},
+			},
+		},
+		{
+			name:  "anonymous backward reference",
+			input: "        jmp !-",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_CTRL, "jmp", 1, 9},
+				{TOKEN_MULTILABEL_BACK, "!-", 1, 13},
+			},
+		},
+		{
+			// Repeating the sign skips labels: !+++ refers to the third one.
+			name:  "repeated sign skips labels",
+			input: "        jmp !+++",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_CTRL, "jmp", 1, 9},
+				{TOKEN_MULTILABEL_FWD, "!+++", 1, 13},
+			},
+		},
+		{
+			name:  "boolean not is not a multi label",
+			input: "#if !DEBUG",
+			want: []wantToken{
+				{TOKEN_DIRECTIVE_KICK_PRE, "#if", 1, 1},
+				{TOKEN_LOGICAL_NOT, "!", 1, 5},
+				{TOKEN_IDENTIFIER, "DEBUG", 1, 6},
+			},
+		},
+		{
+			name:  "not equal is not a multi label",
+			input: "a = 1 != 2",
+			want: []wantToken{
+				{TOKEN_IDENTIFIER, "a", 1, 1},
+				{TOKEN_EQUAL, "=", 1, 3},
+				{TOKEN_NUMBER_DEC, "1", 1, 5},
+				{TOKEN_NOT_EQUAL, "!=", 1, 7},
+				{TOKEN_NUMBER_DEC, "2", 1, 10},
+			},
+		},
+		{
 			name:  "all number bases",
 			input: "        lda #$ff",
 			want: []wantToken{
