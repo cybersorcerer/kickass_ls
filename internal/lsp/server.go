@@ -1171,8 +1171,9 @@ func Start() {
 			}
 			response, err := json.Marshal(result)
 			if err != nil {
+				// Drop this response, do not end the session over one request.
 				log.Error("Failed to marshal completion response: %v", err)
-				return
+				continue
 			}
 			log.Debug("Sending completion response: %s", string(response))
 			writeResponse(writer, response)
@@ -1894,7 +1895,26 @@ func getWordAtPosition(line string, char int) string {
 		end++
 	}
 
-	return line[start : end+1]
+	// '#' is part of the word only for preprocessor statements (#import,
+	// #define), which start the line. Anywhere else it marks an immediate
+	// operand: in "lda #MYCONST" the symbol is MYCONST, not "#MYCONST".
+	if line[start] == '#' && strings.TrimSpace(line[:start]) != "" {
+		start++
+		if start > end {
+			return ""
+		}
+	}
+
+	// A cursor sitting on whitespace or punctuation has no word under it.
+	// Returning that single character instead made callers, which only guard
+	// against "", continue with a lookup for " " or ",".
+	word := line[start : end+1]
+	for i := 0; i < len(word); i++ {
+		if isWordChar(word[i]) {
+			return word
+		}
+	}
+	return ""
 }
 
 // handleGotoDefinition handles goto definition requests for both regular labels and multi-labels
@@ -3305,9 +3325,17 @@ func GenerateHover(symbolTree *Scope, line string, char int) (string, bool) {
 
 // GenerateSignatureHelp generates signature help for function calls at a specific position
 func GenerateSignatureHelp(symbolTree *Scope, line string, char int) (string, bool) {
-	// Debug: show what we're analyzing
-	if char > len(line) {
-		char = len(line)
+	// The scan below indexes line[char], so char must stay inside the string.
+	// Clamping to len(line) instead of len(line)-1 read one past the end and
+	// panicked whenever the cursor sat at the end of the line.
+	if len(line) == 0 {
+		return "", false
+	}
+	if char >= len(line) {
+		char = len(line) - 1
+	}
+	if char < 0 {
+		return "", false
 	}
 
 	// Find function call context - look backwards for opening parenthesis

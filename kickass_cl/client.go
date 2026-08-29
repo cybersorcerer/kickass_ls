@@ -203,9 +203,16 @@ func (c *LSPClient) readStderr() {
 
 func (c *LSPClient) handleMessage(msg *Message) {
 	if msg.ID != nil {
-		// This is a response to a request
+		// This is a response to a request. The id is checked rather than
+		// asserted: a server that answers with a string id would otherwise
+		// panic the reader goroutine.
+		rawID, ok := msg.ID.(float64)
+		if !ok {
+			fmt.Printf("Ignoring response with non numeric id %v\n", msg.ID)
+			return
+		}
 		c.reqMutex.Lock()
-		id := int(msg.ID.(float64))
+		id := int(rawID)
 		if ch, ok := c.pendingReqs[id]; ok {
 			ch <- msg
 			delete(c.pendingReqs, id)

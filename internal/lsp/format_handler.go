@@ -108,8 +108,21 @@ func handleRangeFormatting(params map[string]interface{}) []interface{} {
 		return nil
 	}
 
-	startLine := int(startPos["line"].(float64))
-	endLine := int(endPos["line"].(float64))
+	// Checked assertions: this runs on the server's main message loop, so a
+	// malformed request would otherwise panic and take the whole session down.
+	startLineValue, ok := startPos["line"].(float64)
+	if !ok {
+		log.Error("Invalid start line in range formatting request")
+		return nil
+	}
+	endLineValue, ok := endPos["line"].(float64)
+	if !ok {
+		log.Error("Invalid end line in range formatting request")
+		return nil
+	}
+
+	startLine := int(startLineValue)
+	endLine := int(endLineValue)
 
 	// Get document content
 	documentStore.RLock()
