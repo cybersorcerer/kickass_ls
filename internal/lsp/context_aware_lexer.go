@@ -513,8 +513,10 @@ func (l *ContextAwareLexer) readBlockComment() *ContextToken {
 	l.advance()
 	l.advance()
 
-	// Read until */ is found
-	for l.position+1 < len(l.input) {
+	// Read until */ is found. The bound is the input length, not one short of
+	// it: stopping early left the last character of an unterminated block
+	// comment outside the token, where it was lexed as a separate identifier.
+	for l.position < len(l.input) {
 		if l.peek() == '*' && l.peekAhead(1) == '/' {
 			l.advance() // skip *
 			l.advance() // skip /
@@ -1073,15 +1075,8 @@ func (l *ContextAwareLexer) tryTokenizeMultiLabel() *ContextToken {
 
 // tryTokenizeLabel attempts to tokenize a label (identifier:)
 func (l *ContextAwareLexer) tryTokenizeLabel() *ContextToken {
-	// Look ahead to see if this is a label
-	saved := l.position
-	savedCol := l.column
-
-	if l.debugMode && l.line >= 80 && l.line <= 110 {
-		log.Debug("tryTokenizeLabel: ENTER Line %d, l.position=%d, l.column=%d", l.line, l.position, l.column)
-	}
-
-	// Read identifier
+	// Look ahead to see if this is a label. Nothing is consumed until the
+	// colon is confirmed, so there is no position to restore on failure.
 	if !isAlpha(l.peek()) && l.peek() != '_' {
 		return nil
 	}
@@ -1115,13 +1110,6 @@ func (l *ContextAwareLexer) tryTokenizeLabel() *ContextToken {
 			Context:  l.CurrentContext(),
 			Metadata: &TokenMetadata{},
 		}
-	}
-
-	// Not a label, restore position
-	l.position = saved
-
-	if l.debugMode && l.line >= 80 && l.line <= 110 {
-		log.Debug("tryTokenizeLabel: EXIT (not a label) Line %d, l.position=%d, l.column=%d, savedCol=%d", l.line, l.position, l.column, savedCol)
 	}
 
 	return nil
@@ -1357,10 +1345,6 @@ func (l *ContextAwareLexer) tryTokenizeIdentifier() *ContextToken {
 
 	start := l.position
 	startCol := l.column
-
-	if l.debugMode && l.line >= 80 && l.line <= 110 {
-		log.Debug("tryTokenizeIdentifier: Line %d, l.column=%d, startCol=%d, start position=%d", l.line, l.column, startCol, start)
-	}
 
 	// Read identifier (allow dots for member access like Colors.BLUE)
 	l.advance()

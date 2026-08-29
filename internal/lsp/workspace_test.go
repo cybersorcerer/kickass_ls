@@ -289,3 +289,41 @@ func TestURIPathRoundTrip(t *testing.T) {
 		t.Errorf("PathToURI must not double-prefix: %q", got)
 	}
 }
+
+// TestParseNumericValueHandlesHex guards a helper that reported every hex
+// address as "not numeric": strconv.Atoi parses base 10 only, so prefixing the
+// string with "0x" made it fail rather than succeed.
+func TestParseNumericValueHandlesHex(t *testing.T) {
+	ctx := GetProcessorContext()
+	if ctx == nil {
+		t.Fatal("no processor context")
+	}
+
+	tests := []struct {
+		input string
+		want  int
+	}{
+		{"$d020", 0xd020},
+		{"$80", 0x80},
+		{"0xd020", 0xd020},
+		{"%1010", 0b1010},
+		{"42", 42},
+		{"#$10", 0x10},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.input, func(t *testing.T) {
+			got, err := ctx.parseNumericValue(tc.input)
+			if err != nil {
+				t.Fatalf("parseNumericValue(%q) failed: %v", tc.input, err)
+			}
+			if got != tc.want {
+				t.Errorf("parseNumericValue(%q) = %d, want %d", tc.input, got, tc.want)
+			}
+		})
+	}
+
+	if _, err := ctx.parseNumericValue("someLabel"); err == nil {
+		t.Error("a label must not parse as a number")
+	}
+}

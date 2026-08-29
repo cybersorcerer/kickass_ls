@@ -319,6 +319,23 @@ func TestLexerMalformedInput(t *testing.T) {
 			},
 		},
 		{
+			// The loop used to stop one character early, so the last one was
+			// lexed again as a separate token.
+			name:  "unterminated block comment consumes the rest of the input",
+			input: "        /* unterminated",
+			want: []wantToken{
+				{TOKEN_COMMENT_BLOCK, "/* unterminated", 1, 9},
+			},
+		},
+		{
+			name:  "terminated block comment",
+			input: "        /* note */ nop",
+			want: []wantToken{
+				{TOKEN_COMMENT_BLOCK, "/* note */", 1, 9},
+				{TOKEN_MNEMONIC_STD, "nop", 1, 20},
+			},
+		},
+		{
 			name:  "unterminated character literal does not swallow the rest of the line",
 			input: "        lda #'a",
 			want: []wantToken{

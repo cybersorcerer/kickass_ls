@@ -15,14 +15,15 @@ func generateSemanticTokens(uri string, text string) []int {
 	symbolStore.RUnlock()
 
 	if !exists {
-		log.Debug("generateSemanticTokens: No symbol tree found, parsing document now")
-		// Parse document to get symbol tree
-		tree, context, _ := ParseDocument(uri, text)
-		// Store it for future use
-		symbolStore.Lock()
-		symbolStore.trees[uri] = tree
-		symbolStore.contexts[uri] = context
-		symbolStore.Unlock()
+		// Analysing the unit fills the symbol store for every document in it.
+		// Assigning to a fresh tree here instead used to leave the outer one
+		// nil, so every identifier fell back to "variable".
+		log.Debug("generateSemanticTokens: No symbol tree found, analysing the unit")
+		analyzeUnit(uri)
+
+		symbolStore.RLock()
+		tree = symbolStore.trees[uri]
+		symbolStore.RUnlock()
 	}
 
 	// Create context-aware lexer to tokenize the text
@@ -105,25 +106,12 @@ func generateSemanticTokens(uri string, text string) []int {
 
 		tokenCount++
 
-		// Debug: log tokens around problematic areas
-		// Lines 80-108 (all enums), lines 246-249 (pseudocommand calls), line 232 (clearScreen macro call)
-		if tokenCount <= 50 || (line >= 79 && line <= 108) || (line >= 231 && line <= 233) || (line >= 246 && line <= 249) {
-			log.Debug("SemanticToken[%d]: '%s' L%d:C%d delta(%d,%d) len=%d type=%d tokenType=%d | prevL=%d prevC=%d | RAW=[%d,%d,%d,%d,%d]",
-				tokenCount, token.Literal, line+1, char+1, deltaLine, deltaChar, tokenLength, tokenType, token.Type, lastEmittedLine+1, lastEmittedChar+1,
-				deltaLine, deltaChar, tokenLength, tokenType, modifiers)
-		}
-
 		// Update last emitted position (start of THIS token)
 		lastEmittedLine = line
 		lastEmittedChar = char
 	}
 
 	log.Debug("generateSemanticTokens: Generated %d tokens", len(tokens)/5)
-
-	// Debug: Output raw token values for enum section (tokens 875-900 = values 4375-4500)
-	if len(tokens) >= 900 {
-		log.Debug("Raw LSP tokens for enum section (values 875-900): %v", tokens[875:900])
-	}
 
 	return tokens
 }

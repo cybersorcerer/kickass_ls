@@ -659,7 +659,7 @@ func Start() {
 				log.Info("EOF received, exiting.")
 				break
 			}
-			log.Logger.Printf("Error reading header: %v\n", err)
+			log.Error("Error reading header: %v", err)
 			return
 		}
 
@@ -670,28 +670,28 @@ func Start() {
 		lengthStr := line[16 : len(line)-2]
 		contentLength, err := strconv.Atoi(lengthStr)
 		if err != nil {
-			log.Logger.Printf("Error parsing Content-Length: %v\n", err)
+			log.Error("Error parsing Content-Length: %v", err)
 			return
 		}
 
 		_, err = reader.ReadString('\n')
 		if err != nil {
-			log.Logger.Printf("Error reading empty line: %v\n", err)
+			log.Error("Error reading empty line: %v", err)
 			return
 		}
 
 		payload := make([]byte, contentLength)
 		_, err = io.ReadFull(reader, payload)
 		if err != nil {
-			log.Logger.Printf("Error reading payload: %v\n", err)
+			log.Error("Error reading payload: %v", err)
 			return
 		}
 
-		log.Logger.Printf("Received payload: %s\n", string(payload))
+		log.Debug("Received payload: %s", string(payload))
 
 		var message map[string]interface{}
 		if err := json.Unmarshal(payload, &message); err != nil {
-			log.Logger.Printf("Error unmarshaling JSON: %v\n", err)
+			log.Error("Error unmarshaling JSON: %v", err)
 			continue
 		}
 
@@ -936,12 +936,12 @@ func Start() {
 										if int(lineNum) < len(lines) {
 											lineContent := lines[int(lineNum)]
 											word := getWordAtPosition(lineContent, int(charNum))
-											log.Logger.Printf("Hovering over: %s\n", word)
+											log.Debug("Hovering over: %s", word)
 
 											// Also try to extract memory address (priority over regular words)
 											memoryAddr := getMemoryAddressAtPosition(lineContent, int(charNum))
 											if memoryAddr != "" {
-												log.Logger.Printf("Memory address found: %s\n", memoryAddr)
+												log.Debug("Memory address found: %s", memoryAddr)
 												word = memoryAddr // Use memory address instead of regular word
 											}
 
@@ -1085,7 +1085,7 @@ func Start() {
 			writeResponse(writer, response)
 
 		case "textDocument/definition":
-			log.Info("=== Handling textDocument/definition request ===")
+			log.Debug("Handling textDocument/definition request.")
 			var responseResult interface{} = nil
 
 			if params, ok := message["params"].(map[string]interface{}); ok {
@@ -1094,9 +1094,9 @@ func Start() {
 						if position, ok := params["position"].(map[string]interface{}); ok {
 							if lineNum, ok := position["line"].(float64); ok {
 								if charNum, ok := position["character"].(float64); ok {
-									log.Info("GotoDefinition: uri=%s, line=%d, char=%d", uri, int(lineNum), int(charNum))
+									log.Debug("GotoDefinition: uri=%s, line=%d, char=%d", uri, int(lineNum), int(charNum))
 									responseResult = handleGotoDefinition(uri, int(lineNum), int(charNum))
-									log.Info("GotoDefinition: responseResult=%+v", responseResult)
+									log.Debug("GotoDefinition: responseResult=%+v", responseResult)
 								}
 							}
 						}
@@ -1384,7 +1384,7 @@ func writeResponse(writer *bufio.Writer, response []byte) {
 	writeMutex.Lock()
 	defer writeMutex.Unlock()
 
-	log.Logger.Printf("Sending response: %s\n", string(response))
+	log.Debug("Sending response: %s", string(response))
 	fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(response))
 	writer.Write(response)
 	writer.Flush()

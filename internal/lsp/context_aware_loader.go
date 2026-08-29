@@ -410,12 +410,15 @@ func (ctx *ProcessorContext) parseNumericValue(value string) (int, error) {
 	// Remove leading #
 	value = strings.TrimPrefix(value, "#")
 
-	// Hex values
+	// Hex values. strconv.Atoi parses base 10 only, so it never accepted these
+	// and every hex address was reported as "not numeric".
 	if strings.HasPrefix(value, "$") {
-		return strconv.Atoi("0x" + value[1:])
+		parsed, err := strconv.ParseInt(value[1:], 16, 32)
+		return int(parsed), err
 	}
 	if strings.HasPrefix(value, "0x") || strings.HasPrefix(value, "0X") {
-		return strconv.Atoi(value)
+		parsed, err := strconv.ParseInt(value[2:], 16, 32)
+		return int(parsed), err
 	}
 
 	// Binary values
