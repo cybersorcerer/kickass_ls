@@ -36,6 +36,7 @@ Correctness release. Every fix below is covered by a test that fails without it.
 - A repeated `.namespace` continues the existing namespace instead of reporting a duplicate symbol (manual 9.3)
 - Preprocessor statements terminate a statement, so an instruction no longer swallows the following `#endif`
 - Comments between enum members are allowed
+- Zero page hints, memory write detection and the Branch/Jump/Return classification are read from `mnemonic.json`, directive reachability from `kickass.json`. The hardcoded lists they replaced had drifted: the illegal opcode list named 18 of 46, and the directive list contained `.data`, `.byt` and `.tx`, which Kick Assembler does not have, while its real short forms `.by`, `.te` and `.dw` were reported as unreachable
 
 **Cross-file symbols**
 
@@ -77,8 +78,8 @@ Correctness release. Every fix below is covered by a test that fails without it.
 
 **Tests**
 
-- Added the first Go unit tests: 272 cases covering the lexer, parser, formatter, expression evaluation and program counter arithmetic. `make test` and `make test-race`
-- The integration test runner now enforces `maxErrors`, `minWarnings` and `maxWarnings`, which were silently ignored, and gained `forbiddenDiagnostics` for asserting that a diagnostic is absent
+- Added the first Go unit tests: 326 cases covering the lexer, parser, formatter, expression evaluation, program counter arithmetic and the tables loaded from the JSON files. `make test` and `make test-race`
+- The integration test runner now enforces `maxErrors`, `minWarnings`, `maxWarnings`, `minDiagnostics` and `maxDiagnostics`, none of which existed as fields, so suites using them passed no matter what the server returned. Added `forbiddenDiagnostics` for asserting that a diagnostic is absent
 - Baseline test fixtures corrected to valid Kick Assembler (`.enum` takes no name, conditional assembly uses `#if`/`#endif`/`#undef`)
 
 ### v1.0.7
@@ -165,6 +166,7 @@ The Kick Assembler Language Server provides comprehensive language support for 6
 - **Document formatting** - Configurable code formatting with comment alignment, indentation management, and column-based layout
 - **Semantic highlighting** - Syntax-aware token classification for better code visualization
 - **C64 memory map integration** - Built-in knowledge of VIC-II, SID, CIA registers with I/O register descriptions from memory map
+- **Cross-file symbols** - `#import` is followed, so a file is analysed together with everything it imports, as one translation unit
 - **Multi-pass analysis** - Accurate program counter tracking and forward reference resolution
 
 ## Installation
@@ -219,7 +221,7 @@ The installer will:
 ### Building from Source
 
 **Prerequisites:**
-- Go 1.21 or later
+- Go 1.25.1 or later (the server alone builds with 1.21, the test client needs 1.25.1)
 - Make (optional, for convenience)
 
 **Build steps:**
@@ -328,7 +330,7 @@ Real-time error detection and validation:
 Context-aware completions for:
 
 - **Mnemonics** - All standard and illegal 6502/6510 opcodes with addressing mode hints
-- **Directives** - All 54 Kick Assembler directives (`.byte`, `.word`, `.const`, `.var`, `.macro`, `.segment`, etc.)
+- **Directives** - All 53 Kick Assembler directives (`.byte`, `.word`, `.const`, `.var`, `.macro`, `.segment`, etc.)
 - **Preprocessor statements** - All 9 preprocessor directives (`#import`, `#importif`, `#importonce`, `#define`, `#undef`, `#if`, `#elif`, `#else`, `#endif`)
 - **Labels** - Local and namespace-qualified labels
 - **Constants and variables** - Defined with `.const` and `.var`
@@ -400,13 +402,16 @@ Syntax-aware token classification for:
 ```
 .
 ├── internal/lsp/           # LSP server implementation
-│   ├── server.go          # LSP protocol handlers
+│   ├── server.go                # LSP protocol handlers, completion, hover
 │   ├── context_aware_lexer.go   # Tokenizer
 │   ├── context_aware_parser.go  # Parser and AST
-│   ├── analyze.go         # Semantic analysis
-│   ├── semantic.go        # Semantic tokens
-│   ├── completion.go      # Code completion
-│   └── hover.go           # Hover information
+│   ├── context_aware_loader.go  # Loads the three JSON files
+│   ├── analyze.go               # Semantic analysis
+│   ├── semantic.go              # Semantic tokens
+│   ├── formatter.go             # Document formatting
+│   ├── workspace.go             # Import graph over the workspace folder
+│   ├── translation_unit.go      # Splices imported files into one program
+│   └── unit_analysis.go         # Analyses a file with its imports
 ├── kickass_cl/            # Test client
 │   ├── main.go           # CLI interface
 │   ├── client.go         # LSP client
@@ -414,7 +419,7 @@ Syntax-aware token classification for:
 │   └── runner.go         # Test runner
 ├── test-cases/           # Test suites
 │   ├── regression-test/  # Regression tests
-│   ├── 0.9.0-baseline/   # Baseline tests
+│   ├── 0.9.7-baseline/   # Baseline tests
 │   └── test-files/       # Integration tests
 ├── kickass.json          # Kick Assembler directives
 ├── mnemonic.json         # 6502/6510 mnemonics
@@ -427,7 +432,7 @@ Syntax-aware token classification for:
 
 ### Prerequisites
 
-- Go 1.21 or later
+- Go 1.25.1 or later
 - Make (optional)
 - Git
 
@@ -451,9 +456,17 @@ make release
 
 ### Testing
 
-The project uses integration tests with the test client:
+Go unit tests cover the lexer, parser, formatter, expression evaluation and the
+tables loaded from the JSON files. Integration tests drive the running server
+through the test client.
 
 ```bash
+# Run the Go unit tests
+make test
+
+# Same, under the race detector
+make test-race
+
 # Run integration tests
 make test-integration
 
@@ -467,7 +480,10 @@ build/kickass_cl -suite test-cases/regression-test/regression-suite.json -server
 **Test client options:**
 - `-suite <file>` - Run JSON test suite
 - `-server <path>` - Path to server binary
-- `-debug` - Enable debug logging
+- `-root <path>` - Root path for test files
+- `-verbose` - Verbose output
+- `-output <file>` - Write results as JSON
+- `-html <file>` - Write results as an HTML report
 
 ## Server Configuration
 
@@ -690,17 +706,19 @@ When starting the server directly (outside LSP mode):
 - `--version` / `-v` - Show version information and exit
 - `--debug` - Enable debug logging to `~/.local/share/kickass_ls/log/kickass_ls.log`
 - `--warn-unused-labels` - Enable unused label warnings (can also be set via LSP settings)
+- `--config-dir <path>` - Directory holding `kickass.json`, `mnemonic.json` and `c64memory.json`. Defaults to `~/.config/kickass_ls`. A packaged install can point this at the data files shipped next to the binary
 
 Example:
 
 ```bash
 kickass_ls --version
 kickass_ls --debug
+kickass_ls --config-dir /opt/kickass_ls/share
 ```
 
 ## Configuration Files
 
-The language server uses three JSON configuration files located in `~/.config/kickass_ls/`:
+The language server uses three JSON configuration files. It reads them from `~/.config/kickass_ls/`, or from the directory named by `--config-dir`:
 
 ### kickass.json
 
