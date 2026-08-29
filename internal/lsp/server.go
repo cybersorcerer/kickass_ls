@@ -552,6 +552,29 @@ func submitAnalysisJob(uri, content string, writer *bufio.Writer, isOpen bool) {
 	}
 }
 
+// configDirOverride is set from the command line so a packaged server can use
+// the data files shipped next to it instead of $HOME/.config/kickass_ls.
+var configDirOverride string
+
+// SetConfigDir points the server at the directory holding kickass.json,
+// mnemonic.json and c64memory.json. Empty means the default location.
+func SetConfigDir(dir string) {
+	configDirOverride = dir
+}
+
+// resolveConfigDir returns the directory the Source of Truth files are read
+// from.
+func resolveConfigDir() (string, error) {
+	if configDirOverride != "" {
+		return configDirOverride, nil
+	}
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(homeDir, ".config", "kickass_ls"), nil
+}
+
 func SetWarnUnusedLabels(enabled bool) {
 	warnUnusedLabelsEnabled = enabled
 }
@@ -571,15 +594,14 @@ func Start() {
 	log.Info("LSP server starting...")
 
 	// Check for config directory
-	homeDir, err := os.UserHomeDir()
+	configDir, err := resolveConfigDir()
 	if err != nil {
-		log.Error("Failed to get user home directory: %v", err)
+		log.Error("Failed to determine the configuration directory: %v", err)
 		os.Exit(1)
 	}
 
-	configDir := filepath.Join(homeDir, ".config", "kickass_ls")
 	if _, err := os.Stat(configDir); os.IsNotExist(err) {
-		log.Error("Configuration directory %s does not exist. Please create it and install the required JSON files.", configDir)
+		log.Error("Configuration directory %s does not exist. Install the JSON data files there or pass --config-dir.", configDir)
 		os.Exit(1)
 	}
 

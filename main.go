@@ -36,6 +36,7 @@ func main() {
 	testSymbols := flag.String("test-symbols", "", "Test symbol listing for file")
 	testReferences := flag.String("test-references", "", "Test find references at file:line:char")
 	testGotoDef := flag.String("test-goto-definition", "", "Test go-to-definition at file:line:char")
+	configDirFlag := flag.String("config-dir", "", "Directory holding kickass.json, mnemonic.json and c64memory.json (default: ~/.config/kickass_ls)")
 
 	err := flag.CommandLine.Parse(os.Args[1:])
 
@@ -45,7 +46,7 @@ func main() {
 		os.Exit(0)
 	}
 	if err != nil {
-		log.Warn("Invalid command line argument: %v. Valid flags are: --debug, --warn-unused-labels, --test, --test-completion, --test-hover, --test-signature, --test-symbols, --test-references, --test-goto-definition", err)
+		log.Warn("Invalid command line argument: %v. Valid flags are: --debug, --warn-unused-labels, --test, --test-completion, --test-hover, --test-signature, --test-symbols, --test-references, --test-goto-definition, --config-dir", err)
 	}
 
 	// Set log level
@@ -57,6 +58,7 @@ func main() {
 
 	lsp.SetWarnUnusedLabels(*warnUnused)
 	lsp.SetVersion(Version)
+	lsp.SetConfigDir(*configDirFlag)
 
 	// Initialize logger
 	if err := log.InitLogger(); err != nil {
@@ -73,6 +75,9 @@ func main() {
 		os.Exit(1)
 	}
 	configDir := filepath.Join(homeDir, ".config", "kickass_ls")
+	if *configDirFlag != "" {
+		configDir = *configDirFlag
+	}
 
 	// Set paths for configuration files
 	mnemonicPath := filepath.Join(configDir, "mnemonic.json")
