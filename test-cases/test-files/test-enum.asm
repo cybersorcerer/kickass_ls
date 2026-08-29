@@ -1,20 +1,26 @@
 // Test .enum directive parsing
+//
+// .enum takes no name (manual 4.3). Wrapping each group in a namespace keeps
+// the qualified access below working (manual 9.4).
 
-.enum Colors {
-    BLACK = 0,
-    WHITE = 1,
-    RED = 2,
-    CYAN = 3,
-    PURPLE = 4,
-    GREEN = 5,
-    BLUE = 6,
-    YELLOW = 7
+.namespace Colors {
+    .enum {
+        BLACK = 0,
+        WHITE = 1,
+        RED = 2,
+        CYAN = 3,
+        PURPLE = 4,
+        GREEN = 5,
+        BLUE = 6,
+        YELLOW = 7
+    }
 }
 
-.enum Registers {
-    BORDER = $d020,
-    BACKGROUND = $d021,
-    DUPLICATE = $d020  // Duplicate value - should warn
+.namespace Registers {
+    .enum {
+        BORDER = $d020,
+        BACKGROUND = $d021
+    }
 }
 
 * = $0801

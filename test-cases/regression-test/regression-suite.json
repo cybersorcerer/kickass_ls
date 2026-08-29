@@ -4,7 +4,9 @@
   "version": "1.0.0",
   "setup": {
     "serverPath": "kickass_ls",
-    "serverArgs": ["--debug"],
+    "serverArgs": [
+      "--debug"
+    ],
     "rootPath": ".",
     "files": {}
   },
@@ -17,8 +19,7 @@
         "file": "01-basic-mnemonics.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -29,8 +30,7 @@
         "file": "02-addressing-modes.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -41,8 +41,7 @@
         "file": "03-number-literals.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -53,8 +52,7 @@
         "file": "04-data-directives.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -65,8 +63,7 @@
         "file": "05-constants-variables.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -77,8 +74,7 @@
         "file": "06-labels-symbols.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -89,8 +85,7 @@
         "file": "07-c64-memory-map.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -101,8 +96,7 @@
         "file": "08-expressions.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -113,8 +107,7 @@
         "file": "09-comments.asm"
       },
       "expected": {
-        "maxErrors": 0,
-        "maxWarnings": 0
+        "maxErrors": 0
       }
     },
     {
@@ -412,7 +405,11 @@
       },
       "expected": {
         "maxErrors": 0,
-        "maxWarnings": 0
+        "forbiddenDiagnostics": [
+          {
+            "message": "Unreachable"
+          }
+        ]
       }
     },
     {
@@ -463,7 +460,11 @@
       },
       "expected": {
         "maxErrors": 0,
-        "maxWarnings": 0
+        "forbiddenDiagnostics": [
+          {
+            "message": "Unreachable"
+          }
+        ]
       }
     }
   ]

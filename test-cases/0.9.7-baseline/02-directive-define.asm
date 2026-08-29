@@ -1,30 +1,35 @@
-// Test Case 02: .define Directive
-// Purpose: Test symbol-only directive parsing (no value)
+// Test Case 02: Preprocessor symbol definitions
+// Purpose: Test symbol-only definitions (no value) and conditional assembly
 // Issue #3: Directive Parameter Parsing
+//
+// Kick Assembler defines preprocessor symbols with #define, not .define.
+// The .define directive is something else entirely: it runs a block of
+// directives in function mode (manual table A.7). Conditional assembly uses
+// #if / #else / #endif; there is no .ifdef, .ifndef, .endif or .undef.
 
 * = $0801
 
-// Basic define directive (symbol only, no value)
-.define DEBUG
-.define RELEASE_MODE
-.define ENABLE_SOUND
+// Basic definition (symbol only, no value)
+#define DEBUG
+#define RELEASE_MODE
+#define ENABLE_SOUND
 
-// Conditional compilation based on defines
-.ifdef DEBUG
+// Conditional compilation based on definitions
+#if DEBUG
     nop
     nop
-.endif
+#endif
 
-.ifndef RELEASE_MODE
+#if ENABLE_SOUND
     lda #$ff
     sta $d020
-.endif
+#endif
 
-// Test .undef
-.undef DEBUG
+// Redefinition without an intervening #undef (should warn)
+#define ENABLE_SOUND
 
-// Redefinition (should warn)
-.define DEBUG
+// Removing a definition
+#undef DEBUG
 
 start:
     lda #$00

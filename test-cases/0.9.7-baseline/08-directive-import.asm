@@ -13,9 +13,10 @@
 // .import c64 "music/tune.sid"
 
 // Import with conditional
-.ifdef USE_CUSTOM_CHARSET
+#define USE_CUSTOM_CHARSET
+#if USE_CUSTOM_CHARSET
     // .import binary "charset.bin" at $2000
-.endif
+#endif
 
 start:
     // Use imported symbols (would come from imported files)

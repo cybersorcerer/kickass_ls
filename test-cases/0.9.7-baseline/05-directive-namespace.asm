@@ -55,7 +55,8 @@ start:
     sta $fb
     rts
 
-// Duplicate namespace (should warn)
+// Repeated namespace: per manual 9.3 this reuses the existing namespace
+// and must NOT produce an error
 .namespace graphics {
     .const DUPLICATE = $1000
 }

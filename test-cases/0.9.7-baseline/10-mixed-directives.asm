@@ -14,16 +14,18 @@
     }
 
     .macro debug(msg) {
-        .ifdef DEBUG_MODE
+        #if DEBUG_MODE
             // Debug output would go here
             nop
-        .endif
+        #endif
     }
 
-    .enum Status {
-        OK = 0,
-        ERROR = 1,
-        PENDING = 2
+    .namespace Status {
+        .enum {
+            OK = 0,
+            ERROR = 1,
+            PENDING = 2
+        }
     }
 }
 
@@ -35,9 +37,11 @@
 
 // Function with enum return
 .function getDefaultColor() {
-    .enum DefaultColors {
-        BACKGROUND = 0,
-        BORDER = 6
+    .namespace DefaultColors {
+        .enum {
+            BACKGROUND = 0,
+            BORDER = 6
+        }
     }
     .return DefaultColors.BORDER
 }

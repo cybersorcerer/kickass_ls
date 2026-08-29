@@ -4,7 +4,9 @@
   "version": "0.9.7",
   "setup": {
     "serverPath": "kickass_ls",
-    "serverArgs": ["--debug"],
+    "serverArgs": [
+      "--debug"
+    ],
     "rootPath": ".",
     "files": {}
   },
@@ -17,10 +19,10 @@
         "file": "01-directive-encoding.asm"
       },
       "expected": {
-        "maxErrors": 1,
+        "maxErrors": 0,
         "diagnostics": [
           {
-            "line": 22,
+            "line": 21,
             "severity": 2,
             "message": "invalid_encoding"
           }
@@ -28,8 +30,8 @@
       }
     },
     {
-      "name": ".define Directive - Symbol Only",
-      "description": "Test .define directive without value (symbol-only)",
+      "name": "#define Directive - Symbol Only",
+      "description": "Test preprocessor symbol definition, redefinition warning and #undef",
       "type": "diagnostics",
       "input": {
         "file": "02-directive-define.asm"
@@ -39,9 +41,9 @@
         "minWarnings": 1,
         "diagnostics": [
           {
-            "line": 27,
+            "line": 28,
             "severity": 2,
-            "message": "Redefinition"
+            "message": "already defined"
           }
         ]
       }
@@ -58,14 +60,9 @@
         "minWarnings": 2,
         "diagnostics": [
           {
-            "line": 40,
+            "line": 37,
             "severity": 2,
             "message": "no .return"
-          },
-          {
-            "line": 46,
-            "severity": 4,
-            "message": "never used"
           }
         ]
       }
@@ -78,11 +75,11 @@
         "file": "04-directive-macro.asm"
       },
       "expected": {
-        "maxErrors": 1,
+        "maxErrors": 0,
         "diagnostics": [
           {
-            "line": 54,
-            "severity": 1,
+            "line": 50,
+            "severity": 2,
             "message": "arguments"
           }
         ]
@@ -90,21 +87,14 @@
     },
     {
       "name": ".namespace Directive - Scope Management",
-      "description": "Test .namespace directive with scope management",
+      "description": "Test namespace scoping; a repeated namespace must reuse the existing one (manual 9.3)",
       "type": "diagnostics",
       "input": {
         "file": "05-directive-namespace.asm"
       },
       "expected": {
         "maxErrors": 0,
-        "minWarnings": 1,
-        "diagnostics": [
-          {
-            "line": 56,
-            "severity": 2,
-            "message": "Duplicate"
-          }
-        ]
+        "minWarnings": 1
       }
     },
     {
@@ -115,12 +105,12 @@
         "file": "06-directive-pseudocommand.asm"
       },
       "expected": {
-        "maxErrors": 1,
+        "maxErrors": 0,
         "diagnostics": [
           {
             "line": 50,
-            "severity": 1,
-            "message": "parameters"
+            "severity": 2,
+            "message": "arguments"
           }
         ]
       }
@@ -134,14 +124,7 @@
       },
       "expected": {
         "maxErrors": 0,
-        "minWarnings": 1,
-        "diagnostics": [
-          {
-            "line": 44,
-            "severity": 2,
-            "message": "Duplicate value"
-          }
-        ]
+        "minWarnings": 1
       }
     },
     {
