@@ -74,7 +74,9 @@ func analyzeUnit(uri string) (map[string][]Diagnostic, []string) {
 }
 
 // initWorkspace points the workspace at the folder the client opened and scans
-// it in the background, so that initialize stays fast.
+// it. The scan is synchronous: a document opened right after initialize must
+// already see the import graph, otherwise its translation unit is guessed
+// wrong. Parsing is cheap and maxWorkspaceFiles bounds the work.
 func initWorkspace(params map[string]interface{}) {
 	root := workspaceRootFrom(params)
 	if root == "" {
@@ -84,7 +86,7 @@ func initWorkspace(params map[string]interface{}) {
 
 	workspace.SetRoot(root)
 	log.Info("Workspace root: %s", root)
-	go workspace.Scan()
+	workspace.Scan()
 }
 
 // workspaceRootFrom extracts the project folder from the initialize params,

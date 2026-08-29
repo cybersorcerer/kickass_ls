@@ -869,12 +869,14 @@ func (l *ContextAwareLexer) tokenizeOperand() *ContextToken {
 
 	// Check for X or Y register (for indexed addressing)
 	if ch == 'X' || ch == 'x' || ch == 'Y' || ch == 'y' {
+		startPos := l.position
 		startCol := l.column
 		register := l.peek()
 		l.advance()
 
 		// Make sure it's just a single letter (not part of a longer identifier)
-		if l.position >= len(l.input) || !isAlphaNumeric(l.peek()) {
+		next := l.peek()
+		if l.position >= len(l.input) || !(isAlphaNumeric(next) || next == '_') {
 			token := &ContextToken{
 				Type:    TOKEN_IDENTIFIER, // Could create TOKEN_INDEX_REGISTER
 				Literal: string(register),
@@ -890,6 +892,12 @@ func (l *ContextAwareLexer) tokenizeOperand() *ContextToken {
 			l.PopContext()
 			return token
 		}
+
+		// It was the first letter of a longer name after all. Undo the step,
+		// column included: leaving it consumed turned "lda #YELLOW" into the
+		// symbol "ELLOW" and shifted every later token on the line.
+		l.position = startPos
+		l.column = startCol
 	}
 
 	// Check for multi-labels first (!label+, !label-)

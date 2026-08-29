@@ -140,6 +140,43 @@ func TestLexerValidInput(t *testing.T) {
 			},
 		},
 		{
+			// The index register check used to consume the first letter without
+			// putting it back, so any operand starting with X or Y lost it.
+			name:  "operand starting with Y is not the index register",
+			input: "        lda #YELLOW",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_STD, "lda", 1, 9},
+				{TOKEN_HASH, "#", 1, 13},
+				{TOKEN_IDENTIFIER, "YELLOW", 1, 14},
+			},
+		},
+		{
+			name:  "operand starting with X is not the index register",
+			input: "        lda XCOORD",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_STD, "lda", 1, 9},
+				{TOKEN_IDENTIFIER, "XCOORD", 1, 13},
+			},
+		},
+		{
+			name:  "underscore after Y does not make it a register",
+			input: "        lda Y_POS",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_STD, "lda", 1, 9},
+				{TOKEN_IDENTIFIER, "Y_POS", 1, 13},
+			},
+		},
+		{
+			name:  "the index register itself still works",
+			input: "        lda $d020,y",
+			want: []wantToken{
+				{TOKEN_MNEMONIC_STD, "lda", 1, 9},
+				{TOKEN_NUMBER_HEX, "$d020", 1, 13},
+				{TOKEN_COMMA, ",", 1, 18},
+				{TOKEN_IDENTIFIER, "y", 1, 19},
+			},
+		},
+		{
 			name:  "boolean not is not a multi label",
 			input: "#if !DEBUG",
 			want: []wantToken{
@@ -366,6 +403,9 @@ func TestLexerColumnsMatchSource(t *testing.T) {
 		".var bb = aa & 5678",
 		".var cc = aa % 3",
 		"!loop:  bne !loop-",
+		"        lda #YELLOW",
+		"        lda XCOORD,y",
+		"        lda Y_POS",
 	}
 
 	for _, in := range inputs {
