@@ -1762,23 +1762,8 @@ func (a *SemanticAnalyzer) checkZeroPageOptimization(mnemonic string, operand Ex
 		}
 	}
 
-	// Only check for instructions that support zero page addressing
-	zeroPageInstructions := []string{
-		"LDA", "LDX", "LDY", "STA", "STX", "STY",
-		"ADC", "SBC", "AND", "ORA", "EOR", "CMP", "CPX", "CPY",
-		"INC", "DEC", "ASL", "LSR", "ROL", "ROR",
-		"BIT",
-	}
-
-	supportsZeroPage := false
-	for _, instr := range zeroPageInstructions {
-		if mnemonic == instr {
-			supportsZeroPage = true
-			break
-		}
-	}
-
-	if !supportsZeroPage {
+	// Only check instructions that mnemonic.json gives a zero page mode
+	if !supportsZeroPage(mnemonic) {
 		return
 	}
 
@@ -1946,20 +1931,36 @@ func (a *SemanticAnalyzer) checkMemoryAccess(mnemonic string, operand Expression
 	a.analyzeMemoryAccess(addr, isWrite, token)
 }
 
-// isWriteInstruction determines if an instruction writes to memory
-func (a *SemanticAnalyzer) isWriteInstruction(mnemonic string) bool {
-	writeInstructions := []string{
-		"STA", "STX", "STY", // Store instructions
-		"INC", "DEC", // Read-modify-write instructions
-		"ASL", "LSR", "ROL", "ROR", // Shift/rotate instructions (when used with memory)
+// supportsZeroPage reports whether mnemonic.json lists a zero page addressing
+// mode for the instruction. The mnemonic is expected in upper case.
+func supportsZeroPage(mnemonic string) bool {
+	info := mnemonicInfo(mnemonic)
+	if info == nil {
+		return false
 	}
-
-	for _, instr := range writeInstructions {
-		if mnemonic == instr {
+	for _, mode := range info.AddressingModes {
+		// Covers "Zeropage", "Zeropage,X" and "Zeropage,Y".
+		if strings.HasPrefix(mode.Mode, "Zeropage") {
 			return true
 		}
 	}
 	return false
+}
+
+// isWriteInstruction determines if an instruction writes to memory, as recorded
+// by writes_memory in mnemonic.json.
+func (a *SemanticAnalyzer) isWriteInstruction(mnemonic string) bool {
+	info := mnemonicInfo(mnemonic)
+	return info != nil && info.WritesMemory
+}
+
+// mnemonicInfo looks an upper case mnemonic up in the loaded Source of Truth.
+func mnemonicInfo(mnemonic string) *EnhancedMnemonicInfo {
+	ctx := GetProcessorContext()
+	if ctx == nil {
+		return nil
+	}
+	return ctx.AllMnemonics[mnemonic]
 }
 
 // Memory access pattern analysis
@@ -2114,26 +2115,17 @@ func (a *SemanticAnalyzer) checkForDeadCodeAfterJumpWithVisited(statements []Sta
 // isAlwaysReachableDirective returns true for directives that define symbols or data
 // and are always valid regardless of control flow position.
 func (a *SemanticAnalyzer) isAlwaysReachableDirective(directive string) bool {
-	alwaysReachable := []string{
-		// Data definition - intentional in dead code sections
-		".byte", ".word", ".text", ".data", ".byt", ".wo", ".tx", ".fill", ".fillword",
-		// Symbol/constant definitions - scope-wide, not flow-dependent
-		".const", ".var", ".label", ".define",
-		// Structure definitions - not flow-dependent
-		".macro", ".function", ".pseudocommand", ".namespace", ".struct", ".enum",
-		// Import directives - always processed
-		".import", ".importonce",
-		// Encoding - file-level setting
-		".encoding",
-		// Segment directives - layout, not flow-dependent
-		".segment", ".segmentdef", ".segmentout",
+	ctx := GetProcessorContext()
+	if ctx == nil {
+		return false
 	}
-	for _, d := range alwaysReachable {
-		if directive == d {
-			return true
-		}
+	info := ctx.GetDirectiveInfo(directive)
+	if info == nil {
+		// Not a directive kickass.json knows about, so nothing can be said
+		// about it. Leave the warning in place; a typo should stay visible.
+		return false
 	}
-	return false
+	return !info.FlowDependent
 }
 
 // Additional dead code patterns

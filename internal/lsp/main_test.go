@@ -95,3 +95,53 @@ func TestMnemonicClassification(t *testing.T) {
 		t.Errorf("category tables hold %d mnemonics, AllMnemonics holds %d", total, len(ctx.AllMnemonics))
 	}
 }
+
+// TestInstructionFactsFromSourceOfTruth guards the two lookups that replaced
+// hardcoded opcode lists in analyze.go: zero page support now comes from the
+// addressing_modes table, write access from the writes_memory flag.
+func TestInstructionFactsFromSourceOfTruth(t *testing.T) {
+	zeroPage := map[string]bool{
+		"LDA": true, "STA": true, "BIT": true,
+		"LAX": true, // illegal opcode, but it does have a zero page mode
+		"JMP": false, "INX": false, "RTS": false, "NOPE": false,
+	}
+	for mnemonic, want := range zeroPage {
+		if got := supportsZeroPage(mnemonic); got != want {
+			t.Errorf("supportsZeroPage(%q) = %v, want %v", mnemonic, got, want)
+		}
+	}
+
+	var a SemanticAnalyzer
+	writes := map[string]bool{
+		"STA": true, "STX": true, "STY": true,
+		"INC": true, "DEC": true,
+		"ASL": true, "LSR": true, "ROL": true, "ROR": true,
+		"LDA": false, "CMP": false, "INX": false, "JSR": false, "NOPE": false,
+	}
+	for mnemonic, want := range writes {
+		if got := a.isWriteInstruction(mnemonic); got != want {
+			t.Errorf("isWriteInstruction(%q) = %v, want %v", mnemonic, got, want)
+		}
+	}
+}
+
+// TestAlwaysReachableDirectives guards the third list that moved into the
+// Source of Truth. The hardcoded version named ".data", ".byt" and ".tx",
+// none of which are Kick Assembler directives, while the real short forms
+// ".by", ".te" and ".dw" were missing and warned falsely.
+func TestAlwaysReachableDirectives(t *testing.T) {
+	var a SemanticAnalyzer
+	cases := map[string]bool{
+		".byte": true, ".const": true, ".macro": true, ".encoding": true,
+		".by": true, ".te": true, ".dw": true,
+		".align": true, ".print": true, ".segment": true,
+		".for": false, ".while": false, ".if": false, "else": false,
+		".pseudopc": false, ".zp": false,
+		".nosuchdirective": false,
+	}
+	for directive, want := range cases {
+		if got := a.isAlwaysReachableDirective(directive); got != want {
+			t.Errorf("isAlwaysReachableDirective(%q) = %v, want %v", directive, got, want)
+		}
+	}
+}

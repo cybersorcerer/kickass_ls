@@ -247,6 +247,7 @@
     },
     {
       "directive": ".if",
+      "flow_dependent": true,
       "description": "If-directives work like in standard programming languages. With an .if directive you have the proceeding directive executed only if a given boolean expression is evaluated to true. You can group several statements together in a block with {…} and have them executed together. By adding an else statement you can have an expression executed if the boolean expression is false.",
       "signature": ".if(x>10) {...} else {...}",
       "examples": [
@@ -266,6 +267,7 @@
     },
     {
       "directive": "else",
+      "flow_dependent": true,
       "description": "The else keyword is used with .if directives to specify code that should be executed when the if condition is false. It must follow an .if block.",
       "signature": "} else {",
       "examples": [
@@ -280,6 +282,7 @@
     },
     {
       "directive": ".for",
+      "flow_dependent": true,
       "description": "For-loops in Kick Assembler work similar to for-loops in C/Java. The .for directive allows you to repeat a block of code with a loop variable that changes on each iteration.",
       "signature": ".for (var variable = start; variable < end; variable++) {...}",
       "examples": [
@@ -303,6 +306,7 @@
     },
     {
       "directive": ".while",
+      "flow_dependent": true,
       "description": "The .while directive executes as long as a given expressions is true. That is, it works like a .for-loop but without the init and iteration parameters.",
       "signature": ".while (expression) {...}",
       "examples": [
@@ -492,6 +496,7 @@
     },
     {
       "directive": ".pseudopc",
+      "flow_dependent": true,
       "description": "Sets the program counter to something else than the actual memory position. This is useful when code will be relocated at runtime to a different address than where it is initially loaded.",
       "signature": ".pseudopc address {...}",
       "examples": [
@@ -545,6 +550,7 @@
     },
     {
       "directive": ".zp",
+      "flow_dependent": true,
       "description": "Marks unresolved labels as being in the zeropage. This allows the assembler to use the more efficient zeropage addressing mode for labels whose address is not yet known at the time of use.",
       "signature": ".zp { ... }",
       "examples": [

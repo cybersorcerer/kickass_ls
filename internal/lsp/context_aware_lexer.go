@@ -91,6 +91,7 @@ type EnhancedMnemonicInfo struct {
 	Name            string                `json:"mnemonic"`
 	Description     string                `json:"description"`
 	Type            string                `json:"type"`
+	WritesMemory    bool                  `json:"writes_memory"`
 	AddressingModes []*AddressingModeInfo `json:"addressing_modes"`
 }
 
@@ -122,9 +123,14 @@ type KickDirectiveInfo struct {
 	Examples    []string `json:"examples"`
 	// Values are the accepted operands of a directive that only takes a fixed
 	// set, such as .encoding. Empty for everything else.
-	Values     []string            `json:"values,omitempty"`
-	Category   string              `json:"category,omitempty"` // "data", "flow", "pre", etc.
-	SourceType StatementSourceType `json:"-"`                  // Which table this came from
+	Values []string `json:"values,omitempty"`
+	// FlowDependent marks the directives whose block holds code that follows
+	// the surrounding control flow, so a dead code region does extend into
+	// them. Every other directive is assembler-time or data and stays valid
+	// wherever it appears.
+	FlowDependent bool                `json:"flow_dependent,omitempty"`
+	Category      string              `json:"category,omitempty"` // "data", "flow", "pre", etc.
+	SourceType    StatementSourceType `json:"-"`                  // Which table this came from
 }
 
 // FunctionInfo represents a Kick Assembler built-in function

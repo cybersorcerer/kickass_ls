@@ -275,6 +275,7 @@
     "mnemonic": "ASL",
     "description": "ASL (**A**rithmetic **S**hift **L**eft) shifts all bits in either the accumulator or a specified memory location one position to the left. The bit from the most significant position (bit 7) is moved into the carry flag. A zero is placed in the least significant bit position (bit 0). This operation effectively doubles an unsigned 8-bit integer.",
     "type": "Shift & Rotate",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "0A",
@@ -813,6 +814,7 @@
     "mnemonic": "DEC",
     "description": "DEC (DECrement memory) is a machine language instruction which decrements the byte held in the specified memory address by one. The negative and zero flags are set according to the result. The carry and overflow flags are unaffected.",
     "type": "Decrement & Increment",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "C6",
@@ -955,6 +957,7 @@
     "mnemonic": "INC",
     "description": "INC (INCrease) is the mnemonic for a machine language instruction which increases the numerical value of the contents of the address specified by one, and \"wraps over\" when the numerical limits of a byte are exceeded. If the byte in question is taken as an unsigned integer, INC \"counts\" from 0 thru 255/$0 thru $FF. If a byte already containing the value 255/$FF is INCremented, it \"wraps over\" to the value 0. If the byte is taken as a signed integer, INC will \"count\" from \u2212128 thru +127, or \u2212$80 thru +$7F. If a byte already holding the value 127/$7F is INCremented, it \"wraps over\" to the value \u2212128/\u2212$80.",
     "type": "Decrement & Increment",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "EE",
@@ -1344,6 +1347,7 @@
     "mnemonic": "LSR",
     "description": "LSR (Logic Shift Right) is a machine language instruction that shifts bits in either the accumulator or a specified RAM address one position to the right. The bit shifted out goes into the carry flag, and the most significant bit is filled with a zero. If the byte is an unsigned 8-bit integer, LSR effectively halves the number, with the carry flag holding the remainder. LSR and ASL (Arithmetic Shift Left) are complemented by ROL (Rotate Left) and ROR (Rotate Right) instructions, which fill the vacant bit with the carry flag's prior value.",
     "type": "Shift & Rotate",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "4A",
@@ -1586,6 +1590,7 @@
     "mnemonic": "ROR",
     "description": "ROR (ROtate Right) is an assembler instruction for the C64. It rotates the bits of the accumulator or a memory location one bit to the right. The bit from position 0 is shifted into the Carry-Flag, and the Carry-Flag is shifted into bit 7.",
     "type": "Shift & Rotate",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "6A",
@@ -1838,6 +1843,7 @@
     "mnemonic": "STA",
     "description": "STA (short for **ST**ore **A**ccumulator) is a machine language instruction that stores a copy of the byte held in the accumulator at the specified RAM or I/O address. The accumulator's contents remain unchanged after the operation.",
     "type": "Transfer",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "8D",
@@ -1895,6 +1901,7 @@
     "mnemonic": "STX",
     "description": "STX (STore X) is a machine language instruction that stores a copy of the byte in the X index register at a specified RAM or I/O address, without changing the X index register itself.",
     "type": "Transfer",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "8E",
@@ -1924,6 +1931,7 @@
     "mnemonic": "STY",
     "description": "STY (STore Y) is a machine language instruction that stores a copy of the byte held in the Y index register at a specified RAM or I/O address. The Y index register itself remains unchanged.",
     "type": "Transfer",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "8C",
@@ -2058,6 +2066,7 @@
     "mnemonic": "ROL",
     "description": "ROL (ROtate Left) is a machine language instruction for the C64. It rotates the bits of the accumulator or a memory location one bit to the left. The bit from position 7 is shifted into the Carry-Flag, and the Carry-Flag is shifted into bit 0.",
     "type": "Shift & Rotate",
+    "writes_memory": true,
     "addressing_modes": [
       {
         "opcode": "2A",
