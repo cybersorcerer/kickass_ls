@@ -213,6 +213,93 @@ func TestBuildScopeSymbolKinds(t *testing.T) {
 	}
 }
 
+// --- namespaces ----------------------------------------------------------
+
+// TestNamespaceScopeRange guards the block end position. BlockStatement.EndToken
+// was never assigned, so every namespace scope ended at line -1 and no line
+// lookup ever matched it, which hid namespace local symbols from completion.
+func TestNamespaceScopeRange(t *testing.T) {
+	// 0: .namespace vic {
+	// 1:     .label border = $d020
+	// 2: }
+	src := ".namespace vic {\n    .label border = $d020\n}\n"
+	scope, _ := parseSource(t, src)
+
+	ns := scope.FindNamespace("vic")
+	if ns == nil {
+		t.Fatal("namespace vic did not produce a child scope")
+	}
+	if ns.Range.Start.Line != 0 {
+		t.Errorf("namespace starts at line %d, want 0", ns.Range.Start.Line)
+	}
+	if ns.Range.End.Line != 2 {
+		t.Errorf("namespace ends at line %d, want 2 (the closing brace)", ns.Range.End.Line)
+	}
+
+	// A line inside the block has to resolve to the namespace scope, otherwise
+	// completion inside a namespace never sees its own symbols.
+	if got := scope.findInnermostScope(1); got != ns {
+		t.Errorf("findInnermostScope(1) returned %q, want %q", got.Name, ns.Name)
+	}
+}
+
+// TestNamespaceRedeclarationReusesScope: the manual (9.3) states that declaring
+// a namespace a second time continues the existing one. It must not be reported
+// as a duplicate symbol, and symbols from both blocks belong to one scope.
+func TestNamespaceRedeclarationReusesScope(t *testing.T) {
+	src := ".namespace part1 {\n" +
+		"init:\n" +
+		"    rts\n" +
+		"}\n" +
+		".namespace part1 {\n" +
+		"exec:\n" +
+		"    rts\n" +
+		"}\n"
+
+	assertNoErrors(t, src)
+
+	scope, _ := parseSource(t, src)
+	assertHasSymbols(t, scope, "part1.init", "part1.exec")
+
+	count := 0
+	for _, child := range scope.Children {
+		if child.Name == "part1" {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("namespace part1 produced %d scopes, want 1", count)
+	}
+}
+
+// TestDuplicateSymbolStillReported is the negative case for the change above:
+// only namespaces may be redeclared, everything else keeps its error.
+func TestDuplicateSymbolStillReported(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{"duplicate label", "start:\n    rts\nstart:\n    rts\n"},
+		{"duplicate constant", ".const MAX = 1\n.const MAX = 2\n"},
+		{"duplicate macro", ".macro m() {\n    rts\n}\n.macro m() {\n    rts\n}\n"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			_, diags := parseSource(t, tc.src)
+			found := false
+			for _, d := range errorsOnly(diags) {
+				if strings.Contains(d.Message, "already defined") {
+					found = true
+				}
+			}
+			if !found {
+				t.Errorf("duplicate definition was not reported; diagnostics: %v", messages(diags))
+			}
+		})
+	}
+}
+
 // --- helpers -------------------------------------------------------------
 
 func messages(diags []Diagnostic) []string {

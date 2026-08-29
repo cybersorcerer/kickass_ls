@@ -699,6 +699,16 @@ func (p *ContextAwareParser) parseBlockStatement() *BlockStatement {
 		p.nextToken()
 	}
 
+	// Record the token the block ended on. Callers derive the block's range
+	// from it; leaving it at the zero value made every namespace scope end at
+	// line -1, so no scope ever matched a line lookup.
+	block.EndToken = Token{
+		Type:    p.currentToken.Type,
+		Literal: p.currentToken.Literal,
+		Line:    p.currentToken.Line,
+		Column:  p.currentToken.Column,
+	}
+
 	if p.debugMode {
 		log.Debug("parseBlockStatement: Exited loop, currentToken=%s", p.currentToken.Literal)
 	}
@@ -805,6 +815,13 @@ func (p *ContextAwareParser) parseEnumBlock() *BlockStatement {
 			p.addError(fmt.Sprintf("Expected enum member identifier, got %s", p.currentToken.Literal), p.currentToken.Line, p.currentToken.Column)
 			p.nextToken()
 		}
+	}
+
+	block.EndToken = Token{
+		Type:    p.currentToken.Type,
+		Literal: p.currentToken.Literal,
+		Line:    p.currentToken.Line,
+		Column:  p.currentToken.Column,
 	}
 
 	return block
@@ -2229,7 +2246,10 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					},
 					Scope: currentScope,
 				}
-				if err := currentScope.AddSymbol(symbol); err != nil {
+				// A namespace may be declared more than once; the later
+				// declaration continues the existing namespace (manual 9.3),
+				// so a repeated name is not an error there.
+				if err := currentScope.AddSymbol(symbol); err != nil && kind != Namespace {
 					diagnostic := Diagnostic{
 						Severity: SeverityError,
 						Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
@@ -2255,19 +2275,27 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 						endLine = 999999
 						endChar = 0
 					}
-					newScope := &Scope{
-						Name:     stmt.Name.Value,
-						Parent:   currentScope,
-						Children: make([]*Scope, 0),
-						Symbols:  make(map[string]*Symbol),
-						Uri:      currentScope.Uri,
-						Range: Range{
-							Start: Position{Line: stmt.Name.Token.Line - 1, Character: stmt.Name.Token.Column - 1},
-							End:   Position{Line: endLine, Character: endChar},
-						},
+					// Reuse the scope if this namespace was already opened
+					// earlier in the file, so both blocks contribute to the
+					// same set of symbols (manual 9.3).
+					nsScope := currentScope.FindNamespace(stmt.Name.Value)
+					if nsScope == nil {
+						nsScope = &Scope{
+							Name:     stmt.Name.Value,
+							Parent:   currentScope,
+							Children: make([]*Scope, 0),
+							Symbols:  make(map[string]*Symbol),
+							Uri:      currentScope.Uri,
+							Range: Range{
+								Start: Position{Line: stmt.Name.Token.Line - 1, Character: stmt.Name.Token.Column - 1},
+								End:   Position{Line: endLine, Character: endChar},
+							},
+						}
+						currentScope.AddChildScope(nsScope)
+					} else if endLine > nsScope.Range.End.Line {
+						nsScope.Range.End = Position{Line: endLine, Character: endChar}
 					}
-					currentScope.AddChildScope(newScope)
-					sb.buildScope(stmt.Block.Statements, newScope)
+					sb.buildScope(stmt.Block.Statements, nsScope)
 				} else if directiveName == ".function" || directiveName == ".macro" || directiveName == ".pseudocommand" {
 					// Process blocks without creating new scope
 					log.Debug("buildScope: Processing block for directive '%s'", stmt.Token.Literal)
