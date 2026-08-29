@@ -2,13 +2,66 @@
 
 A Language Server Protocol (LSP) implementation for Kick Assembler, providing modern IDE features for 6502/6510 assembly development on Commodore 64.
 
-Current version: v1.0.7
+Current version: v1.1.0
 
 While the server has been extensively tested on macOS, installation and functionality on Windows and Linux have not been thoroughly tested yet. Your feedback and bug reports are greatly appreciated!
 
 Made with love for the retro computing community.
 
 ## Changelog
+
+### v1.1.0
+
+Correctness release. Every fix below is covered by a test that fails without it.
+
+**Expression grammar** — completed against the Kick Assembler manual (tables 4.4, 5.1, 5.2 and section 4.5)
+
+- Added the missing operators: `~`, `!`, `&&`, `||`, `==`, `!=`, `<=`, `>=` and the conditional operator `? :`
+- `& | ^ << >>` now have precedence and are parsed as infix operators instead of ending the expression
+- Hard parentheses `[ ]` are supported as grouping
+- Soft parentheses are kept in the syntax tree, so `jmp ($1000)` (indirect) and `jmp $1000` (absolute) are told apart; the page-boundary warning no longer fires on absolute jumps
+- `#if` and `#elif` take a full boolean expression, not just a single symbol
+
+**Formatting**
+
+- Fixed source corruption: `//` and `;` inside string literals were treated as comments, so `.text "a // b"` was split apart and padded with alignment whitespace
+- Fixed a newline being appended on every run, which grew the file with each save
+
+**Diagnostics and analysis**
+
+- Instruction lengths now come from `mnemonic.json` instead of a hardcoded list. Branches counted three bytes instead of two and `TAX` was missing entirely, which made branch distance warnings unreliable
+- `.byte` and `.word` lists advance the program counter by their number of values, `.text` by the length of its string
+- `.for` loop bodies are counted once per loop instead of once per nesting level plus a whole document rescan
+- Expression evaluation distinguishes the value `-1` from "cannot evaluate", so `.const OFFSET = 0-1` and `.byte -1` work
+- A repeated `.namespace` continues the existing namespace instead of reporting a duplicate symbol (manual 9.3)
+- Preprocessor statements terminate a statement, so an instruction no longer swallows the following `#endif`
+- Comments between enum members are allowed
+
+**Symbols, hover and completion**
+
+- `.label NAME = value` and enum members without an explicit value define symbols again, so hover and go-to-definition work on them
+- Hover works on symbols used as immediate operands (`lda #MYCONST`)
+- Namespace scopes now have a valid range, so completion inside a namespace sees its own symbols
+- Built-in functions and constants are loaded from `kickass.json` again; the loader was reading keys that do not exist in the file
+
+**Semantic highlighting**
+
+- Token modifiers are sent as a bit set as the protocol requires, instead of an index into the legend
+- Fixed a column drift after `&`, `%`, `$` and `'` that shifted every following token on the line
+- The new operators are highlighted
+
+**Robustness**
+
+- Writes to the client are serialized; the analysis worker and the main loop shared an unsynchronized writer
+- A malformed range formatting request no longer panics the server
+- A failed response no longer ends the session
+- Fixed an out of range read in signature help when the cursor sits at the end of a line
+
+**Tests**
+
+- Added the first Go unit tests: 201 cases covering the lexer, parser, formatter, expression evaluation and program counter arithmetic. `make test` and `make test-race`
+- The integration test runner now enforces `maxErrors`, `minWarnings` and `maxWarnings`, which were silently ignored, and gained `forbiddenDiagnostics` for asserting that a diagnostic is absent
+- Baseline test fixtures corrected to valid Kick Assembler (`.enum` takes no name, conditional assembly uses `#if`/`#endif`/`#undef`)
 
 ### v1.0.7
 
@@ -197,7 +250,6 @@ lspconfig.kickass_ls.setup({
     -- Your keybindings and configuration here
     vim.keymap.set('n', 'gd', vim.lsp.buf.definition, { buffer = bufnr })
     vim.keymap.set('n', 'K', vim.lsp.buf.hover, { buffer = bufnr })
-    vim.keymap.set('n', '<leader>rn', vim.lsp.buf.rename, { buffer = bufnr })
   end,
   capabilities = require('cmp_nvim_lsp').default_capabilities(),
 })
