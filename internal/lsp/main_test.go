@@ -67,3 +67,31 @@ func TestProcessorContextLoaded(t *testing.T) {
 		}
 	}
 }
+
+// TestMnemonicClassification pins the categorisation to the type field in
+// mnemonic.json. The loader used to OR the type check together with hardcoded
+// opcode lists; those lists duplicated data the Source of Truth already carries
+// and had gone stale (they named 18 of the 46 illegal opcodes).
+func TestMnemonicClassification(t *testing.T) {
+	ctx := GetProcessorContext()
+
+	for name, m := range ctx.AllMnemonics {
+		var category map[string]*EnhancedMnemonicInfo
+		switch m.Type {
+		case "Illegal":
+			category = ctx.IllegalMnemonics
+		case "Jump", "Branch", "Return":
+			category = ctx.ControlMnemonics
+		default:
+			category = ctx.StandardMnemonics
+		}
+		if _, ok := category[name]; !ok {
+			t.Errorf("%s (type %q) is missing from the table its type selects", name, m.Type)
+		}
+	}
+
+	total := len(ctx.StandardMnemonics) + len(ctx.IllegalMnemonics) + len(ctx.ControlMnemonics)
+	if total != len(ctx.AllMnemonics) {
+		t.Errorf("category tables hold %d mnemonics, AllMnemonics holds %d", total, len(ctx.AllMnemonics))
+	}
+}

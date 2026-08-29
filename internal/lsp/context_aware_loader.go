@@ -35,11 +35,11 @@ func (ctx *ProcessorContext) loadMnemonics(path string) error {
 	for _, mnemonic := range mnemonics {
 		name := strings.ToUpper(mnemonic.Name)
 
-		// Determine category based on type or name patterns
-		if mnemonic.Type == "Illegal" || isIllegalOpcode(name) {
+		// Determine category from the type recorded in mnemonic.json
+		if mnemonic.Type == "Illegal" {
 			ctx.IllegalMnemonics[name] = mnemonic
 			illegalCount++
-		} else if mnemonic.Type == "Jump" || isControlOpcode(name) {
+		} else if mnemonic.Type == "Jump" || mnemonic.Type == "Branch" || mnemonic.Type == "Return" {
 			ctx.ControlMnemonics[name] = mnemonic
 			controlCount++
 		} else {
@@ -183,32 +183,6 @@ func (ctx *ProcessorContext) buildCaches() {
 }
 
 // Helper functions
-
-// isIllegalOpcode checks if a mnemonic is an illegal 6510 opcode
-func isIllegalOpcode(name string) bool {
-	illegalOpcodes := []string{
-		"AHX", "ALR", "ANC", "ARR", "AXS", "DCP", "ISC", "LAS", "LAX", "RLA", "RRA", "SAX", "SHX", "SHY", "SLO", "SRE", "TAS", "XAA",
-	}
-	for _, illegal := range illegalOpcodes {
-		if name == illegal {
-			return true
-		}
-	}
-	return false
-}
-
-// isControlOpcode checks if a mnemonic is a control flow opcode
-func isControlOpcode(name string) bool {
-	controlOpcodes := []string{
-		"BCC", "BCS", "BEQ", "BMI", "BNE", "BPL", "BVC", "BVS", "JMP", "JSR", "RTS", "RTI",
-	}
-	for _, control := range controlOpcodes {
-		if name == control {
-			return true
-		}
-	}
-	return false
-}
 
 // parseAddress parses a hex address string (e.g., "0x1000" or "$1000")
 func parseAddress(addrStr string) (uint16, error) {
