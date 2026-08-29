@@ -128,9 +128,6 @@ func runTestMode(filename, mnemonicPath, kickassDir string) {
 		os.Exit(3)
 	}
 
-	// Initialize the lexer path (needed for mnemonic loading)
-	lsp.SetKickassJSONPath(kickassDir)
-
 	// Load configuration files (same as LSP mode)
 	err = lsp.LoadMnemonics(mnemonicPath)
 	if err != nil {
@@ -210,10 +207,6 @@ func initTestMode() error {
 	}
 	configDir := filepath.Join(homeDir, ".config", "kickass_ls")
 
-	// Initialize LSP components with config directory paths
-	lsp.SetKickassJSONPath(filepath.Join(configDir, "kickass.json"))
-	lsp.SetMnemonicJSONPath(filepath.Join(configDir, "mnemonic.json"))
-
 	err = lsp.LoadMnemonics(filepath.Join(configDir, "mnemonic.json"))
 	if err != nil {
 		return fmt.Errorf("error loading mnemonics: %v", err)
@@ -237,9 +230,6 @@ func initTestMode() error {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Warning: Could not load C64 memory map: %v\n", err)
 	}
-
-	// Initialize lexer token definitions AFTER all JSON files are loaded
-	lsp.InitTokenDefs()
 
 	return nil
 }

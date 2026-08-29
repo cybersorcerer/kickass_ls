@@ -3,7 +3,6 @@ package lsp
 
 import (
 	"c64.nvim/internal/log"
-	"unicode/utf16"
 )
 
 // generateSemanticTokens creates semantic tokens for syntax highlighting
@@ -223,11 +222,6 @@ const (
 	SemanticTokenModifierReadonly                // legend index 1
 )
 
-// encodeSemanticToken encodes a semantic token for LSP
-func encodeSemanticToken(line, char, length, tokenType, modifiers int) []int {
-	return []int{line, char, length, tokenType, modifiers}
-}
-
 // getTokenTypeForSymbol returns the appropriate token type for a symbol
 func getTokenTypeForSymbol(kind SymbolKind) int {
 	switch kind {
@@ -246,53 +240,4 @@ func getTokenTypeForSymbol(kind SymbolKind) int {
 	default:
 		return SemanticTokenKeyword
 	}
-}
-
-// utf16Length returns the length of a string in UTF-16 code units
-func utf16Length(s string) int {
-	return len(utf16.Encode([]rune(s)))
-}
-
-// utf8ToUTF16Offset converts a UTF-8 byte offset on a line to UTF-16 code unit offset
-func utf8ToUTF16Offset(text string, targetLine int, byteOffset int) int {
-	// Find the start of the target line
-	currentLine := 0
-	lineStart := 0
-
-	for i := 0; i < len(text); i++ {
-		if currentLine == targetLine {
-			// We're on the target line, extract substring up to byteOffset
-			lineEnd := lineStart
-			for lineEnd < len(text) && text[lineEnd] != '\n' {
-				lineEnd++
-			}
-
-			// Calculate the byte position on this line
-			targetPos := lineStart + byteOffset
-			if targetPos > lineEnd {
-				targetPos = lineEnd
-			}
-
-			// Convert the substring from line start to target position to UTF-16
-			substring := text[lineStart:targetPos]
-			return utf16Length(substring)
-		}
-
-		if text[i] == '\n' {
-			currentLine++
-			lineStart = i + 1
-		}
-	}
-
-	// Last line without newline
-	if currentLine == targetLine {
-		targetPos := lineStart + byteOffset
-		if targetPos > len(text) {
-			targetPos = len(text)
-		}
-		substring := text[lineStart:targetPos]
-		return utf16Length(substring)
-	}
-
-	return 0
 }

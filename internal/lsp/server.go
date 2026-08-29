@@ -2,8 +2,6 @@ package lsp
 
 import (
 	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +11,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 	"unicode"
 
 	log "c64.nvim/internal/log"
@@ -427,13 +424,6 @@ func UpdateLSPConfig(settings map[string]interface{}) {
 	log.Debug("LSP Configuration updated")
 }
 
-// Feature flag helper functions for context-aware parser
-func IsContextAwareParserEnabled() bool {
-	configMutex.RLock()
-	defer configMutex.RUnlock()
-	return lspConfig.ParserFeatureFlags.UseContextAware
-}
-
 func ShouldFallbackToOldParser() bool {
 	configMutex.RLock()
 	defer configMutex.RUnlock()
@@ -476,15 +466,6 @@ func IsPerformanceModeEnabled() bool {
 	return lspConfig.ParserFeatureFlags.PerformanceMode
 }
 
-// Combined function to check if we should use the new parser infrastructure
-func ShouldUseNewParser() bool {
-	configMutex.RLock()
-	defer configMutex.RUnlock()
-	return lspConfig.ParserFeatureFlags.UseContextAware ||
-		lspConfig.ParserFeatureFlags.ContextAwareLexer ||
-		lspConfig.ParserFeatureFlags.EnhancedAST
-}
-
 // documentStore holds the content of opened text documents.
 var documentStore = struct {
 	sync.RWMutex
@@ -501,73 +482,6 @@ var symbolStore = struct {
 }{
 	trees:    make(map[string]*Scope),
 	contexts: make(map[string]*AnalysisContext),
-}
-
-// DocumentCache represents cached parsing results for a document
-type DocumentCache struct {
-	Content      string
-	ContentHash  string
-	Scope        *Scope
-	Context      *AnalysisContext
-	Diagnostics  []Diagnostic
-	LastModified time.Time
-}
-
-// parseCache holds cached parsing results to avoid re-parsing unchanged documents
-var parseCache = struct {
-	sync.RWMutex
-	cache map[string]*DocumentCache
-}{
-	cache: make(map[string]*DocumentCache),
-}
-
-// calculateContentHash creates a SHA256 hash of the document content
-func calculateContentHash(content string) string {
-	hash := sha256.Sum256([]byte(content))
-	return hex.EncodeToString(hash[:])
-}
-
-// ParseDocumentCached parses a document with caching for unchanged content
-func ParseDocumentCached(uri string, text string) (*Scope, *AnalysisContext, []Diagnostic) {
-	contentHash := calculateContentHash(text)
-
-	// Check cache first
-	parseCache.RLock()
-	if cached, exists := parseCache.cache[uri]; exists {
-		if cached.ContentHash == contentHash {
-			// Cache hit - return cached results
-			parseCache.RUnlock()
-			log.Debug("Cache hit for document %s", uri)
-			return cached.Scope, cached.Context, cached.Diagnostics
-		}
-	}
-	parseCache.RUnlock()
-
-	// Cache miss - parse document
-	log.Debug("Cache miss for document %s - parsing", uri)
-	scope, context, diagnostics := ParseDocument(uri, text)
-
-	// Update cache
-	parseCache.Lock()
-	parseCache.cache[uri] = &DocumentCache{
-		Content:      text,
-		ContentHash:  contentHash,
-		Scope:        scope,
-		Context:      context,
-		Diagnostics:  diagnostics,
-		LastModified: time.Now(),
-	}
-	parseCache.Unlock()
-
-	return scope, context, diagnostics
-}
-
-// ClearParseCache removes a document from the parse cache
-func ClearParseCache(uri string) {
-	parseCache.Lock()
-	delete(parseCache.cache, uri)
-	parseCache.Unlock()
-	log.Debug("Cleared parse cache for document %s", uri)
 }
 
 // AnalysisJob represents a parsing/analysis job
@@ -638,45 +552,6 @@ func submitAnalysisJob(uri, content string, writer *bufio.Writer, isOpen bool) {
 	}
 }
 
-// DiagnosticPool manages a pool of diagnostic slices to reduce allocations
-type DiagnosticPool struct {
-	pool sync.Pool
-}
-
-// diagnosticPool is the global pool for diagnostic slices
-var diagnosticPool = &DiagnosticPool{
-	pool: sync.Pool{
-		New: func() interface{} {
-			// Pre-allocate slice with reasonable capacity
-			return make([]Diagnostic, 0, 32)
-		},
-	},
-}
-
-// Get retrieves a diagnostic slice from the pool
-func (dp *DiagnosticPool) Get() []Diagnostic {
-	return dp.pool.Get().([]Diagnostic)
-}
-
-// Put returns a diagnostic slice to the pool
-func (dp *DiagnosticPool) Put(diagnostics []Diagnostic) {
-	// Reset slice but keep underlying array if capacity is reasonable
-	if cap(diagnostics) < 128 { // Don't pool overly large slices
-		diagnostics = diagnostics[:0] // Reset length to 0
-		dp.pool.Put(diagnostics)
-	}
-}
-
-// GetPooledDiagnostics gets a diagnostic slice from the pool
-func GetPooledDiagnostics() []Diagnostic {
-	return diagnosticPool.Get()
-}
-
-// ReturnPooledDiagnostics returns a diagnostic slice to the pool
-func ReturnPooledDiagnostics(diagnostics []Diagnostic) {
-	diagnosticPool.Put(diagnostics)
-}
-
 func SetWarnUnusedLabels(enabled bool) {
 	warnUnusedLabelsEnabled = enabled
 }
@@ -727,9 +602,6 @@ func Start() {
 		} else {
 			log.Info("Successfully loaded mnemonics from %s", mnemonicPath)
 		}
-
-		// Set mnemonic.json path for lexer
-		SetMnemonicJSONPath(mnemonicPath)
 	}()
 
 	// Load C64 memory map data
@@ -758,17 +630,11 @@ func Start() {
 		} else {
 			log.Info("Successfully loaded %d built-in functions and %d built-in constants from %s", len(builtinFunctions), len(builtinConstants), kickassPath)
 		}
-
-		// Set kickass.json path for lexer
-		SetKickassJSONPath(kickassPath)
 	}()
 
 	// Wait for all JSON files to load
 	wg.Wait()
 	log.Info("All JSON Source of Truth files loaded successfully from %s", configDir)
-
-	// Initialize lexer token definitions AFTER all JSON files are loaded
-	InitTokenDefs()
 
 	// Initialize ProcessorContext (used by completion and context-aware parser)
 	mnemonicPath := filepath.Join(configDir, "mnemonic.json")
@@ -934,14 +800,6 @@ func Start() {
 							}
 						}
 
-						// Invalidate all parse caches to trigger re-analysis with new settings
-						parseCache.Lock()
-						for uri := range parseCache.cache {
-							delete(parseCache.cache, uri)
-							log.Debug("Invalidated parse cache for %s due to config change", uri)
-						}
-						parseCache.Unlock()
-
 						// Re-analyze all open documents with new configuration
 						documentStore.RLock()
 						for uri, content := range documentStore.documents {
@@ -1047,9 +905,6 @@ func Start() {
 						symbolStore.Lock()
 						delete(symbolStore.trees, uri)
 						symbolStore.Unlock()
-
-						// Clear parse cache for closed document
-						ClearParseCache(uri)
 
 						log.Info("Removed document %s from stores.", uri)
 

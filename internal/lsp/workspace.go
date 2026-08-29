@@ -1,6 +1,8 @@
 package lsp
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -20,6 +22,13 @@ const maxImportDepth = 64
 
 // sourceExtensions are the files the workspace scan picks up.
 var sourceExtensions = map[string]bool{".asm": true, ".kasm": true, ".a": true}
+
+// calculateContentHash identifies a document by its content, so an unchanged
+// file is not reparsed.
+func calculateContentHash(content string) string {
+	sum := sha256.Sum256([]byte(content))
+	return hex.EncodeToString(sum[:])
+}
 
 // SourceProvider supplies the current text of a document. The server's
 // implementation prefers an open editor buffer over the file on disk, so that

@@ -269,7 +269,7 @@ func NewSemanticAnalyzerForUnit(scope *Scope, sources map[string]string) *Semant
 func newSemanticAnalyzer(scope *Scope) *SemanticAnalyzer {
 	return &SemanticAnalyzer{
 		scope:         scope,
-		diagnostics:   GetPooledDiagnostics(), // Use pooled diagnostics slice
+		diagnostics:   nil,
 		documentLines: map[string][]string{},
 		context:       NewAnalysisContext(),
 	}
