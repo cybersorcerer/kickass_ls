@@ -126,7 +126,7 @@ type KickDirectiveInfo struct {
 
 // FunctionInfo represents a Kick Assembler built-in function
 type FunctionInfo struct {
-	Name        string   `json:"function"`
+	Name        string   `json:"name"`
 	Description string   `json:"description"`
 	Signature   string   `json:"signature"`
 	Examples    []string `json:"examples"`
@@ -136,7 +136,7 @@ type FunctionInfo struct {
 
 // ConstantInfo represents a Kick Assembler built-in constant
 type ConstantInfo struct {
-	Name        string `json:"constant"`
+	Name        string `json:"name"`
 	Description string `json:"description"`
 	Value       string `json:"value"`
 	Type        string `json:"type"`
@@ -152,7 +152,7 @@ type MemoryRegion struct {
 	Size        int               `json:"size"`
 	Description string            `json:"description"`
 	Access      string            `json:"access"`      // "read", "write", "read/write"
-	BitFields   map[string]string `json:"bit_fields,omitempty"`
+	BitFields   map[string]string `json:"bitFields,omitempty"`
 	Examples    []string          `json:"examples,omitempty"`
 	Tips        []string          `json:"tips,omitempty"`
 }
@@ -1369,19 +1369,23 @@ func (l *ContextAwareLexer) tryTokenizeIdentifier() *ContextToken {
 	metadata := &TokenMetadata{}
 	tokenType := TOKEN_IDENTIFIER
 
+	// Attach built-in information as metadata, but keep the token an identifier.
+	// The lexer has no symbol table, and the lookups are case-insensitive, so a
+	// user label, macro parameter or enum member named RED, min or Vector would
+	// otherwise stop being a name everywhere the parser expects TOKEN_IDENTIFIER.
+	// Distinguishing a shadowed built-in from a user symbol needs the symbol
+	// table, which is only built after parsing.
 	if l.processorCtx != nil {
 		// Check for function
 		if funcInfo := l.processorCtx.GetFunctionInfo(literal); funcInfo != nil {
 			metadata.IsKickFunction = true
 			metadata.FunctionInfo = funcInfo
-			tokenType = TOKEN_BUILTIN_MATH_FUNC // Default, could categorize by function category
 		}
 
 		// Check for constant
 		if constInfo := l.processorCtx.GetConstantInfo(literal); constInfo != nil {
 			metadata.IsKickConstant = true
 			metadata.ConstantInfo = constInfo
-			tokenType = TOKEN_BUILTIN_MATH_CONST // Default, could categorize by constant category
 		}
 	}
 

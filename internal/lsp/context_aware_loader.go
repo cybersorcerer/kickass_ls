@@ -69,8 +69,8 @@ func (ctx *ProcessorContext) loadKickAssemblerData(path string) error {
 	var kickassData struct {
 		Directives             []KickDirectiveInfo `json:"directives"`
 		PreprocessorStatements []KickDirectiveInfo `json:"preprocessorStatements"`
-		Functions              []FunctionInfo      `json:"functions"`
-		Constants              []ConstantInfo      `json:"constants"`
+		Functions              []FunctionInfo      `json:"builtinFunctions"`
+		Constants              []ConstantInfo      `json:"builtinConstants"`
 	}
 
 	if err := json.Unmarshal(data, &kickassData); err != nil {
