@@ -118,6 +118,56 @@ func TestExpressionPrecedence(t *testing.T) {
 	}
 }
 
+// TestNegativeValuesAreEvaluated guards the sentinel that used to conflate
+// "the value is -1" with "the expression cannot be evaluated". Everything here
+// folds to a negative number and must still be reported as evaluated.
+func TestNegativeValuesAreEvaluated(t *testing.T) {
+	tests := []struct {
+		expr string
+		want int64
+	}{
+		{"0-1", -1},
+		{"5-10", -5},
+		{"-1", -1},
+		{"-5", -5},
+		{"1-2*3", -5},
+		{"abs(0-1)", 1},
+		{"min(0-1, 5)", -1},
+		{"(0-1)", -1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.expr, func(t *testing.T) {
+			got, evaluated := evalConst(t, tc.expr)
+			if !evaluated {
+				t.Fatalf("%q was reported as not evaluable", tc.expr)
+			}
+			if got != tc.want {
+				t.Errorf("%q = %d, want %d", tc.expr, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestUnevaluableExpressionsAreReported is the counterpart: expressions that
+// genuinely cannot be folded must not silently produce a value.
+func TestUnevaluableExpressionsAreReported(t *testing.T) {
+	exprs := []string{
+		"UNDEFINED_SYMBOL",
+		"1/0",
+		"sin(1)",
+	}
+
+	for _, expr := range exprs {
+		t.Run(expr, func(t *testing.T) {
+			_, evaluated := evalConst(t, expr)
+			if evaluated {
+				t.Errorf("%q was reported as evaluable", expr)
+			}
+		})
+	}
+}
+
 // --- addressing modes ----------------------------------------------------
 
 // TestJumpParenthesesAreSignificant covers manual 4.5: soft parentheses select

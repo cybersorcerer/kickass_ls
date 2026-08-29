@@ -52,17 +52,17 @@ type CPUFlags struct {
 
 // AnalysisContext holds enhanced analysis state
 type AnalysisContext struct {
-	CurrentPC          int64                       // Track program counter
-	DefinedLabels      map[string]*Symbol          // Labels with addresses
-	DefinedMultiLabels map[string][]*Symbol        // Multi labels: Name → [Instance1, Instance2, ...]
-	DefinedSymbols     map[string]bool             // Symbols defined via .define directive
-	ForwardRefs        []ForwardReference          // Unresolved references
-	MacroDefinitions   map[string]*MacroDefinition // Macro definitions
-	MemoryMap              *MemoryMap                  // C64/6502 memory layout
-	CPUFlags               *CPUFlags                   // Processor flags state
-	CurrentNamespace       string                      // Current namespace context for label resolution
-	NamespaceStack         []string                    // Stack for nested namespaces
-	PreprocessorIfDepth    int                         // Nesting depth for #if/#endif matching
+	CurrentPC           int64                       // Track program counter
+	DefinedLabels       map[string]*Symbol          // Labels with addresses
+	DefinedMultiLabels  map[string][]*Symbol        // Multi labels: Name → [Instance1, Instance2, ...]
+	DefinedSymbols      map[string]bool             // Symbols defined via .define directive
+	ForwardRefs         []ForwardReference          // Unresolved references
+	MacroDefinitions    map[string]*MacroDefinition // Macro definitions
+	MemoryMap           *MemoryMap                  // C64/6502 memory layout
+	CPUFlags            *CPUFlags                   // Processor flags state
+	CurrentNamespace    string                      // Current namespace context for label resolution
+	NamespaceStack      []string                    // Stack for nested namespaces
+	PreprocessorIfDepth int                         // Nesting depth for #if/#endif matching
 }
 
 // NewAnalysisContext creates a new enhanced analysis context
@@ -1117,7 +1117,7 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 	case ".pc", "*", "*=":
 		// Set program counter (ONLY in Pass 1)
 		if isPass1 && node.Value != nil {
-			if addr := a.evaluateExpression(node.Value); addr != -1 {
+			if addr, ok := a.evaluateExpression(node.Value); ok {
 				a.context.CurrentPC = addr
 			}
 		}
@@ -1131,9 +1131,9 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			}
 
 			// Try to evaluate the constant value
-			addr := a.evaluateExpression(node.Value)
-			log.Debug("processDirective .const: name=%s, addr=%d", node.Name.Value, addr)
-			if addr != -1 {
+			addr, evaluated := a.evaluateExpression(node.Value)
+			log.Debug("processDirective .const: name=%s, addr=%d, evaluated=%v", node.Name.Value, addr, evaluated)
+			if evaluated {
 				symbol.Address = addr
 				symbol.Value = fmt.Sprintf("$%04X", addr)
 
@@ -1164,9 +1164,9 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			}
 
 			// Try to evaluate the variable value
-			addr := a.evaluateExpression(node.Value)
-			log.Debug("processDirective .const: name=%s, addr=%d", node.Name.Value, addr)
-			if addr != -1 {
+			addr, evaluated := a.evaluateExpression(node.Value)
+			log.Debug("processDirective .var: name=%s, addr=%d, evaluated=%v", node.Name.Value, addr, evaluated)
+			if evaluated {
 				symbol.Address = addr
 				symbol.Value = fmt.Sprintf("$%04X", addr)
 
@@ -1197,8 +1197,8 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			}
 
 			// Try to evaluate the label value
-			addr := a.evaluateExpression(node.Value)
-			if addr != -1 {
+			addr, evaluated := a.evaluateExpression(node.Value)
+			if evaluated {
 				symbol.Address = addr
 				symbol.Value = fmt.Sprintf("$%04X", addr)
 			}
@@ -1246,16 +1246,16 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			// For now, try to evaluate it as count
 			if arrayExpr, ok := node.Value.(*ArrayExpression); ok && len(arrayExpr.Elements) > 0 {
 				// First element is the count
-				count := a.evaluateExpression(arrayExpr.Elements[0])
-				if count > 0 && !a.inMacroOrFunction {
+				count, ok := a.evaluateExpression(arrayExpr.Elements[0])
+				if ok && count > 0 && !a.inMacroOrFunction {
 					log.Debug("processDirective .fill: count=%d, updating PC from %d to %d",
 						count, a.context.CurrentPC, a.context.CurrentPC+count)
 					a.context.CurrentPC += count
 				}
 			} else {
 				// Try to evaluate as single expression (count only)
-				count := a.evaluateExpression(node.Value)
-				if count > 0 && !a.inMacroOrFunction {
+				count, ok := a.evaluateExpression(node.Value)
+				if ok && count > 0 && !a.inMacroOrFunction {
 					log.Debug("processDirective .fill: count=%d, updating PC from %d to %d",
 						count, a.context.CurrentPC, a.context.CurrentPC+count)
 					a.context.CurrentPC += count
@@ -1273,7 +1273,6 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		log.Debug("processDirective: .ifndef not implemented yet")
 	}
 }
-
 
 // handleUnparsedForDirectives scans document lines for .for directives that weren't parsed correctly
 func (a *SemanticAnalyzer) handleUnparsedForDirectives() {
@@ -1348,78 +1347,85 @@ func (a *SemanticAnalyzer) extractForLoopContent(startLine int) []string {
 	return content
 }
 
-
-// evaluateExpression attempts to evaluate an expression to a numeric value
-func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
+// evaluateExpression attempts to fold an expression to a numeric value. The
+// second result reports whether that succeeded; -1 used to double as the
+// failure marker, which made every expression that legitimately evaluates to
+// -1 (".const OFFSET = 0-1", ".byte -1", "abs(-1)") look unevaluable.
+func (a *SemanticAnalyzer) evaluateExpression(expr Expression) (int64, bool) {
 	if expr == nil || a.context == nil {
-		return -1
+		return 0, false
 	}
 
 	switch e := expr.(type) {
 	case *IntegerLiteral:
 		if e != nil {
-			return e.Value
+			return e.Value, true
 		}
 	case *Identifier:
 		if e != nil && a.context.DefinedLabels != nil {
 			// Use namespace-aware label lookup
 			if symbol, found := a.context.lookupLabel(normalizeLabel(e.Value)); found {
-				return symbol.Address
+				return symbol.Address, true
 			}
 		}
 	case *PrefixExpression:
 		if e != nil {
-			// CRITICAL: Return -1 for immediate addressing to prevent zero-page hints
+			// Immediate addressing is a value, not an address. Reporting it as
+			// unevaluable is what keeps zero page hints off "lda #$01".
 			if e.Operator == "#" {
-				return -1 // Immediate addressing - not a memory address!
+				return 0, false
+			}
+			if e.Operator == "-" {
+				if val, ok := a.evaluateExpression(e.Right); ok {
+					return -val, true
+				}
 			}
 			if e.Operator == "<" {
 				// Low byte
-				if val := a.evaluateExpression(e.Right); val != -1 {
-					return val & 0xFF
+				if val, ok := a.evaluateExpression(e.Right); ok {
+					return val & 0xFF, true
 				}
 			}
 			if e.Operator == ">" {
 				// High byte
-				if val := a.evaluateExpression(e.Right); val != -1 {
-					return (val >> 8) & 0xFF
+				if val, ok := a.evaluateExpression(e.Right); ok {
+					return (val >> 8) & 0xFF, true
 				}
 			}
 		}
 	case *InfixExpression:
 		if e != nil {
-			left := a.evaluateExpression(e.Left)
-			right := a.evaluateExpression(e.Right)
+			left, leftOK := a.evaluateExpression(e.Left)
+			right, rightOK := a.evaluateExpression(e.Right)
 			// Only proceed if both operands are evaluable
-			if left != -1 && right != -1 {
+			if leftOK && rightOK {
 				switch e.Operator {
 				case "+":
-					return left + right
+					return left + right, true
 				case "-":
-					return left - right
+					return left - right, true
 				case "*":
-					return left * right
+					return left * right, true
 				case "/":
 					if right != 0 {
-						return left / right
+						return left / right, true
 					}
-					// Division by zero - return -1 to indicate cannot evaluate
-					return -1
+					return 0, false // division by zero
 				case "%":
 					if right != 0 {
-						return left % right
+						return left % right, true
 					}
-					return -1
+					return 0, false
 				case "<<":
-					return left << right
+					return left << right, true
 				case ">>":
-					return left >> right
+					return left >> right, true
 				case "&":
-					return left & right
+					return left & right, true
 				case "|":
-					return left | right
+					return left | right, true
 				case "^":
-					return left ^ right
+					return left ^ right, true
 				}
 			}
 		}
@@ -1430,7 +1436,7 @@ func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
 		}
 	case *TernaryExpression:
 		if e != nil {
-			if cond := a.evaluateExpression(e.Condition); cond != -1 {
+			if cond, ok := a.evaluateExpression(e.Condition); ok {
 				if cond != 0 {
 					return a.evaluateExpression(e.Then)
 				}
@@ -1445,57 +1451,62 @@ func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
 			}
 		}
 	}
-	return -1 // Cannot evaluate
+	return 0, false // Cannot evaluate
 }
 
 // evaluateBuiltinFunction attempts to evaluate a builtin function call
-func (a *SemanticAnalyzer) evaluateBuiltinFunction(name string, args []Expression) int64 {
-	// Phase 1: Basic math function evaluation
+func (a *SemanticAnalyzer) evaluateBuiltinFunction(name string, args []Expression) (int64, bool) {
 	switch name {
 	case "abs":
 		if len(args) == 1 {
-			val := a.evaluateExpression(args[0])
-			if val != -1 {
+			if val, ok := a.evaluateExpression(args[0]); ok {
 				if val < 0 {
-					return -val
+					return -val, true
 				}
-				return val
+				return val, true
 			}
 		}
 	case "min":
 		if len(args) == 2 {
-			val1 := a.evaluateExpression(args[0])
-			val2 := a.evaluateExpression(args[1])
-			if val1 != -1 && val2 != -1 {
+			val1, ok1 := a.evaluateExpression(args[0])
+			val2, ok2 := a.evaluateExpression(args[1])
+			if ok1 && ok2 {
 				if val1 < val2 {
-					return val1
+					return val1, true
 				}
-				return val2
+				return val2, true
 			}
 		}
 	case "max":
 		if len(args) == 2 {
-			val1 := a.evaluateExpression(args[0])
-			val2 := a.evaluateExpression(args[1])
-			if val1 != -1 && val2 != -1 {
+			val1, ok1 := a.evaluateExpression(args[0])
+			val2, ok2 := a.evaluateExpression(args[1])
+			if ok1 && ok2 {
 				if val1 > val2 {
-					return val1
+					return val1, true
 				}
-				return val2
+				return val2, true
+			}
+		}
+	case "mod":
+		if len(args) == 2 {
+			val1, ok1 := a.evaluateExpression(args[0])
+			val2, ok2 := a.evaluateExpression(args[1])
+			if ok1 && ok2 && val2 != 0 {
+				return val1 % val2, true
 			}
 		}
 	case "floor":
 		if len(args) == 1 {
-			val := a.evaluateExpression(args[0])
-			if val != -1 {
+			if val, ok := a.evaluateExpression(args[0]); ok {
 				// For integer values, floor is identity
-				return val
+				return val, true
 			}
 		}
-		// More complex functions like sin, cos, sqrt cannot be evaluated at compile time
-		// without proper floating point support, so return -1 to indicate cannot evaluate
+		// sin, cos, sqrt and friends need floating point support and are not
+		// folded here.
 	}
-	return -1 // Cannot evaluate this function
+	return 0, false
 }
 
 // validateBuiltinFunctionCall validates a builtin function call against kickass.json
@@ -1626,7 +1637,7 @@ func (a *SemanticAnalyzer) checkZeroPageOptimization(mnemonic string, operand Ex
 	// 3. instruction supports zero page addressing
 
 	// Check if operand is an absolute address that could be zero page
-	if addr := a.evaluateExpression(operand); addr >= 0x00 && addr <= 0xFF {
+	if addr, ok := a.evaluateExpression(operand); ok && addr >= 0x00 && addr <= 0xFF {
 		// This should only apply to direct memory access like "lda $0080"
 		// We already verified it's not immediate addressing above
 
@@ -1737,8 +1748,6 @@ func (a *SemanticAnalyzer) checkJMPIndirectBug(operand Expression, token Token) 
 		return
 	}
 
-	var addr int64 = -1
-
 	// Check for indirect addressing: JMP ($xxxx)
 	// Only real indirect addressing is affected. The parser keeps the
 	// parentheses, so an absolute "jmp $10ff" is an IntegerLiteral and must
@@ -1747,17 +1756,16 @@ func (a *SemanticAnalyzer) checkJMPIndirectBug(operand Expression, token Token) 
 	if !ok {
 		return
 	}
-	addr = a.evaluateExpression(group.Expression)
+	addr, evaluated := a.evaluateExpression(group.Expression)
 
 	// Check if we have a valid address and it triggers the page boundary bug
-	if addr != -1 && (addr&0xFF) == 0xFF {
+	if evaluated && (addr&0xFF) == 0xFF {
 		a.addWarning(token,
 			"JMP ($%04X) triggers 6502 page-boundary bug - "+
 				"will read from $%04X and $%04X instead of $%04X/$%04X",
 			addr, addr, addr&0xFF00, addr, addr+1)
 	}
 }
-
 
 // checkMemoryAccess analyzes memory access patterns for instructions
 func (a *SemanticAnalyzer) checkMemoryAccess(mnemonic string, operand Expression, token Token) {
@@ -1775,8 +1783,8 @@ func (a *SemanticAnalyzer) checkMemoryAccess(mnemonic string, operand Expression
 	}
 
 	// Get the memory address being accessed
-	addr := a.evaluateExpression(operand)
-	if addr == -1 {
+	addr, ok := a.evaluateExpression(operand)
+	if !ok {
 		return // Cannot evaluate address
 	}
 
@@ -1831,7 +1839,6 @@ func (a *SemanticAnalyzer) analyzeMemoryAccess(addr int64, isWrite bool, token T
 	}
 }
 
-
 // Dead Code Detection
 
 // pass4DeadCodeDetection analyzes control flow to find unreachable code
@@ -1846,7 +1853,6 @@ func (a *SemanticAnalyzer) pass4DeadCodeDetection(statements []Statement) {
 	visited := make(map[Statement]bool)
 	a.analyzeControlFlowWithVisited(statements, visited)
 }
-
 
 // analyzeControlFlowWithVisited detects unreachable code with duplicate prevention
 func (a *SemanticAnalyzer) analyzeControlFlowWithVisited(statements []Statement, visited map[Statement]bool) {
@@ -1904,7 +1910,6 @@ func (a *SemanticAnalyzer) isUnconditionalJump(stmt *InstructionStatement) bool 
 	}
 	return false
 }
-
 
 // checkForDeadCodeAfterJumpWithVisited looks for unreachable code with duplicate prevention
 func (a *SemanticAnalyzer) checkForDeadCodeAfterJumpWithVisited(statements []Statement, startIndex int, visited map[Statement]bool) {
@@ -1982,7 +1987,6 @@ func (a *SemanticAnalyzer) isAlwaysReachableDirective(directive string) bool {
 
 // Additional dead code patterns
 
-
 // processDataDirective handles .byte and .word directives with potential multiple values
 func (a *SemanticAnalyzer) processDataDirective(node *DirectiveStatement) {
 	if node == nil || a.context == nil {
@@ -2024,8 +2028,8 @@ func (a *SemanticAnalyzer) validateDataValues(expr Expression, dataType string, 
 	}
 
 	// Try to evaluate as single expression first
-	value := a.evaluateExpression(expr)
-	if value != -1 {
+	value, ok := a.evaluateExpression(expr)
+	if ok {
 		if value < minVal || value > maxVal {
 			log.Debug("validateDataValues: ADDING WARNING for value %d out of range", value)
 			a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
@@ -2043,9 +2047,9 @@ func (a *SemanticAnalyzer) checkRangeValidation(expr Expression, dataType string
 		return
 	}
 
-	value := a.evaluateExpression(expr)
+	value, ok := a.evaluateExpression(expr)
 	log.Debug("checkRangeValidation: dataType=%s, value=%d, range=%d-%d", dataType, value, minVal, maxVal)
-	if value != -1 && (value < minVal || value > maxVal) {
+	if ok && (value < minVal || value > maxVal) {
 		log.Debug("checkRangeValidation: ADDING WARNING for value %d out of range", value)
 		a.addWarning(token, "Value $%X out of %s range ($%X-$%X)", value, dataType, minVal, maxVal)
 	}
@@ -2114,8 +2118,8 @@ func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum 
 		log.Debug("validateTokenLevelDataDirective: checking value '%s' in %s directive", valueStr, dataType)
 
 		// Parse the value
-		value := a.parseTokenLevelValue(valueStr)
-		if value == -1 {
+		value, parsed := a.parseTokenLevelValue(valueStr)
+		if !parsed {
 			log.Debug("validateTokenLevelDataDirective: could not parse value '%s'", valueStr)
 			continue
 		}
@@ -2156,15 +2160,17 @@ func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum 
 	}
 }
 
-// parseTokenLevelValue parses hex, decimal, binary numbers in token-level analysis
-func (a *SemanticAnalyzer) parseTokenLevelValue(valueStr string) int64 {
+// parseTokenLevelValue parses hex, decimal and binary numbers in the token
+// level analysis. The second result reports success, so that a literal -1 is
+// not mistaken for a parse failure.
+func (a *SemanticAnalyzer) parseTokenLevelValue(valueStr string) (int64, bool) {
 	valueStr = strings.TrimSpace(valueStr)
 
 	// Hex numbers ($FF, $100, etc.)
 	if strings.HasPrefix(valueStr, "$") {
 		hexStr := valueStr[1:]
 		if value, err := strconv.ParseInt(hexStr, 16, 64); err == nil {
-			return value
+			return value, true
 		}
 	}
 
@@ -2172,17 +2178,17 @@ func (a *SemanticAnalyzer) parseTokenLevelValue(valueStr string) int64 {
 	if strings.HasPrefix(valueStr, "%") {
 		binStr := valueStr[1:]
 		if value, err := strconv.ParseInt(binStr, 2, 64); err == nil {
-			return value
+			return value, true
 		}
 	}
 
-	// Decimal numbers (123, etc.)
+	// Decimal numbers (123, -1, etc.)
 	if value, err := strconv.ParseInt(valueStr, 10, 64); err == nil {
-		return value
+		return value, true
 	}
 
 	// Could not parse
-	return -1
+	return 0, false
 }
 
 // processIfDirective handles .if conditional compilation directives with dead code detection
@@ -2195,11 +2201,11 @@ func (a *SemanticAnalyzer) processIfDirective(node *DirectiveStatement) {
 	log.Debug("processIfDirective: evaluating .if condition")
 
 	// Evaluate the condition expression
-	conditionValue := a.evaluateExpression(node.Value)
-	log.Debug("processIfDirective: condition value=%d", conditionValue)
+	conditionValue, evaluated := a.evaluateExpression(node.Value)
+	log.Debug("processIfDirective: condition value=%d, evaluated=%v", conditionValue, evaluated)
 
 	// Check for dead code: .if (0) or .if (false)
-	if conditionValue == 0 {
+	if evaluated && conditionValue == 0 {
 		log.Debug("processIfDirective: detected dead code block (.if condition is false)")
 		a.addDeadCodeWarningsForIfBlock(node)
 	}
