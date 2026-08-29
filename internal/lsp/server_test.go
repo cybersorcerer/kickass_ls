@@ -46,6 +46,47 @@ func TestGetWordAtPosition(t *testing.T) {
 	}
 }
 
+// --- getTokenAtPosition --------------------------------------------------
+
+// TestGetTokenAtPosition covers the token hover and go-to-definition work on.
+// Multi labels need their own recognition: neither '!' nor '+' nor '-' is a
+// word character, so the anonymous forms were invisible and go-to-definition
+// on "!+" or "!-" silently did nothing.
+func TestGetTokenAtPosition(t *testing.T) {
+	tests := []struct {
+		name string
+		line string
+		char int
+		want string
+	}{
+		// anonymous multi labels
+		{"cursor on the bang of a forward reference", "        bcc !+", 12, "!+"},
+		{"cursor on the sign of a forward reference", "        bcc !+", 13, "!+"},
+		{"anonymous backward reference", "        jmp !-", 13, "!-"},
+		{"anonymous definition", "!:      sta $02", 0, "!:"},
+		{"repeated sign", "        jmp !+++", 14, "!+++"},
+
+		// named multi labels
+		{"named definition", "!loop:  inc $d020", 3, "!loop:"},
+		{"named backward reference", "        bne !loop-", 15, "!loop-"},
+		{"named forward reference", "        beq !done+", 15, "!done+"},
+
+		// not multi labels
+		{"boolean not", "#if !DEBUG", 6, "DEBUG"},
+		{"not equal", "a != 2", 2, ""},
+		{"plain label", "start:  rts", 2, "start"},
+		{"mnemonic", "        lda #$01", 9, "lda"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := getTokenAtPosition(tc.line, tc.char); got != tc.want {
+				t.Errorf("getTokenAtPosition(%q, %d) = %q, want %q", tc.line, tc.char, got, tc.want)
+			}
+		})
+	}
+}
+
 // --- GenerateSignatureHelp -----------------------------------------------
 
 // TestGenerateSignatureHelpBounds guards an out of range read: the cursor was

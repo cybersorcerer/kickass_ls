@@ -17,6 +17,7 @@ type ForwardReference struct {
 	PC           int64  // Program counter where this reference occurs (for branch distance calculation)
 	IsMultiLabel bool   // True if this is a multi-label reference
 	Direction    rune   // '+' for forward, '-' for backward (only for multi-labels)
+	Skip         int    // How many labels to skip: 1 for "!loop+", 3 for "!+++"
 }
 
 // MacroDefinition represents a macro with enhanced analysis
@@ -107,10 +108,28 @@ func (ctx *AnalysisContext) lookupLabel(label string) (*Symbol, bool) {
 	return nil, false
 }
 
+// multiLabelSkipCount returns how many labels a reference skips. Repeating the
+// sign skips instances: "!loop+" is the next one, "!+++" the third (manual 2.4).
+// A literal without a trailing sign counts as one.
+func multiLabelSkipCount(literal string) int {
+	count := 0
+	for i := len(literal) - 1; i >= 0; i-- {
+		if literal[i] != '+' && literal[i] != '-' {
+			break
+		}
+		count++
+	}
+	if count < 1 {
+		return 1
+	}
+	return count
+}
+
 // lookupMultiLabel searches for a multi-label instance based on direction and position
 // direction: '+' for forward (next instance after fromPC), '-' for backward (previous instance before fromPC)
+// skip: how many matching instances to step over, 1 being the nearest one
 // Returns the appropriate instance or nil if not found
-func (ctx *AnalysisContext) lookupMultiLabel(label string, direction rune, fromPC int64) (*Symbol, bool) {
+func (ctx *AnalysisContext) lookupMultiLabel(label string, direction rune, fromPC int64, skip int) (*Symbol, bool) {
 	// Try with namespace prefix first
 	var instances []*Symbol
 	if ctx.CurrentNamespace != "" {
@@ -131,20 +150,32 @@ func (ctx *AnalysisContext) lookupMultiLabel(label string, direction rune, fromP
 		return nil, false
 	}
 
+	if skip < 1 {
+		skip = 1
+	}
+
 	// Instances are sorted by Address (chronologically)
 	switch direction {
 	case '+':
-		// Forward: find first instance AFTER fromPC
+		// Forward: step over instances after fromPC
+		remaining := skip
 		for _, inst := range instances {
 			if inst.Address > fromPC {
-				return inst, true
+				remaining--
+				if remaining == 0 {
+					return inst, true
+				}
 			}
 		}
 	case '-':
-		// Backward: find last instance BEFORE fromPC
+		// Backward: step over instances before fromPC
+		remaining := skip
 		for i := len(instances) - 1; i >= 0; i-- {
 			if instances[i].Address < fromPC {
-				return instances[i], true
+				remaining--
+				if remaining == 0 {
+					return instances[i], true
+				}
 			}
 		}
 	}
@@ -388,7 +419,7 @@ func (a *SemanticAnalyzer) pass2ForwardReferenceResolution() {
 
 		// Use appropriate lookup based on whether it's a multi-label or regular label
 		if ref.IsMultiLabel {
-			symbol, found = a.context.lookupMultiLabel(normalizeLabel(ref.SymbolName), ref.Direction, ref.PC)
+			symbol, found = a.context.lookupMultiLabel(normalizeLabel(ref.SymbolName), ref.Direction, ref.PC, ref.Skip)
 		} else {
 			symbol, found = a.context.lookupLabel(normalizeLabel(ref.SymbolName))
 		}
@@ -887,7 +918,8 @@ func (a *SemanticAnalyzer) validateBranchDistancePass1(operand Expression, token
 			}
 
 			// Try to find the multi-label instance
-			if symbol, found := a.context.lookupMultiLabel(normalizeLabel(ident.Value), direction, a.context.CurrentPC); found {
+			skip := multiLabelSkipCount(ident.Token.Literal)
+			if symbol, found := a.context.lookupMultiLabel(normalizeLabel(ident.Value), direction, a.context.CurrentPC, skip); found {
 				// Calculate branch distance
 				distance := symbol.Address - (a.context.CurrentPC + 2)
 				if distance < -128 || distance > 127 {
@@ -903,6 +935,7 @@ func (a *SemanticAnalyzer) validateBranchDistancePass1(operand Expression, token
 						PC:           a.context.CurrentPC,
 						IsMultiLabel: true,
 						Direction:    direction,
+						Skip:         skip,
 					})
 				} else {
 					// Backward multi-label not found - error

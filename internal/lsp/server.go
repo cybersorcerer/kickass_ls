@@ -856,9 +856,9 @@ func Start() {
 							"resolveProvider":   false,
 							"triggerCharacters": []string{" ", ".", "$", "#"},
 						},
-						"definitionProvider":      true,
-						"referencesProvider":      true,
-						"documentSymbolProvider":  true,
+						"definitionProvider":              true,
+						"referencesProvider":              true,
+						"documentSymbolProvider":          true,
 						"documentFormattingProvider":      true,
 						"documentRangeFormattingProvider": true,
 						"semanticTokensProvider": map[string]interface{}{
@@ -1963,102 +1963,73 @@ func handleGotoDefinition(uri string, lineNum int, charNum int) interface{} {
 
 	// Check if this is a multi-label
 	if strings.HasPrefix(token, "!") {
-		// Multi-label handling
 		if !contextFound || analysisContext == nil {
 			log.Debug("handleGotoDefinition: No analysis context available for multi-labels")
 			return nil
 		}
 
-		// Extract label name and direction/type
-		labelName := strings.TrimPrefix(token, "!")
+		body := strings.TrimPrefix(token, "!")
+		// TrimRight, not TrimSuffix: repeating the sign skips labels, and the
+		// anonymous form has no name at all (manual 2.4).
+		labelName := strings.TrimRight(body, "+-:")
+		skip := multiLabelSkipCount(body)
 
-		if strings.HasSuffix(labelName, "+") {
-			// Forward reference - find target instance
-			labelName = strings.TrimSuffix(labelName, "+")
-			log.Info("handleGotoDefinition: Forward ref to '%s', current line %d", labelName, lineNum)
-			if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found && len(instances) > 0 {
-				log.Info("handleGotoDefinition: Found %d instances", len(instances))
-				// Sort instances by line number
-				sortedInstances := make([]*Symbol, len(instances))
-				copy(sortedInstances, instances)
-				sort.Slice(sortedInstances, func(i, j int) bool {
-					return sortedInstances[i].Position.Line < sortedInstances[j].Position.Line
-				})
+		instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName))
+		if !found || len(instances) == 0 {
+			log.Debug("handleGotoDefinition: no instances for multi-label %q", labelName)
+			return nil
+		}
 
-				// Find the first instance after this line
-				for _, inst := range sortedInstances {
-					log.Info("handleGotoDefinition: Checking instance at line %d", inst.Position.Line)
-					if inst.Position.Line > lineNum {
-						log.Info("handleGotoDefinition: Found target at line %d", inst.Position.Line)
-						return map[string]interface{}{
-							"uri": uri,
-							"range": map[string]interface{}{
-								"start": map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character},
-								"end":   map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character + len(labelName) + 2}, // +2 for "!:"
-							},
-						}
+		sorted := make([]*Symbol, len(instances))
+		copy(sorted, instances)
+		sort.Slice(sorted, func(i, j int) bool {
+			return sorted[i].Position.Line < sorted[j].Position.Line
+		})
+
+		locationOf := func(sym *Symbol) map[string]interface{} {
+			// The token in the source is "!" + name + the terminator.
+			length := len(labelName) + 2
+			return map[string]interface{}{
+				"uri": uri,
+				"range": map[string]interface{}{
+					"start": map[string]interface{}{"line": sym.Position.Line, "character": sym.Position.Character},
+					"end":   map[string]interface{}{"line": sym.Position.Line, "character": sym.Position.Character + length},
+				},
+			}
+		}
+
+		switch {
+		case strings.HasSuffix(body, "+"):
+			remaining := skip
+			for _, inst := range sorted {
+				if inst.Position.Line > lineNum {
+					remaining--
+					if remaining == 0 {
+						return locationOf(inst)
 					}
 				}
-				log.Info("handleGotoDefinition: No instance found after line %d", lineNum)
-			} else {
-				log.Info("handleGotoDefinition: No instances found for '%s'", labelName)
 			}
-		} else if strings.HasSuffix(labelName, "-") {
-			// Backward reference - find target instance
-			labelName = strings.TrimSuffix(labelName, "-")
-			log.Info("handleGotoDefinition: Backward ref to '%s', current line %d", labelName, lineNum)
-			if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found && len(instances) > 0 {
-				log.Info("handleGotoDefinition: Found %d instances", len(instances))
-				// Sort instances by line number
-				sortedInstances := make([]*Symbol, len(instances))
-				copy(sortedInstances, instances)
-				sort.Slice(sortedInstances, func(i, j int) bool {
-					return sortedInstances[i].Position.Line < sortedInstances[j].Position.Line
-				})
+			log.Debug("handleGotoDefinition: no instance %d steps after line %d", skip, lineNum)
 
-				// Find the last instance before this line
-				var target *Symbol
-				for _, inst := range sortedInstances {
-					log.Info("handleGotoDefinition: Checking instance at line %d", inst.Position.Line)
-					if inst.Position.Line < lineNum {
-						target = inst
-					} else {
-						break
+		case strings.HasSuffix(body, "-"):
+			remaining := skip
+			for i := len(sorted) - 1; i >= 0; i-- {
+				if sorted[i].Position.Line < lineNum {
+					remaining--
+					if remaining == 0 {
+						return locationOf(sorted[i])
 					}
 				}
+			}
+			log.Debug("handleGotoDefinition: no instance %d steps before line %d", skip, lineNum)
 
-				if target != nil {
-					log.Info("handleGotoDefinition: Found target at line %d", target.Position.Line)
-					return map[string]interface{}{
-						"uri": uri,
-						"range": map[string]interface{}{
-							"start": map[string]interface{}{"line": target.Position.Line, "character": target.Position.Character},
-							"end":   map[string]interface{}{"line": target.Position.Line, "character": target.Position.Character + len(labelName) + 2},
-						},
-					}
-				} else {
-					log.Info("handleGotoDefinition: No instance found before line %d", lineNum)
-				}
-			} else {
-				log.Info("handleGotoDefinition: No instances found for '%s'", labelName)
+		case strings.HasSuffix(body, ":"):
+			// On a definition, offer every instance.
+			locations := []map[string]interface{}{}
+			for _, inst := range sorted {
+				locations = append(locations, locationOf(inst))
 			}
-		} else if strings.HasSuffix(labelName, ":") {
-			// Definition - return all instances
-			labelName = strings.TrimSuffix(labelName, ":")
-			if instances, found := analysisContext.getAllMultiLabelInstances(normalizeLabel(labelName)); found && len(instances) > 0 {
-				// Return array of locations (LSP supports this)
-				locations := []map[string]interface{}{}
-				for _, inst := range instances {
-					locations = append(locations, map[string]interface{}{
-						"uri": uri,
-						"range": map[string]interface{}{
-							"start": map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character},
-							"end":   map[string]interface{}{"line": inst.Position.Line, "character": inst.Position.Character + len(labelName) + 2},
-						},
-					})
-				}
-				return locations
-			}
+			return locations
 		}
 		return nil
 	}
@@ -2085,51 +2056,67 @@ func getTokenAtPosition(line string, char int) string {
 		return ""
 	}
 
-	// Use the existing, proven getWordAtPosition function
-	word := getWordAtPosition(line, char)
-	if word == "" {
-		return ""
+	// Multi labels first: neither '!' nor '+' nor '-' is a word character, so
+	// the anonymous forms (!:, !+, !--) are invisible to getWordAtPosition.
+	if token := multiLabelAt(line, char); token != "" {
+		return token
 	}
 
-	// Now find where this word appears in the line near the cursor position
-	// Search backwards from cursor to find word start
-	searchStart := char
-	if searchStart >= len(word) {
-		searchStart = char - len(word) + 1
-	}
-	if searchStart < 0 {
-		searchStart = 0
-	}
+	return getWordAtPosition(line, char)
+}
 
-	wordStart := -1
-	for i := searchStart; i <= char && i < len(line); i++ {
-		if i+len(word) <= len(line) && line[i:i+len(word)] == word {
-			wordStart = i
+// multiLabelAt returns the multi label token covering the given position, or ""
+// if there is none. Covers the named form (!loop:, !loop+) and the anonymous
+// one (!:, !+, !++), including repeated signs (manual 2.4).
+func multiLabelAt(line string, char int) string {
+	// Walk back to the '!' that could start the token.
+	start := -1
+	for i := char; i >= 0; i-- {
+		c := line[i]
+		if c == '!' {
+			start = i
+			break
+		}
+		if !isAlphaNumeric(c) && c != '_' && c != '+' && c != '-' && c != ':' {
 			break
 		}
 	}
-
-	if wordStart < 0 {
-		// Fallback: just return the word without prefix/suffix
-		return word
+	if start < 0 {
+		return ""
 	}
 
-	wordEnd := wordStart + len(word) - 1
-
-	// Check for '!' prefix (multi-label)
-	if wordStart > 0 && line[wordStart-1] == '!' {
-		word = "!" + word
+	// A '!' glued to the end of an identifier does not start a label.
+	if start > 0 && (isAlphaNumeric(line[start-1]) || line[start-1] == '_') {
+		return ""
 	}
 
-	// Check for suffix ('+', '-', or ':')
-	if wordEnd+1 < len(line) {
-		nextChar := line[wordEnd+1]
-		if nextChar == '+' || nextChar == '-' || nextChar == ':' {
-			word = word + string(nextChar)
+	// Optional name.
+	pos := start + 1
+	for pos < len(line) && (isAlphaNumeric(line[pos]) || line[pos] == '_') {
+		pos++
+	}
+	if pos >= len(line) {
+		return ""
+	}
+
+	end := pos
+	switch line[pos] {
+	case ':':
+		end = pos + 1
+	case '+', '-':
+		sign := line[pos]
+		for end < len(line) && line[end] == sign {
+			end++
 		}
+	default:
+		// Something else follows, so this '!' is the boolean not operator.
+		return ""
 	}
 
-	return word
+	if char < start || char >= end {
+		return ""
+	}
+	return line[start:end]
 }
 
 // getMemoryAddressAtPosition extracts memory addresses like $D020, $0800, etc.

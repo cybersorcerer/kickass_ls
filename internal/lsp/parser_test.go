@@ -249,6 +249,76 @@ func TestBooleanNotIsNotAMultiLabel(t *testing.T) {
 	}
 }
 
+// TestMultiLabelSkipCount covers the sign counting. Repeating the sign skips
+// instances, so "!+++" is not the same reference as "!+".
+func TestMultiLabelSkipCount(t *testing.T) {
+	tests := []struct {
+		literal string
+		want    int
+	}{
+		{"!loop+", 1},
+		{"!loop-", 1},
+		{"!+", 1},
+		{"!-", 1},
+		{"!++", 2},
+		{"!+++", 3},
+		{"!--", 2},
+		{"!loop++", 2},
+		{"!loop:", 1}, // a definition has no sign
+		{"!:", 1},
+		{"", 1},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.literal, func(t *testing.T) {
+			if got := multiLabelSkipCount(tc.literal); got != tc.want {
+				t.Errorf("multiLabelSkipCount(%q) = %d, want %d", tc.literal, got, tc.want)
+			}
+		})
+	}
+}
+
+// TestLookupMultiLabelSkip checks that the resolver steps over the requested
+// number of instances instead of always taking the nearest one.
+func TestLookupMultiLabelSkip(t *testing.T) {
+	ctx := NewAnalysisContext()
+	for _, addr := range []int64{0x1000, 0x1010, 0x1020, 0x1030} {
+		ctx.DefinedMultiLabels[""] = append(ctx.DefinedMultiLabels[""],
+			&Symbol{Kind: MultiLabel, Address: addr})
+	}
+
+	tests := []struct {
+		name      string
+		from      int64
+		direction rune
+		skip      int
+		want      int64
+		found     bool
+	}{
+		{"forward nearest", 0x1005, '+', 1, 0x1010, true},
+		{"forward second", 0x1005, '+', 2, 0x1020, true},
+		{"forward third", 0x1005, '+', 3, 0x1030, true},
+		{"forward past the end", 0x1005, '+', 4, 0, false},
+		{"backward nearest", 0x1025, '-', 1, 0x1020, true},
+		{"backward second", 0x1025, '-', 2, 0x1010, true},
+		{"backward third", 0x1025, '-', 3, 0x1000, true},
+		{"backward past the start", 0x1025, '-', 4, 0, false},
+		{"skip below one is treated as one", 0x1005, '+', 0, 0x1010, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			sym, found := ctx.lookupMultiLabel("", tc.direction, tc.from, tc.skip)
+			if found != tc.found {
+				t.Fatalf("found = %v, want %v", found, tc.found)
+			}
+			if found && sym.Address != tc.want {
+				t.Errorf("resolved to $%04X, want $%04X", sym.Address, tc.want)
+			}
+		})
+	}
+}
+
 // --- symbol kinds --------------------------------------------------------
 
 // TestBuildScopeSymbolKinds guards the rule that a symbol's kind follows from
