@@ -20,6 +20,7 @@ const (
 	Macro
 	PseudoCommand
 	Namespace
+	Parameter
 )
 
 // String returns a human-readable representation of the SymbolKind.
@@ -41,6 +42,8 @@ func (sk SymbolKind) String() string {
 		return "pseudocommand"
 	case Namespace:
 		return "namespace"
+	case Parameter:
+		return "parameter"
 	default:
 		return "unknown"
 	}

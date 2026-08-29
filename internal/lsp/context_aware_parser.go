@@ -1986,6 +1986,15 @@ type scopeBuilder struct {
 	diagnostics []Diagnostic
 }
 
+// blockEndLine returns the zero based line the block closes on, or a line far
+// beyond the document when the block ran to the end of the file.
+func blockEndLine(block *BlockStatement) int {
+	if block == nil || block.EndToken.Type == TOKEN_EOF || block.EndToken.Line <= 0 {
+		return 999999
+	}
+	return block.EndToken.Line - 1
+}
+
 // buildScopeFromAST walks the AST and builds the Scope/Symbol tree.
 func buildScopeFromAST(program *Program, uri string) (*Scope, []Diagnostic) {
 	rootScope := NewRootScope(uri)
@@ -2197,9 +2206,37 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					}
 					sb.buildScope(stmt.Block.Statements, nsScope)
 				} else if directiveName == ".function" || directiveName == ".macro" || directiveName == ".pseudocommand" {
-					// Process blocks without creating new scope
+					// The body gets its own scope holding the parameters, so a
+					// reference to one resolves and hover can describe it.
 					log.Debug("buildScope: Processing block for directive '%s'", stmt.Token.Literal)
-					sb.buildScope(stmt.Block.Statements, currentScope)
+					bodyScope := &Scope{
+						Name:     stmt.Name.Value,
+						Parent:   currentScope,
+						Children: make([]*Scope, 0),
+						Symbols:  make(map[string]*Symbol),
+						Uri:      currentScope.Uri,
+						Range: Range{
+							Start: Position{Line: stmt.Token.Line - 1, Character: stmt.Token.Column - 1},
+							End:   Position{Line: blockEndLine(stmt.Block), Character: 0},
+						},
+					}
+					for _, parameter := range stmt.Parameters {
+						if parameter == nil {
+							continue
+						}
+						bodyScope.Symbols[parameter.Value] = &Symbol{
+							Name: parameter.Value,
+							Kind: Parameter,
+							Position: Position{
+								Line:      parameter.Token.Line - 1,
+								Character: parameter.Token.Column - 1,
+							},
+							URI:   parameter.Token.File,
+							Scope: bodyScope,
+						}
+					}
+					currentScope.AddChildScope(bodyScope)
+					sb.buildScope(stmt.Block.Statements, bodyScope)
 				}
 			}
 

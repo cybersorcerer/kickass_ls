@@ -454,3 +454,49 @@ func messages(diags []Diagnostic) []string {
 	}
 	return out
 }
+
+// TestFunctionParametersAreSymbols covers hover and go-to-definition inside a
+// function or macro body. The parameters used to exist only as a []string on
+// the symbol, so a reference to one resolved to nothing.
+func TestFunctionParametersAreSymbols(t *testing.T) {
+	tests := []struct {
+		name   string
+		src    string
+		body   int // a line inside the body, zero based
+		params []string
+	}{
+		{"function", ".function square(x) {\n    .return x * x\n}\n", 1, []string{"x"}},
+		{"function with two parameters", ".function add(a, b) {\n    .return a + b\n}\n", 1, []string{"a", "b"}},
+		{"macro", ".macro store(value, target) {\n    lda #value\n}\n", 1, []string{"value", "target"}},
+		{"pseudocommand", ".pseudocommand mov src : dst {\n    lda src\n}\n", 1, []string{"src", "dst"}},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scope, _ := parseSource(t, tc.src)
+
+			// From the root the parameters must stay invisible; they belong to
+			// the body, not to the file.
+			for _, name := range tc.params {
+				if _, found := scope.Symbols[name]; found {
+					t.Errorf("parameter %q leaked into the outer scope", name)
+				}
+			}
+
+			inner := scope.findInnermostScope(tc.body)
+			if inner == scope {
+				t.Fatalf("line %d did not resolve to a body scope", tc.body)
+			}
+			for _, name := range tc.params {
+				symbol, found := inner.FindSymbol(name)
+				if !found {
+					t.Errorf("parameter %q is not a symbol in the body scope", name)
+					continue
+				}
+				if symbol.Kind != Parameter {
+					t.Errorf("parameter %q has kind %s, want parameter", name, symbol.Kind.String())
+				}
+			}
+		})
+	}
+}

@@ -50,13 +50,13 @@ type TextDocumentItem struct {
 
 // Initialize Request/Response
 type InitializeParams struct {
-	ProcessID             *int                `json:"processId"`
-	RootPath              *string             `json:"rootPath"`
-	RootURI               *string             `json:"rootUri"`
-	InitializationOptions interface{}         `json:"initializationOptions,omitempty"`
-	Capabilities          ClientCapabilities  `json:"capabilities"`
-	Trace                 *string             `json:"trace,omitempty"`
-	WorkspaceFolders      []WorkspaceFolder   `json:"workspaceFolders,omitempty"`
+	ProcessID             *int               `json:"processId"`
+	RootPath              *string            `json:"rootPath"`
+	RootURI               *string            `json:"rootUri"`
+	InitializationOptions interface{}        `json:"initializationOptions,omitempty"`
+	Capabilities          ClientCapabilities `json:"capabilities"`
+	Trace                 *string            `json:"trace,omitempty"`
+	WorkspaceFolders      []WorkspaceFolder  `json:"workspaceFolders,omitempty"`
 }
 
 type ClientCapabilities struct {
@@ -65,10 +65,10 @@ type ClientCapabilities struct {
 }
 
 type TextDocumentClientCapabilities struct {
-	Completion     *CompletionClientCapabilities `json:"completion,omitempty"`
-	Hover          *HoverClientCapabilities      `json:"hover,omitempty"`
-	Definition     *DefinitionClientCapabilities `json:"definition,omitempty"`
-	References     *ReferencesClientCapabilities `json:"references,omitempty"`
+	Completion     *CompletionClientCapabilities     `json:"completion,omitempty"`
+	Hover          *HoverClientCapabilities          `json:"hover,omitempty"`
+	Definition     *DefinitionClientCapabilities     `json:"definition,omitempty"`
+	References     *ReferencesClientCapabilities     `json:"references,omitempty"`
 	DocumentSymbol *DocumentSymbolClientCapabilities `json:"documentSymbol,omitempty"`
 	SemanticTokens *SemanticTokensClientCapabilities `json:"semanticTokens,omitempty"`
 }
@@ -104,9 +104,9 @@ type SemanticTokensClientCapabilities struct {
 }
 
 type WorkspaceClientCapabilities struct {
-	WorkspaceFolders         bool `json:"workspaceFolders,omitempty"`
-	DidChangeConfiguration   bool `json:"didChangeConfiguration,omitempty"`
-	DidChangeWatchedFiles    bool `json:"didChangeWatchedFiles,omitempty"`
+	WorkspaceFolders       bool `json:"workspaceFolders,omitempty"`
+	DidChangeConfiguration bool `json:"didChangeConfiguration,omitempty"`
+	DidChangeWatchedFiles  bool `json:"didChangeWatchedFiles,omitempty"`
 }
 
 type WorkspaceFolder struct {
@@ -119,13 +119,13 @@ type InitializeResult struct {
 }
 
 type ServerCapabilities struct {
-	TextDocumentSync                 interface{}                    `json:"textDocumentSync,omitempty"`
-	CompletionProvider               *CompletionOptions             `json:"completionProvider,omitempty"`
-	HoverProvider                    bool                          `json:"hoverProvider,omitempty"`
-	DefinitionProvider               bool                          `json:"definitionProvider,omitempty"`
-	ReferencesProvider               bool                          `json:"referencesProvider,omitempty"`
-	DocumentSymbolProvider           bool                          `json:"documentSymbolProvider,omitempty"`
-	SemanticTokensProvider           *SemanticTokensOptions        `json:"semanticTokensProvider,omitempty"`
+	TextDocumentSync       interface{}            `json:"textDocumentSync,omitempty"`
+	CompletionProvider     *CompletionOptions     `json:"completionProvider,omitempty"`
+	HoverProvider          bool                   `json:"hoverProvider,omitempty"`
+	DefinitionProvider     bool                   `json:"definitionProvider,omitempty"`
+	ReferencesProvider     bool                   `json:"referencesProvider,omitempty"`
+	DocumentSymbolProvider bool                   `json:"documentSymbolProvider,omitempty"`
+	SemanticTokensProvider *SemanticTokensOptions `json:"semanticTokensProvider,omitempty"`
 }
 
 type CompletionOptions struct {
@@ -149,7 +149,7 @@ type DidOpenTextDocumentParams struct {
 }
 
 type DidChangeTextDocumentParams struct {
-	TextDocument   VersionedTextDocumentIdentifier `json:"textDocument"`
+	TextDocument   VersionedTextDocumentIdentifier  `json:"textDocument"`
 	ContentChanges []TextDocumentContentChangeEvent `json:"contentChanges"`
 }
 
@@ -166,8 +166,8 @@ type DidCloseTextDocumentParams struct {
 // Completion Request
 type CompletionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
-	Position     Position              `json:"position"`
-	Context      *CompletionContext    `json:"context,omitempty"`
+	Position     Position               `json:"position"`
+	Context      *CompletionContext     `json:"context,omitempty"`
 }
 
 type CompletionContext struct {
@@ -181,16 +181,16 @@ type CompletionList struct {
 }
 
 type CompletionItem struct {
-	Label         string                 `json:"label"`
-	Kind          *int                   `json:"kind,omitempty"`
-	Detail        *string                `json:"detail,omitempty"`
-	Documentation interface{}            `json:"documentation,omitempty"`
-	InsertText    *string                `json:"insertText,omitempty"`
-	TextEdit      *TextEdit              `json:"textEdit,omitempty"`
-	AdditionalTextEdits []TextEdit       `json:"additionalTextEdits,omitempty"`
-	SortText      *string                `json:"sortText,omitempty"`
-	FilterText    *string                `json:"filterText,omitempty"`
-	Data          interface{}            `json:"data,omitempty"`
+	Label               string      `json:"label"`
+	Kind                *int        `json:"kind,omitempty"`
+	Detail              *string     `json:"detail,omitempty"`
+	Documentation       interface{} `json:"documentation,omitempty"`
+	InsertText          *string     `json:"insertText,omitempty"`
+	TextEdit            *TextEdit   `json:"textEdit,omitempty"`
+	AdditionalTextEdits []TextEdit  `json:"additionalTextEdits,omitempty"`
+	SortText            *string     `json:"sortText,omitempty"`
+	FilterText          *string     `json:"filterText,omitempty"`
+	Data                interface{} `json:"data,omitempty"`
 }
 
 type TextEdit struct {
@@ -201,7 +201,7 @@ type TextEdit struct {
 // Hover Request
 type HoverParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
-	Position     Position              `json:"position"`
+	Position     Position               `json:"position"`
 }
 
 type Hover struct {
@@ -212,7 +212,7 @@ type Hover struct {
 // Definition Request
 type DefinitionParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
-	Position     Position              `json:"position"`
+	Position     Position               `json:"position"`
 }
 
 type Location struct {
@@ -223,8 +223,8 @@ type Location struct {
 // References Request
 type ReferenceParams struct {
 	TextDocument TextDocumentIdentifier `json:"textDocument"`
-	Position     Position              `json:"position"`
-	Context      ReferenceContext      `json:"context"`
+	Position     Position               `json:"position"`
+	Context      ReferenceContext       `json:"context"`
 }
 
 type ReferenceContext struct {
@@ -254,12 +254,12 @@ type PublishDiagnosticsParams struct {
 }
 
 type Diagnostic struct {
-	Range              Range                   `json:"range"`
-	Severity           *int                    `json:"severity,omitempty"`
-	Code               interface{}             `json:"code,omitempty"`
-	Source             *string                 `json:"source,omitempty"`
-	Message            string                  `json:"message"`
-	Tags               []int                   `json:"tags,omitempty"`
+	Range              Range                          `json:"range"`
+	Severity           *int                           `json:"severity,omitempty"`
+	Code               interface{}                    `json:"code,omitempty"`
+	Source             *string                        `json:"source,omitempty"`
+	Message            string                         `json:"message"`
+	Tags               []int                          `json:"tags,omitempty"`
 	RelatedInformation []DiagnosticRelatedInformation `json:"relatedInformation,omitempty"`
 }
 

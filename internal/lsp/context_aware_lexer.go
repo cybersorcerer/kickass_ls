@@ -116,12 +116,15 @@ const (
 
 // KickDirectiveInfo represents a Kick Assembler directive for context-aware parser
 type KickDirectiveInfo struct {
-	Name        string              `json:"directive"`
-	Description string              `json:"description"`
-	Signature   string              `json:"signature"`
-	Examples    []string            `json:"examples"`
-	Category    string              `json:"category,omitempty"` // "data", "flow", "pre", etc.
-	SourceType  StatementSourceType `json:"-"`                  // Which table this came from
+	Name        string   `json:"directive"`
+	Description string   `json:"description"`
+	Signature   string   `json:"signature"`
+	Examples    []string `json:"examples"`
+	// Values are the accepted operands of a directive that only takes a fixed
+	// set, such as .encoding. Empty for everything else.
+	Values     []string            `json:"values,omitempty"`
+	Category   string              `json:"category,omitempty"` // "data", "flow", "pre", etc.
+	SourceType StatementSourceType `json:"-"`                  // Which table this came from
 }
 
 // FunctionInfo represents a Kick Assembler built-in function

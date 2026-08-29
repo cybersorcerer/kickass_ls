@@ -1210,25 +1210,11 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 		}
 		if node.Value != nil {
 			if strLit, ok := node.Value.(*StringLiteral); ok {
-				encodingName := strings.ToLower(strLit.Value)
-				validEncodings := []string{
-					"petscii", "petscii_upper", "petscii_mixed", "petscii_lower",
-					"screencode", "screencode_upper", "screencode_mixed", "screencode_lower",
-					"ascii",
+				valid := directiveValues(".encoding")
+				if len(valid) > 0 && !containsFold(valid, strLit.Value) {
+					a.addWarning(node.Token, "Unknown encoding '%s'. Valid encodings: %s",
+						strLit.Value, strings.Join(valid, ", "))
 				}
-
-				isValid := false
-				for _, valid := range validEncodings {
-					if encodingName == valid {
-						isValid = true
-						break
-					}
-				}
-
-				if !isValid {
-					a.addWarning(node.Token, "Unknown encoding '%s'. Valid encodings: petscii, petscii_upper, petscii_mixed, screencode, screencode_upper, screencode_mixed, ascii", strLit.Value)
-				}
-				log.Debug("processDirective .encoding: name=%s, valid=%v", encodingName, isValid)
 			}
 		}
 	case ".import":
@@ -1714,6 +1700,30 @@ func (a *SemanticAnalyzer) checkIllegalOpcode(mnemonic string, token Token) {
 	if isIllegalMnemonic(mnemonic) {
 		a.addWarning(token, "'%s' is an undocumented/illegal opcode - may not work on all systems", mnemonic)
 	}
+}
+
+// directiveValues returns the operands a directive accepts, as declared in
+// kickass.json. Empty when the directive takes free-form operands.
+func directiveValues(directive string) []string {
+	ctx := GetProcessorContext()
+	if ctx == nil {
+		return nil
+	}
+	info := ctx.GetDirectiveInfo(directive)
+	if info == nil {
+		return nil
+	}
+	return info.Values
+}
+
+// containsFold reports whether the list holds the value, ignoring case.
+func containsFold(list []string, value string) bool {
+	for _, entry := range list {
+		if strings.EqualFold(entry, value) {
+			return true
+		}
+	}
+	return false
 }
 
 // isIllegalMnemonic checks if a mnemonic is marked as "Illegal" type in the loaded mnemonic data

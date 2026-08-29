@@ -10,13 +10,13 @@ import (
 
 func main() {
 	var (
-		testSuite  = flag.String("suite", "", "Path to test suite JSON file")
-		serverPath = flag.String("server", "kickass_ls", "Path to LSP server executable")
-		serverArgs = flag.String("args", "", "Additional server arguments")
-		rootPath   = flag.String("root", ".", "Root path for test files")
-		outputFile = flag.String("output", "", "Save test results to JSON file")
-		htmlReport = flag.String("html", "", "Save test results as HTML report")
-		verbose    = flag.Bool("verbose", false, "Verbose output")
+		testSuite   = flag.String("suite", "", "Path to test suite JSON file")
+		serverPath  = flag.String("server", "kickass_ls", "Path to LSP server executable")
+		serverArgs  = flag.String("args", "", "Additional server arguments")
+		rootPath    = flag.String("root", ".", "Root path for test files")
+		outputFile  = flag.String("output", "", "Save test results to JSON file")
+		htmlReport  = flag.String("html", "", "Save test results as HTML report")
+		verbose     = flag.Bool("verbose", false, "Verbose output")
 		interactive = flag.Bool("interactive", false, "Interactive mode for manual testing")
 	)
 	flag.Parse()

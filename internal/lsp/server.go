@@ -994,7 +994,12 @@ func Start() {
 																}
 															} else {
 																searchSymbol := normalizeLabel(word)
-																if symbol, found := symbolTree.FindSymbol(searchSymbol); found {
+																// Resolve from the innermost scope covering the
+																// cursor: FindSymbol walks up to the parents, so
+																// starting at the root never sees anything local
+																// to a namespace or a function body.
+																scopeAtCursor := symbolTree.findInnermostScope(int(lineNum))
+																if symbol, found := scopeAtCursor.FindSymbol(searchSymbol); found {
 																	var markdown string
 																	if symbol.Signature != "" {
 																		markdown = fmt.Sprintf("(%s) **%s**", symbol.Kind.String(), symbol.Signature)
@@ -1932,7 +1937,8 @@ func handleGotoDefinition(uri string, lineNum int, charNum int) interface{} {
 
 	// Regular label - use existing logic
 	word := getWordAtPosition(lineContent, charNum)
-	if symbol, found := symbolTree.FindSymbol(normalizeLabel(word)); found {
+	scopeAtCursor := symbolTree.findInnermostScope(lineNum)
+	if symbol, found := scopeAtCursor.FindSymbol(normalizeLabel(word)); found {
 		return map[string]interface{}{
 			"uri": uri,
 			"range": map[string]interface{}{
@@ -2511,6 +2517,27 @@ func generateCompletions(symbolTree *Scope, lineNum int, contextType CompletionC
 		}
 
 	case ContextOperandGeneral, ContextDirectiveOperand:
+		// Directives that only accept a fixed set of operands, such as
+		// .encoding, offer exactly those and nothing else. The values come from
+		// kickass.json, not from a list in the code.
+		if isDir {
+			if values := directiveValues(precedingName); len(values) > 0 {
+				log.Debug("Offering the %d declared values of %s", len(values), precedingName)
+				for _, value := range values {
+					if wordToComplete != "" && !strings.HasPrefix(strings.ToLower(value), strings.ToLower(wordToComplete)) {
+						continue
+					}
+					items = append(items, map[string]interface{}{
+						"label":    value,
+						"kind":     float64(12), // Value
+						"detail":   precedingName + " value",
+						"textEdit": makeTextEdit(value),
+					})
+				}
+				return items
+			}
+		}
+
 		// General operand context - suggest labels, constants, variables
 		log.Debug("ContextOperandGeneral/DirectiveOperand: suggesting all operands")
 		if memoryPrefix != "" {

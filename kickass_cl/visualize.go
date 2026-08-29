@@ -58,13 +58,13 @@ var tokenTypeNames = []string{
 
 // DecodedToken represents a decoded semantic token with position and type
 type DecodedToken struct {
-	Line       int
-	StartChar  int
-	Length     int
-	TokenType  int
-	Modifiers  int
-	TypeName   string
-	ColorCode  string
+	Line      int
+	StartChar int
+	Length    int
+	TokenType int
+	Modifiers int
+	TypeName  string
+	ColorCode string
 }
 
 // DecodeSemanticTokens decodes the relative-encoded semantic tokens into absolute positions

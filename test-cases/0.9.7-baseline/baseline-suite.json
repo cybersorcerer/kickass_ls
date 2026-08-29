@@ -191,7 +191,7 @@
       "input": {
         "file": "03-directive-function.asm",
         "line": 8,
-        "character": 15
+        "character": 12
       },
       "expected": {
         "hoverContent": "parameter"
