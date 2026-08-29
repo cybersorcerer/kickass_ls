@@ -1057,13 +1057,17 @@ func (p *ContextAwareParser) parseProgramCounter() Expression {
 	}
 }
 
+// unquoteStringLiteral removes the surrounding double quotes of a string token.
+func unquoteStringLiteral(literal string) string {
+	if len(literal) >= 2 && literal[0] == '"' && literal[len(literal)-1] == '"' {
+		return literal[1 : len(literal)-1]
+	}
+	return literal
+}
+
 // parseStringLiteral parses string literals
 func (p *ContextAwareParser) parseStringLiteral() Expression {
-	// Remove quotes
-	value := p.currentToken.Literal
-	if len(value) >= 2 && value[0] == '"' && value[len(value)-1] == '"' {
-		value = value[1 : len(value)-1]
-	}
+	value := unquoteStringLiteral(p.currentToken.Literal)
 
 	return &StringLiteral{
 		Token: tokenFrom(p.currentToken),
@@ -1417,11 +1421,27 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 	// #import, #importif: expect string (filename)
 	// #define, #undef: expect identifier (symbol name)
 	if directiveName == "#import" || directiveName == "#importif" {
+		// #importif takes a condition before the filename:
+		// "#importif DEBUG&&STANDALONE \"UpstartWithDebug.asm\"" (manual 8.5).
+		// The condition is parsed so it does not end up being read as the
+		// filename, but it is not evaluated: the import is always followed, so
+		// that symbols behind it stay known.
+		if directiveName == "#importif" && p.currentToken.Type != TOKEN_STRING {
+			stmt.Name = nil
+			condition := p.parseExpression(LOWEST)
+			_ = condition
+			if p.peekToken != nil && p.peekToken.Type == TOKEN_STRING {
+				p.nextToken()
+			}
+		}
+
 		// Expect string literal (filename)
 		if p.currentToken.Type == TOKEN_STRING {
 			stmt.Value = &StringLiteral{
 				Token: tokenFrom(p.currentToken),
-				Value: p.currentToken.Literal,
+				// Without the quotes: the value is a path, and #encoding
+				// already strips them. Import resolution relies on it.
+				Value: unquoteStringLiteral(p.currentToken.Literal),
 			}
 			stmt.Name = nil // No symbol name for import
 		} else {
