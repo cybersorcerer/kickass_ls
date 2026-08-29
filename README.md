@@ -51,6 +51,10 @@ Correctness release. Every fix below is covered by a test that fails without it.
 - Hover works on symbols used as immediate operands (`lda #MYCONST`)
 - Namespace scopes now have a valid range, so completion inside a namespace sees its own symbols
 - Operands starting with `X` or `Y` lost their first letter: `lda #YELLOW` looked up a symbol named `ELLOW`
+- Function, macro and pseudocommand parameters are symbols now, so hover and go-to-definition work on them
+- Hover and go-to-definition resolve from the innermost scope around the cursor instead of the file scope, which is what makes namespace- and body-local symbols reachable
+- An unterminated block comment no longer leaves its last character outside the token
+- Semantic highlighting no longer falls back to "variable" for every identifier when the document had not been analysed yet
 - Built-in functions and constants are loaded from `kickass.json` again; the loader was reading keys that do not exist in the file
 
 **Semantic highlighting**
@@ -58,6 +62,11 @@ Correctness release. Every fix below is covered by a test that fails without it.
 - Token modifiers are sent as a bit set as the protocol requires, instead of an index into the legend
 - Fixed a column drift after `&`, `%`, `$` and `'` that shifted every following token on the line
 - The new operators are highlighted
+
+**Configuration**
+
+- New `--config-dir` flag names the directory holding `kickass.json`, `mnemonic.json` and `c64memory.json`. Without it the server still reads `~/.config/kickass_ls`, but a packaged install can now point at the data files shipped next to the binary instead of refusing to start
+- The accepted values of `.encoding` moved into `kickass.json` and are both validated and offered as completions from there. The list in the code had seven entries, two of which the assembler does not accept
 
 **Robustness**
 
@@ -68,7 +77,7 @@ Correctness release. Every fix below is covered by a test that fails without it.
 
 **Tests**
 
-- Added the first Go unit tests: 260 cases covering the lexer, parser, formatter, expression evaluation and program counter arithmetic. `make test` and `make test-race`
+- Added the first Go unit tests: 272 cases covering the lexer, parser, formatter, expression evaluation and program counter arithmetic. `make test` and `make test-race`
 - The integration test runner now enforces `maxErrors`, `minWarnings` and `maxWarnings`, which were silently ignored, and gained `forbiddenDiagnostics` for asserting that a diagnostic is absent
 - Baseline test fixtures corrected to valid Kick Assembler (`.enum` takes no name, conditional assembly uses `#if`/`#endif`/`#undef`)
 
