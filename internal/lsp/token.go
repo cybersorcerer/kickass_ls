@@ -65,7 +65,22 @@ const (
 	TOKEN_BITWISE_AND // &
 	TOKEN_BITWISE_OR  // |
 	TOKEN_BITWISE_XOR // ^
-	TOKEN_MODULO      // %
+	TOKEN_BITWISE_NOT // ~
+	TOKEN_MODULO      // % (only produced when % is not a binary literal prefix)
+
+	// Comparison operators (manual table 5.1)
+	TOKEN_EQUAL_EQUAL   // ==
+	TOKEN_NOT_EQUAL     // !=
+	TOKEN_LESS_EQUAL    // <=
+	TOKEN_GREATER_EQUAL // >=
+
+	// Boolean operators (manual table 5.2)
+	TOKEN_LOGICAL_NOT // !
+	TOKEN_LOGICAL_AND // &&
+	TOKEN_LOGICAL_OR  // ||
+
+	// Conditional operator
+	TOKEN_QUESTION // ? (paired with TOKEN_COLON for the ternary)
 
 	// Built-in Functions
 	TOKEN_BUILTIN_MATH_FUNC
@@ -130,7 +145,16 @@ var tokenNames = map[TokenType]string{
 	TOKEN_BITWISE_AND:         "BITWISE_AND",
 	TOKEN_BITWISE_OR:          "BITWISE_OR",
 	TOKEN_BITWISE_XOR:         "BITWISE_XOR",
+	TOKEN_BITWISE_NOT:         "BITWISE_NOT",
 	TOKEN_MODULO:              "MODULO",
+	TOKEN_EQUAL_EQUAL:         "EQUAL_EQUAL",
+	TOKEN_NOT_EQUAL:           "NOT_EQUAL",
+	TOKEN_LESS_EQUAL:          "LESS_EQUAL",
+	TOKEN_GREATER_EQUAL:       "GREATER_EQUAL",
+	TOKEN_LOGICAL_NOT:         "LOGICAL_NOT",
+	TOKEN_LOGICAL_AND:         "LOGICAL_AND",
+	TOKEN_LOGICAL_OR:          "LOGICAL_OR",
+	TOKEN_QUESTION:            "QUESTION",
 	TOKEN_BUILTIN_MATH_FUNC:   "BUILTIN_MATH_FUNC",
 	TOKEN_BUILTIN_STRING_FUNC: "BUILTIN_STRING_FUNC",
 	TOKEN_BUILTIN_FILE_FUNC:   "BUILTIN_FILE_FUNC",

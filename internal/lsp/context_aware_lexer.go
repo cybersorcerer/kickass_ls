@@ -1329,7 +1329,10 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 
 // tryTokenizeIdentifier attempts to tokenize an identifier
 func (l *ContextAwareLexer) tryTokenizeIdentifier() *ContextToken {
-	if !isAlpha(l.peek()) && l.peek() != '_' && l.peek() != '!' {
+	// '!' is not an identifier character. Multi labels (!loop:, !loop-) are
+	// handled by tryTokenizeMultiLabel before this point; everywhere else a '!'
+	// is the boolean not operator (manual table 5.2).
+	if !isAlpha(l.peek()) && l.peek() != '_' {
 		return nil
 	}
 
@@ -1399,23 +1402,32 @@ func (l *ContextAwareLexer) tryTokenizeIdentifier() *ContextToken {
 	}
 }
 
+// twoCharOperators are the operators that must be recognised before the single
+// character ones, otherwise "<<" reads as two "<" and "&&" as two "&"
+// (manual tables 4.4, 5.1 and 5.2).
+var twoCharOperators = map[string]TokenType{
+	"<<": TOKEN_LEFT_SHIFT,
+	">>": TOKEN_RIGHT_SHIFT,
+	"==": TOKEN_EQUAL_EQUAL,
+	"!=": TOKEN_NOT_EQUAL,
+	"<=": TOKEN_LESS_EQUAL,
+	">=": TOKEN_GREATER_EQUAL,
+	"&&": TOKEN_LOGICAL_AND,
+	"||": TOKEN_LOGICAL_OR,
+}
+
 // tokenizeOperatorOrPunctuation handles operators and punctuation
 func (l *ContextAwareLexer) tokenizeOperatorOrPunctuation() *ContextToken {
 	startCol := l.column
 	ch := l.peek()
 
-	// Multi-character operators
-	if ch == '<' && l.peekAhead(1) == '<' {
-		startCol := l.column
-		l.advance()
-		l.advance()
-		return l.createToken(TOKEN_LEFT_SHIFT, "<<", startCol, nil)
-	}
-	if ch == '>' && l.peekAhead(1) == '>' {
-		startCol := l.column
-		l.advance()
-		l.advance()
-		return l.createToken(TOKEN_RIGHT_SHIFT, ">>", startCol, nil)
+	if next := l.peekAhead(1); next != 0 {
+		pair := string([]byte{ch, next})
+		if tokenType, found := twoCharOperators[pair]; found {
+			l.advance()
+			l.advance()
+			return l.createToken(tokenType, pair, startCol, nil)
+		}
 	}
 
 	// Single character operators/punctuation
@@ -1485,6 +1497,12 @@ func (l *ContextAwareLexer) tokenizeOperatorOrPunctuation() *ContextToken {
 		tokenType = TOKEN_BITWISE_XOR
 	case '%':
 		tokenType = TOKEN_MODULO
+	case '~':
+		tokenType = TOKEN_BITWISE_NOT
+	case '!':
+		tokenType = TOKEN_LOGICAL_NOT
+	case '?':
+		tokenType = TOKEN_QUESTION
 	default:
 		// Unknown character
 		startCol := l.column

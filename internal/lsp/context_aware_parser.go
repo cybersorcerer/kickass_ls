@@ -8,30 +8,52 @@ import (
 	log "c64.nvim/internal/log"
 )
 
-// Operator precedence constants
+// Operator precedence constants. The manual says expressions "obey the standard
+// precedence rules" (4.4) without giving a table; Kick Assembler's value and
+// math semantics are built on Java, so the Java ordering is used here.
 const (
 	_ int = iota
 	LOWEST
-	EQUALS      // ==
-	LESSGREATER // > or <
-	SUM         // +
-	PRODUCT     // *
-	PREFIX      // -X or <X
-	CALL        // myFunction(X)
+	TERNARY     // ?:
+	LOGICAL_OR  // ||
+	LOGICAL_AND // &&
+	BIT_OR      // |
+	BIT_XOR     // ^
+	BIT_AND     // &
+	EQUALS      // == !=
+	LESSGREATER // < > <= >=
+	SHIFT       // << >>
+	SUM         // + -
+	PRODUCT     // * /
+	PREFIX      // -x ~x !x <x >x
+	CALL        // myFunction(x)
 	MEMBER      // object.member
 )
 
-// precedences maps token types to their precedence levels
+// precedences maps token types to their infix precedence. A token missing here
+// terminates the expression, which is how statement boundaries are found.
 var precedences = map[TokenType]int{
-	TOKEN_EQUAL:    EQUALS,
-	TOKEN_PLUS:     SUM,
-	TOKEN_MINUS:    SUM,
-	TOKEN_SLASH:    PRODUCT,
-	TOKEN_ASTERISK: PRODUCT,
-	TOKEN_LESS:     PREFIX,
-	TOKEN_GREATER:  PREFIX,
-	TOKEN_LPAREN:   CALL,
-	TOKEN_DOT:      MEMBER,
+	TOKEN_QUESTION:      TERNARY,
+	TOKEN_LOGICAL_OR:    LOGICAL_OR,
+	TOKEN_LOGICAL_AND:   LOGICAL_AND,
+	TOKEN_BITWISE_OR:    BIT_OR,
+	TOKEN_BITWISE_XOR:   BIT_XOR,
+	TOKEN_BITWISE_AND:   BIT_AND,
+	TOKEN_EQUAL_EQUAL:   EQUALS,
+	TOKEN_NOT_EQUAL:     EQUALS,
+	TOKEN_EQUAL:         EQUALS, // assignment, kept for enum members
+	TOKEN_LESS:          LESSGREATER,
+	TOKEN_GREATER:       LESSGREATER,
+	TOKEN_LESS_EQUAL:    LESSGREATER,
+	TOKEN_GREATER_EQUAL: LESSGREATER,
+	TOKEN_LEFT_SHIFT:    SHIFT,
+	TOKEN_RIGHT_SHIFT:   SHIFT,
+	TOKEN_PLUS:          SUM,
+	TOKEN_MINUS:         SUM,
+	TOKEN_SLASH:         PRODUCT,
+	TOKEN_ASTERISK:      PRODUCT,
+	TOKEN_LPAREN:        CALL,
+	TOKEN_DOT:           MEMBER,
 }
 
 // Context-Aware Parser for 6510/C64/Kick Assembler
@@ -942,10 +964,16 @@ func (p *ContextAwareParser) parseExpression(precedence int) Expression {
 	case TOKEN_ASTERISK:
 		// Program Counter expression
 		leftExp = p.parseProgramCounter()
-	case TOKEN_HASH, TOKEN_MINUS, TOKEN_PLUS, TOKEN_LESS, TOKEN_GREATER, TOKEN_DOT, TOKEN_AT:
+	case TOKEN_HASH, TOKEN_MINUS, TOKEN_PLUS, TOKEN_LESS, TOKEN_GREATER, TOKEN_DOT, TOKEN_AT,
+		TOKEN_BITWISE_NOT, TOKEN_LOGICAL_NOT:
 		leftExp = p.parsePrefixExpression()
 	case TOKEN_LPAREN:
 		leftExp = p.parseGroupedExpression()
+	case TOKEN_LBRACKET:
+		// Hard parentheses are pure grouping. Unlike (), they carry no
+		// addressing mode meaning: jmp [$1000] is an absolute jump while
+		// jmp ($1000) is indirect (manual 4.5).
+		leftExp = p.parseBracketExpression()
 	case TOKEN_BUILTIN_MATH_FUNC, TOKEN_BUILTIN_STRING_FUNC, TOKEN_BUILTIN_FILE_FUNC, TOKEN_BUILTIN_3D_FUNC:
 		leftExp = p.parseBuiltinFunction()
 	case TOKEN_BUILTIN_MATH_CONST, TOKEN_BUILTIN_COLOR_CONST:
@@ -974,9 +1002,17 @@ func (p *ContextAwareParser) parseExpression(precedence int) Expression {
 	// Parse infix expressions
 	for p.peekToken != nil && p.peekToken.Type != TOKEN_EOF && precedence < p.peekPrecedence() {
 		switch p.peekToken.Type {
-		case TOKEN_PLUS, TOKEN_MINUS, TOKEN_SLASH, TOKEN_ASTERISK, TOKEN_EQUAL, TOKEN_DOT:
+		case TOKEN_PLUS, TOKEN_MINUS, TOKEN_SLASH, TOKEN_ASTERISK, TOKEN_EQUAL, TOKEN_DOT,
+			TOKEN_LEFT_SHIFT, TOKEN_RIGHT_SHIFT,
+			TOKEN_BITWISE_AND, TOKEN_BITWISE_OR, TOKEN_BITWISE_XOR,
+			TOKEN_EQUAL_EQUAL, TOKEN_NOT_EQUAL,
+			TOKEN_LESS, TOKEN_GREATER, TOKEN_LESS_EQUAL, TOKEN_GREATER_EQUAL,
+			TOKEN_LOGICAL_AND, TOKEN_LOGICAL_OR:
 			p.nextToken()
 			leftExp = p.parseInfixExpression(leftExp)
+		case TOKEN_QUESTION:
+			p.nextToken()
+			leftExp = p.parseTernaryExpression(leftExp)
 		case TOKEN_LPAREN:
 			p.nextToken()
 			leftExp = p.parseCallExpression(leftExp)
@@ -1120,9 +1156,60 @@ func (p *ContextAwareParser) parsePrefixExpression() Expression {
 	return expression
 }
 
+// parseBracketExpression parses [expr], the hard parentheses of Kick Assembler.
+// They only group; the result is the inner expression itself.
+func (p *ContextAwareParser) parseBracketExpression() Expression {
+	p.nextToken() // skip [
+
+	exp := p.parseExpression(LOWEST)
+
+	if p.peekToken == nil || p.peekToken.Type != TOKEN_RBRACKET {
+		p.addError("Expected ']' after expression", p.currentToken.Line, p.currentToken.Column)
+		return exp
+	}
+	p.nextToken() // consume ]
+
+	return exp
+}
+
+// parseTernaryExpression parses condition ? then : else. The condition has
+// already been parsed and the parser sits on the '?'.
+func (p *ContextAwareParser) parseTernaryExpression(condition Expression) Expression {
+	exp := &TernaryExpression{
+		Token: Token{
+			Type:    p.currentToken.Type,
+			Literal: p.currentToken.Literal,
+			Line:    p.currentToken.Line,
+			Column:  p.currentToken.Column,
+		},
+		Condition: condition,
+	}
+
+	p.nextToken()
+	exp.Then = p.parseExpression(LOWEST)
+
+	if p.peekToken == nil || p.peekToken.Type != TOKEN_COLON {
+		p.addError("Expected ':' in conditional expression", p.currentToken.Line, p.currentToken.Column)
+		return exp
+	}
+	p.nextToken() // move onto ':'
+	p.nextToken() // move past ':'
+
+	// Right associative: a ? b : c ? d : e groups as a ? b : (c ? d : e).
+	exp.Else = p.parseExpression(TERNARY - 1)
+
+	return exp
+}
+
 // parseGroupedExpression parses expressions in parentheses
 // Also handles 6502 indirect addressing modes: ($80, x) and ($80), y
 func (p *ContextAwareParser) parseGroupedExpression() Expression {
+	openParen := Token{
+		Type:    p.currentToken.Type,
+		Literal: p.currentToken.Literal,
+		Line:    p.currentToken.Line,
+		Column:  p.currentToken.Column,
+	}
 	openParenLine := p.currentToken.Line
 
 	p.nextToken() // skip (
@@ -1194,7 +1281,10 @@ func (p *ContextAwareParser) parseGroupedExpression() Expression {
 
 	p.nextToken() // consume )
 
-	return exp
+	// The parentheses are kept in the tree. Dropping them made jmp ($1000)
+	// indistinguishable from jmp $1000, which are different instructions:
+	// the first is indirect, the second absolute (manual 4.5).
+	return &GroupedExpression{Token: openParen, Expression: exp}
 }
 
 // parseInfixExpression parses infix expressions like a + b
@@ -1407,20 +1497,20 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 			p.addError(fmt.Sprintf("Expected expression after %s directive", directiveName), directiveToken.Line, directiveToken.Column)
 			return stmt
 		}
-		// Consume the expression token (symbol name used as condition)
+		// The condition is a full boolean expression, not a single symbol:
+		// "#if !DEBUG && !COMPLICATED" is valid (manual 8.5). Consuming only
+		// one token left the rest of the line to be parsed as a statement.
 		p.nextToken()
-		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
-			Value: p.currentToken.Literal,
+		stmt.Value = p.parseExpression(LOWEST)
+
+		// Keep Name for the common "#if SYMBOL" form so the analyzer can still
+		// report on the symbol itself.
+		if ident, ok := stmt.Value.(*Identifier); ok {
+			stmt.Name = &Identifier{Token: ident.Token, Value: ident.Value}
 		}
+
 		if p.debugMode {
-			log.Debug("ContextAwareParser: Parsed %s directive with expression '%s' at Line %d",
-				directiveName, stmt.Name.Value, stmt.Token.Line)
+			log.Debug("ContextAwareParser: Parsed %s directive at Line %d", directiveName, stmt.Token.Line)
 		}
 		return stmt
 	}

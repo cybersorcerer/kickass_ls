@@ -140,6 +140,17 @@ type ArrayExpression struct {
 func (ae *ArrayExpression) expressionNode()      {}
 func (ae *ArrayExpression) TokenLiteral() string { return ae.Token.Literal }
 
+// TernaryExpression represents the conditional operator: condition ? then : else
+type TernaryExpression struct {
+	Token     Token // The '?' token
+	Condition Expression
+	Then      Expression
+	Else      Expression
+}
+
+func (te *TernaryExpression) expressionNode()      {}
+func (te *TernaryExpression) TokenLiteral() string { return te.Token.Literal }
+
 // ProgramCounterExpression represents the program counter (*) in addressing modes
 type ProgramCounterExpression struct {
 	Token Token // The '*' token

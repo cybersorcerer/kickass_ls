@@ -509,6 +509,10 @@ func (a *SemanticAnalyzer) walkExpression(expr Expression, currentScope *Scope) 
 		if node.Expression != nil {
 			a.walkExpression(node.Expression, currentScope)
 		}
+	case *TernaryExpression:
+		a.walkExpression(node.Condition, currentScope)
+		a.walkExpression(node.Then, currentScope)
+		a.walkExpression(node.Else, currentScope)
 	case *CallExpression:
 		// First, walk the function identifier itself to mark it as used
 		a.walkExpression(node.Function, currentScope)
@@ -889,6 +893,16 @@ func (a *SemanticAnalyzer) validateSymbolsInExpression(expr Expression, token To
 		if e.Right != nil {
 			a.validateSymbolsInExpression(e.Right, token)
 		}
+	case *GroupedExpression:
+		// The parentheses are kept in the tree now, so recurse through them or
+		// symbols inside an indirect operand are never checked.
+		if e.Expression != nil {
+			a.validateSymbolsInExpression(e.Expression, token)
+		}
+	case *TernaryExpression:
+		a.validateSymbolsInExpression(e.Condition, token)
+		a.validateSymbolsInExpression(e.Then, token)
+		a.validateSymbolsInExpression(e.Else, token)
 	}
 }
 
@@ -929,6 +943,17 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			case "#importonce":
 				// No special diagnostic needed for now
 				log.Debug("processDirective: #importonce at line %d", node.Token.Line)
+			case "#if":
+				// A condition that is not a plain symbol leaves Name nil, so
+				// the depth has to be tracked here as well.
+				if isPass1 {
+					a.context.PreprocessorIfDepth++
+					log.Debug("processDirective #if: depth now %d", a.context.PreprocessorIfDepth)
+				}
+			case "#elif":
+				if isPass1 && a.context.PreprocessorIfDepth == 0 {
+					a.addError(node.Token, "#elif without matching #if")
+				}
 			case "#else":
 				if isPass1 {
 					if a.context.PreprocessorIfDepth == 0 {
@@ -1403,6 +1428,15 @@ func (a *SemanticAnalyzer) evaluateExpression(expr Expression) int64 {
 			// Evaluate the grouped expression
 			return a.evaluateExpression(e.Expression)
 		}
+	case *TernaryExpression:
+		if e != nil {
+			if cond := a.evaluateExpression(e.Condition); cond != -1 {
+				if cond != 0 {
+					return a.evaluateExpression(e.Then)
+				}
+				return a.evaluateExpression(e.Else)
+			}
+		}
 	case *CallExpression:
 		if e != nil {
 			// Basic builtin function evaluation
@@ -1706,18 +1740,14 @@ func (a *SemanticAnalyzer) checkJMPIndirectBug(operand Expression, token Token) 
 	var addr int64 = -1
 
 	// Check for indirect addressing: JMP ($xxxx)
-	switch op := operand.(type) {
-	case *GroupedExpression:
-		// This is JMP ($xxxx) - indirect addressing with proper parentheses parsing
-		addr = a.evaluateExpression(op.Expression)
-	case *IntegerLiteral:
-		// Parser may treat ($20ff) as IntegerLiteral if parsing fails
-		// Check if this looks like an indirect jump address
-		addr = op.Value
-	default:
-		// Not an indirect jump or not a recognizable pattern
+	// Only real indirect addressing is affected. The parser keeps the
+	// parentheses, so an absolute "jmp $10ff" is an IntegerLiteral and must
+	// not be reported here.
+	group, ok := operand.(*GroupedExpression)
+	if !ok {
 		return
 	}
+	addr = a.evaluateExpression(group.Expression)
 
 	// Check if we have a valid address and it triggers the page boundary bug
 	if addr != -1 && (addr&0xFF) == 0xFF {
