@@ -1263,7 +1263,9 @@ func (p *ContextAwareParser) parseGroupedExpression() Expression {
 						indexReg, openParenLine)
 				}
 
-				return indirectExp
+				// Wrapped like every other parenthesised operand, otherwise
+				// ($80,x) is indistinguishable from $80,x in the tree.
+				return &GroupedExpression{Token: openParen, Expression: indirectExp}
 			}
 		}
 

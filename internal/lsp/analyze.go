@@ -277,8 +277,6 @@ func (a *SemanticAnalyzer) Analyze(program *Program) []Diagnostic {
 
 // Pass 1: Address calculation and label collection
 func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
-	// First, handle unparsed .for directives by scanning document lines
-	a.handleUnparsedForDirectives()
 	if statements == nil {
 		return
 	}
@@ -352,7 +350,19 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 						}
 					}
 
-					a.pass1AddressCalculation(stmt.Block.Statements)
+					if directiveName == ".for" {
+						// The body is walked once; the remaining iterations are
+						// added as a multiple of its size. The parser skips the
+						// loop header, so the count is read from the source line.
+						pcBefore := a.context.CurrentPC
+						a.pass1AddressCalculation(stmt.Block.Statements)
+						bodySize := a.context.CurrentPC - pcBefore
+						if n := a.forIterationCount(stmt.Token.Line); n > 1 && !a.inMacroOrFunction {
+							a.context.CurrentPC += bodySize * int64(n-1)
+						}
+					} else {
+						a.pass1AddressCalculation(stmt.Block.Statements)
+					}
 
 					// Reset flag after processing block
 					if isMacroOrFunction {
@@ -626,43 +636,128 @@ func (a *SemanticAnalyzer) addInfo(token Token, format string, args ...interface
 
 // Address calculation and PC tracking methods
 
-// getInstructionLength returns the byte length of an instruction
-func (a *SemanticAnalyzer) getInstructionLength(mnemonic string, operand Expression) int {
-	// 6502 instruction lengths based on addressing mode
-	switch mnemonic {
-	case "BRK", "RTI", "RTS":
-		return 1 // Implied
-	case "PHP", "PLP", "PHA", "PLA", "DEY", "TAY", "INY", "INX",
-		"CLC", "SEC", "CLI", "SEI", "CLV", "CLD", "SED", "TXA",
-		"TYA", "TXS", "TSX", "DEX", "NOP":
-		return 1 // Implied
+// indexRegisterName returns "X" or "Y" if the expression is one of the index
+// registers, and "" otherwise.
+func indexRegisterName(expr Expression) string {
+	if ident, ok := expr.(*Identifier); ok {
+		switch strings.ToUpper(ident.Value) {
+		case "X":
+			return "X"
+		case "Y":
+			return "Y"
+		}
 	}
+	return ""
+}
 
+// fitsZeroPage reports whether an operand folds to a value inside the zero page.
+func (a *SemanticAnalyzer) fitsZeroPage(expr Expression) bool {
+	value, ok := a.evaluateExpression(expr)
+	return ok && value >= 0 && value <= 0xFF
+}
+
+// addressingModeForOperand derives the addressing mode name that mnemonic.json
+// uses from the shape of the parsed operand.
+func (a *SemanticAnalyzer) addressingModeForOperand(mnemonic string, operand Expression) string {
 	if operand == nil {
-		return 1 // Implied addressing
+		return "Implied"
 	}
 
-	// Analyze operand to determine addressing mode
-	switch expr := operand.(type) {
+	// Branches are always relative, whatever the operand looks like.
+	if a.isBranchInstruction(mnemonic) {
+		return "Relative"
+	}
+
+	switch e := operand.(type) {
 	case *PrefixExpression:
-		if expr.Operator == "#" {
-			return 2 // Immediate mode (#$nn)
+		switch e.Operator {
+		case "#":
+			return "Immediate"
+		case "<", ">":
+			// The high and low byte operators yield a single byte.
+			return "Zeropage"
 		}
-		if expr.Operator == "<" || expr.Operator == ">" {
-			return 2 // Zero page or high byte
+	case *GroupedExpression:
+		// ($nn,X) keeps the comma inside the parentheses, ($nn) does not.
+		if inner, ok := e.Expression.(*InfixExpression); ok && inner.Operator == "," {
+			if indexRegisterName(inner.Right) == "X" {
+				return "Indexed-indirect"
+			}
 		}
-	case *IntegerLiteral:
-		// Absolute or zero page
-		if expr.Value >= 0 && expr.Value <= 255 {
-			return 2 // Could be zero page
+		return "Indirect"
+	case *InfixExpression:
+		if e.Operator == "," {
+			// ($nn),Y has the parentheses on the left of the comma.
+			if _, ok := e.Left.(*GroupedExpression); ok {
+				return "Indirect-indexed"
+			}
+			base := "Absolute"
+			if a.fitsZeroPage(e.Left) {
+				base = "Zeropage"
+			}
+			if reg := indexRegisterName(e.Right); reg != "" {
+				return base + "," + reg
+			}
+			return base
 		}
-		return 3 // Absolute
-	case *Identifier:
-		// Label reference - assume absolute for now
-		return 3
 	}
 
-	return 3 // Default to absolute addressing
+	if a.fitsZeroPage(operand) {
+		return "Zeropage"
+	}
+	return "Absolute"
+}
+
+// getInstructionLength returns the byte length of an instruction. The lengths
+// come from mnemonic.json, which carries one entry per addressing mode; they
+// are not hardcoded here.
+func (a *SemanticAnalyzer) getInstructionLength(mnemonic string, operand Expression) int {
+	const fallbackLength = 3
+
+	ctx := GetProcessorContext()
+	if ctx == nil {
+		return fallbackLength
+	}
+
+	info := ctx.GetMnemonicInfo(mnemonic)
+	if info == nil || len(info.AddressingModes) == 0 {
+		return fallbackLength
+	}
+
+	wanted := a.addressingModeForOperand(mnemonic, operand)
+	for _, mode := range info.AddressingModes {
+		if mode.Mode == wanted && mode.Length > 0 {
+			return mode.Length
+		}
+	}
+
+	// Implied and accumulator forms are the same length; ASL for example only
+	// lists Accumulator for its operand free form.
+	if wanted == "Implied" {
+		for _, mode := range info.AddressingModes {
+			if mode.Mode == "Accumulator" && mode.Length > 0 {
+				return mode.Length
+			}
+		}
+	}
+
+	// A single supported mode leaves nothing to choose.
+	if len(info.AddressingModes) == 1 && info.AddressingModes[0].Length > 0 {
+		return info.AddressingModes[0].Length
+	}
+
+	// Otherwise take the longest form, so the program counter never runs ahead
+	// of the real one and branch distances are not underestimated.
+	longest := 0
+	for _, mode := range info.AddressingModes {
+		if mode.Length > longest {
+			longest = mode.Length
+		}
+	}
+	if longest > 0 {
+		return longest
+	}
+	return fallbackLength
 }
 
 // isBranchInstruction checks if a mnemonic is a branch instruction
@@ -1208,34 +1303,29 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 			a.context.DefinedLabels[qualifiedName] = symbol
 		}
 	case ".byte", ".byt":
-		// Single byte data
+		// One byte per value in the list
 		log.Debug("processDirective .byte: node.Value type=%T, value=%+v", node.Value, node.Value)
 		if node.Value != nil {
 			a.checkRangeValidation(node.Value, "byte", 0, 255, node.Token)
 		}
 		// Update PC only in Pass 1 and not inside templates
 		if isPass1 && !a.inMacroOrFunction {
-			a.context.CurrentPC++
+			a.context.CurrentPC += dataValueCount(node.Value)
 		}
 	case ".word", ".wo":
-		// Two byte data
+		// Two bytes per value in the list
 		log.Debug("processDirective .word: node.Value type=%T, value=%+v", node.Value, node.Value)
 		if node.Value != nil {
 			a.checkRangeValidation(node.Value, "word", 0, 65535, node.Token)
 		}
 		// Update PC only in Pass 1 and not inside templates
 		if isPass1 && !a.inMacroOrFunction {
-			a.context.CurrentPC += 2
+			a.context.CurrentPC += 2 * dataValueCount(node.Value)
 		}
 	case ".text", ".tx":
-		// String data - estimate length based on token type
-		if node.Value != nil {
-			// For text directives, estimate 1 byte per character
-			// This is a simplified estimation since we don't have StringLiteral type
-			// Update PC only in Pass 1 and not inside templates
-			if isPass1 && !a.inMacroOrFunction {
-				a.context.CurrentPC += 8 // Default text size estimate
-			}
+		// One byte per character of the string
+		if isPass1 && !a.inMacroOrFunction {
+			a.context.CurrentPC += textByteCount(node.Value)
 		}
 	case ".fill":
 		// Fill directive: .fill count, value
@@ -1274,78 +1364,64 @@ func (a *SemanticAnalyzer) processDirectiveWithPass(node *DirectiveStatement, is
 	}
 }
 
-// handleUnparsedForDirectives scans document lines for .for directives that weren't parsed correctly
-func (a *SemanticAnalyzer) handleUnparsedForDirectives() {
-	if a.documentLines == nil || a.context == nil {
-		return
+// dataValueCount returns how many values a data directive holds. Comma
+// separated lists arrive as an ArrayExpression; a single value does not.
+func dataValueCount(value Expression) int64 {
+	if value == nil {
+		return 0
 	}
-
-	for lineNum, line := range a.documentLines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, ".for") {
-			// Found a .for directive - try to extract iteration count
-			iterCount := a.extractIterationCountFromText(trimmed)
-			if iterCount > 0 {
-				// Look for the content between braces in following lines
-				contentLines := a.extractForLoopContent(lineNum)
-				byteSize := int64(len(contentLines)) // Assume each line is ~1 byte (e.g., nop)
-				if byteSize == 0 {
-					byteSize = 1 // Default: at least one instruction like nop
-				}
-				totalSize := byteSize * int64(iterCount)
-				if !a.inMacroOrFunction {
-					a.context.CurrentPC += totalSize
-				}
-			}
-		}
+	if array, ok := value.(*ArrayExpression); ok {
+		return int64(len(array.Elements))
 	}
+	return 1
 }
 
-// extractIterationCountFromText extracts iteration count from .for directive text
-func (a *SemanticAnalyzer) extractIterationCountFromText(forLine string) int {
-	// Look for patterns like "i<100" or "i < 100"
-	re := regexp.MustCompile(`i\s*<\s*(\d+)`)
-	matches := re.FindStringSubmatch(forLine)
-	if len(matches) >= 2 {
-		if count, err := strconv.Atoi(matches[1]); err == nil {
-			return count
+// textByteCount returns the number of bytes a .text directive emits. Only the
+// literal length is known here; encodings that change the byte count are not
+// modelled.
+func textByteCount(value Expression) int64 {
+	switch v := value.(type) {
+	case nil:
+		return 0
+	case *StringLiteral:
+		return int64(len(v.Value))
+	case *ArrayExpression:
+		var total int64
+		for _, element := range v.Elements {
+			total += textByteCount(element)
 		}
+		return total
 	}
-	return 0
+	return 1
 }
 
-// extractForLoopContent extracts the content lines inside a .for loop
-func (a *SemanticAnalyzer) extractForLoopContent(startLine int) []string {
-	if a.documentLines == nil || startLine >= len(a.documentLines) {
-		return nil
+// forIterationCount reads the iteration count out of a .for header, e.g.
+// ".for (var i = 0; i < 100; i++)" yields 100. The parser skips the header, so
+// the source line is used. Returns 0 when no count can be determined.
+func (a *SemanticAnalyzer) forIterationCount(line int) int {
+	idx := line - 1
+	if a.documentLines == nil || idx < 0 || idx >= len(a.documentLines) {
+		return 0
 	}
 
-	var content []string
-	braceDepth := 0
-	inLoop := false
-
-	for i := startLine; i < len(a.documentLines); i++ {
-		line := strings.TrimSpace(a.documentLines[i])
-		if strings.Contains(line, "{") {
-			braceDepth++
-			inLoop = true
-		}
-		if inLoop && braceDepth > 0 {
-			// Count non-empty lines as content
-			if line != "" && !strings.Contains(line, "{") && !strings.Contains(line, "}") {
-				content = append(content, line)
-			}
-		}
-		if strings.Contains(line, "}") {
-			braceDepth--
-			if braceDepth <= 0 {
-				break
-			}
-		}
+	matches := forBoundRegex.FindStringSubmatch(a.documentLines[idx])
+	if len(matches) < 3 {
+		return 0
 	}
 
-	return content
+	count, err := strconv.Atoi(matches[2])
+	if err != nil {
+		return 0
+	}
+	if matches[1] == "<=" {
+		count++
+	}
+	return count
 }
+
+// forBoundRegex matches the upper bound of a counting .for loop for any loop
+// variable name, not just "i".
+var forBoundRegex = regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*\s*(<=|<)\s*([0-9]+)`)
 
 // evaluateExpression attempts to fold an expression to a numeric value. The
 // second result reports whether that succeeded; -1 used to double as the
@@ -2014,9 +2090,9 @@ func (a *SemanticAnalyzer) processDataDirective(node *DirectiveStatement) {
 	if !a.inMacroOrFunction {
 		switch directive {
 		case ".byte":
-			a.context.CurrentPC++
+			a.context.CurrentPC += dataValueCount(node.Value)
 		case ".word":
-			a.context.CurrentPC += 2
+			a.context.CurrentPC += 2 * dataValueCount(node.Value)
 		}
 	}
 }
