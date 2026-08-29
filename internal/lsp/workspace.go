@@ -388,3 +388,23 @@ func hexDigit(c byte) (byte, error) {
 	}
 	return 0, os.ErrInvalid
 }
+
+// SetRoot points the workspace at a folder. Passing "" disables scanning, in
+// which case every document stays its own translation unit.
+func (w *Workspace) SetRoot(root string) {
+	w.mu.Lock()
+	w.root = root
+	w.mu.Unlock()
+}
+
+// UnitSources returns the text of every document in a translation unit, keyed
+// by URI. The analyzer needs it to map a token back to its own source line.
+func (w *Workspace) UnitSources(root string) map[string]string {
+	sources := map[string]string{}
+	for _, member := range w.Members(root) {
+		if text, ok := w.provider.Read(member); ok {
+			sources[member] = text
+		}
+	}
+	return sources
+}

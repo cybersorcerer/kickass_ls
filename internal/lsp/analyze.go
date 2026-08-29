@@ -237,21 +237,40 @@ func (mm *MemoryMap) IsIOArea(addr int64) bool {
 // SemanticAnalyzer performs semantic analysis on the AST, after the initial scope has been built.
 // This includes tasks like resolving symbols, checking for unused symbols, etc.
 type SemanticAnalyzer struct {
-	scope         *Scope
-	diagnostics   []Diagnostic
-	documentLines []string
+	scope       *Scope
+	diagnostics []Diagnostic
+	// documentLines holds the source of every document in the translation unit,
+	// keyed by URI. A unit is spliced from several files, so a line number only
+	// means something together with the file the token came from.
+	documentLines map[string][]string
 	// Enhanced analysis context
 	context *AnalysisContext
 	// Track if we're inside a macro or function template (for skipping PC-based validations)
 	inMacroOrFunction bool
 }
 
-// NewSemanticAnalyzer creates a new analyzer.
+// NewSemanticAnalyzer creates an analyzer for a single document.
 func NewSemanticAnalyzer(scope *Scope, text string) *SemanticAnalyzer {
+	return NewSemanticAnalyzerForUnit(scope, map[string]string{"": text})
+}
+
+// NewSemanticAnalyzerForUnit creates an analyzer over a translation unit,
+// given the source of every document that contributed to it.
+func NewSemanticAnalyzerForUnit(scope *Scope, sources map[string]string) *SemanticAnalyzer {
+	lines := make(map[string][]string, len(sources))
+	for uri, text := range sources {
+		lines[uri] = strings.Split(text, "\n")
+	}
+	analyzer := newSemanticAnalyzer(scope)
+	analyzer.documentLines = lines
+	return analyzer
+}
+
+func newSemanticAnalyzer(scope *Scope) *SemanticAnalyzer {
 	return &SemanticAnalyzer{
 		scope:         scope,
 		diagnostics:   GetPooledDiagnostics(), // Use pooled diagnostics slice
-		documentLines: strings.Split(text, "\n"),
+		documentLines: map[string][]string{},
 		context:       NewAnalysisContext(),
 	}
 }
@@ -389,7 +408,7 @@ func (a *SemanticAnalyzer) pass1AddressCalculation(statements []Statement) {
 						pcBefore := a.context.CurrentPC
 						a.pass1AddressCalculation(stmt.Block.Statements)
 						bodySize := a.context.CurrentPC - pcBefore
-						if n := a.forIterationCount(stmt.Token.Line); n > 1 && !a.inMacroOrFunction {
+						if n := a.forIterationCount(stmt.Token); n > 1 && !a.inMacroOrFunction {
 							a.context.CurrentPC += bodySize * int64(n-1)
 						}
 					} else {
@@ -527,8 +546,9 @@ func (a *SemanticAnalyzer) walkExpression(expr Expression, currentScope *Scope) 
 	case *Identifier:
 		// Check if the identifier is in a comment before counting it as a usage.
 		lineNum := node.Token.Line - 1
-		if lineNum >= 0 && lineNum < len(a.documentLines) {
-			line := a.documentLines[lineNum]
+		lines := a.documentLines[node.Token.File]
+		if lineNum >= 0 && lineNum < len(lines) {
+			line := lines[lineNum]
 			commentStart := findCommentStart(line)
 			if commentStart != -1 && (node.Token.Column-1) >= commentStart {
 				return // It's in a comment, so don't process it.
@@ -1441,13 +1461,14 @@ func textByteCount(value Expression) int64 {
 // forIterationCount reads the iteration count out of a .for header, e.g.
 // ".for (var i = 0; i < 100; i++)" yields 100. The parser skips the header, so
 // the source line is used. Returns 0 when no count can be determined.
-func (a *SemanticAnalyzer) forIterationCount(line int) int {
-	idx := line - 1
-	if a.documentLines == nil || idx < 0 || idx >= len(a.documentLines) {
+func (a *SemanticAnalyzer) forIterationCount(token Token) int {
+	lines := a.documentLines[token.File]
+	idx := token.Line - 1
+	if idx < 0 || idx >= len(lines) {
 		return 0
 	}
 
-	matches := forBoundRegex.FindStringSubmatch(a.documentLines[idx])
+	matches := forBoundRegex.FindStringSubmatch(lines[idx])
 	if len(matches) < 3 {
 		return 0
 	}
@@ -2186,7 +2207,14 @@ func (a *SemanticAnalyzer) performTokenLevelRangeValidation() {
 
 	log.Debug("performTokenLevelRangeValidation: starting token-level analysis")
 
-	for lineNum, line := range a.documentLines {
+	for uri, lines := range a.documentLines {
+		a.validateDataLinesOf(uri, lines)
+	}
+}
+
+// validateDataLinesOf runs the token level range check over one document.
+func (a *SemanticAnalyzer) validateDataLinesOf(uri string, lines []string) {
+	for lineNum, line := range lines {
 		line = strings.TrimSpace(line)
 
 		// Skip empty lines and comments
@@ -2196,18 +2224,18 @@ func (a *SemanticAnalyzer) performTokenLevelRangeValidation() {
 
 		// Check for .byte directives
 		if strings.HasPrefix(strings.ToLower(line), ".byte") {
-			a.validateTokenLevelDataDirective(line, lineNum, "byte", 0, 255)
+			a.validateTokenLevelDataDirective(line, lineNum, uri, "byte", 0, 255)
 		}
 
 		// Check for .word directives
 		if strings.HasPrefix(strings.ToLower(line), ".word") {
-			a.validateTokenLevelDataDirective(line, lineNum, "word", 0, 65535)
+			a.validateTokenLevelDataDirective(line, lineNum, uri, "word", 0, 65535)
 		}
 	}
 }
 
 // validateTokenLevelDataDirective validates range for a single .byte or .word line
-func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum int, dataType string, minVal, maxVal int64) {
+func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum int, uri string, dataType string, minVal, maxVal int64) {
 	log.Debug("validateTokenLevelDataDirective: processing %s line %d: %s", dataType, lineNum+1, line)
 
 	// Extract the values part after the directive
@@ -2266,6 +2294,7 @@ func (a *SemanticAnalyzer) validateTokenLevelDataDirective(line string, lineNum 
 				Literal: valueStr,
 				Line:    lineNum + 1,
 				Column:  strings.Index(line, valueStr) + 1,
+				File:    uri,
 			}
 
 			// Generate appropriate warning message based on data type

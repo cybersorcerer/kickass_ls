@@ -36,7 +36,7 @@ func ParseDocument(uri string, text string) (*Scope, *AnalysisContext, []Diagnos
 	scope, definitionDiagnostics := buildScopeFromAST(program, uri)
 
 	// Pass 2: Perform semantic analysis (e.g., find symbol usages)
-	analyzer := NewSemanticAnalyzer(scope, text)
+	analyzer := NewSemanticAnalyzerForUnit(scope, map[string]string{uri: text})
 	semanticDiagnostics := analyzer.Analyze(program)
 
 	// Combine all diagnostics
