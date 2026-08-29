@@ -27,13 +27,13 @@ type TestSetup struct {
 }
 
 type TestCase struct {
-	Name        string        `json:"name"`
-	Description string        `json:"description"`
-	Type        string        `json:"type"` // "completion", "hover", "diagnostics", etc.
-	Input       TestInput     `json:"input"`
-	Expected    TestExpected  `json:"expected"`
-	Timeout     int           `json:"timeout,omitempty"` // seconds, default 5
-	Action      string        `json:"action,omitempty"`  // for performance tests
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Type        string          `json:"type"` // "completion", "hover", "diagnostics", etc.
+	Input       TestInput       `json:"input"`
+	Expected    TestExpected    `json:"expected"`
+	Timeout     int             `json:"timeout,omitempty"`    // seconds, default 5
+	Action      string          `json:"action,omitempty"`     // for performance tests
 	Operations  []TestOperation `json:"operations,omitempty"` // for memory tests
 }
 
@@ -61,6 +61,17 @@ type TestExpected struct {
 
 	// For diagnostics tests
 	Diagnostics []ExpectedDiagnostic `json:"diagnostics,omitempty"`
+
+	// Diagnostics that must NOT appear. Unlike Diagnostics, a zero Line is not
+	// part of the match, so a message fragment alone is enough to forbid a
+	// whole class of diagnostics anywhere in the file.
+	ForbiddenDiagnostics []ExpectedDiagnostic `json:"forbiddenDiagnostics,omitempty"`
+
+	// Budgets for diagnostics tests. Pointers so that an explicit 0 is
+	// distinguishable from an absent field.
+	MaxErrors   *int `json:"maxErrors,omitempty"`
+	MinWarnings *int `json:"minWarnings,omitempty"`
+	MaxWarnings *int `json:"maxWarnings,omitempty"`
 
 	// For definition/references tests
 	Locations []ExpectedLocation `json:"locations,omitempty"`
@@ -445,8 +456,84 @@ func (tr *TestRunner) testDiagnostics(testCase TestCase, uri string, result Test
 		}
 	}
 
+	// Diagnostics that must not appear at all.
+	for _, forbidden := range testCase.Expected.ForbiddenDiagnostics {
+		for _, diag := range diagnostics {
+			if matchesForbidden(diag, forbidden) {
+				result.Status = "FAIL"
+				result.Message = fmt.Sprintf("forbidden diagnostic present at line %d: %q",
+					diag.Range.Start.Line, diag.Message)
+				result.Details = diagnostics
+				return result
+			}
+		}
+	}
+
+	// Enforce the diagnostic budgets. Without this a test only asserts that
+	// the listed diagnostics are present and stays green while the server
+	// floods the file with unrelated errors.
+	errors, warnings := countBySeverity(diagnostics)
+
+	if exp := testCase.Expected.MaxErrors; exp != nil && errors > *exp {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("got %d errors, expected at most %d", errors, *exp)
+		result.Details = diagnostics
+		return result
+	}
+	if exp := testCase.Expected.MinWarnings; exp != nil && warnings < *exp {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("got %d warnings, expected at least %d", warnings, *exp)
+		result.Details = diagnostics
+		return result
+	}
+	if exp := testCase.Expected.MaxWarnings; exp != nil && warnings > *exp {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("got %d warnings, expected at most %d", warnings, *exp)
+		result.Details = diagnostics
+		return result
+	}
+
 	result.Status = "PASS"
 	return result
+}
+
+// matchesForbidden reports whether a diagnostic is one the test forbids. Only
+// the fields that were actually specified take part in the match, and unlike
+// matchesDiagnostic a zero Line means "any line" rather than "line 0".
+func matchesForbidden(diag Diagnostic, forbidden ExpectedDiagnostic) bool {
+	if forbidden.Line > 0 && diag.Range.Start.Line != forbidden.Line {
+		return false
+	}
+	if forbidden.Severity > 0 && (diag.Severity == nil || *diag.Severity != forbidden.Severity) {
+		return false
+	}
+	if forbidden.Message != "" && !strings.Contains(diag.Message, forbidden.Message) {
+		return false
+	}
+	if forbidden.Source != "" && (diag.Source == nil || *diag.Source != forbidden.Source) {
+		return false
+	}
+	// An entry with no criteria at all would forbid every diagnostic; treat it
+	// as a mistake in the suite rather than silently failing everything.
+	return forbidden.Line > 0 || forbidden.Severity > 0 || forbidden.Message != "" || forbidden.Source != ""
+}
+
+// countBySeverity counts errors (severity 1) and warnings (severity 2).
+// Diagnostics without a severity are not counted; the LSP treats those as
+// client defined.
+func countBySeverity(diagnostics []Diagnostic) (errors, warnings int) {
+	for _, d := range diagnostics {
+		if d.Severity == nil {
+			continue
+		}
+		switch *d.Severity {
+		case 1:
+			errors++
+		case 2:
+			warnings++
+		}
+	}
+	return errors, warnings
 }
 
 func (tr *TestRunner) testDefinition(testCase TestCase, uri string, result TestResult) TestResult {
