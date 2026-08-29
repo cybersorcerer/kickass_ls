@@ -1,0 +1,224 @@
+package lsp
+
+import (
+	"strings"
+	"testing"
+)
+
+// parseSource runs the full lexer/parser/analyzer pipeline the way the server
+// does and returns the scope plus the diagnostics.
+func parseSource(t *testing.T, src string) (*Scope, []Diagnostic) {
+	t.Helper()
+	scope, _, diags := ParseDocument("file:///test.asm", src)
+	if scope == nil {
+		t.Fatal("ParseDocument returned a nil scope")
+	}
+	return scope, diags
+}
+
+// errorsOnly keeps the diagnostics that mark the source as broken. Warnings and
+// hints are style feedback and are not interesting for parser tests.
+func errorsOnly(diags []Diagnostic) []Diagnostic {
+	var out []Diagnostic
+	for _, d := range diags {
+		if d.Severity == SeverityError {
+			out = append(out, d)
+		}
+	}
+	return out
+}
+
+func assertNoErrors(t *testing.T, src string) {
+	t.Helper()
+	_, diags := parseSource(t, src)
+	errs := errorsOnly(diags)
+	if len(errs) == 0 {
+		return
+	}
+	t.Errorf("valid source produced %d error(s):", len(errs))
+	for _, e := range errs {
+		t.Errorf("  line %d col %d: %s", e.Range.Start.Line+1, e.Range.Start.Character+1, e.Message)
+	}
+	t.Logf("source:\n%s", src)
+}
+
+func assertHasSymbols(t *testing.T, scope *Scope, names ...string) {
+	t.Helper()
+	for _, n := range names {
+		if _, ok := scope.FindSymbol(n); !ok {
+			t.Errorf("symbol %q not found in the scope tree", n)
+		}
+	}
+}
+
+// --- preprocessor blocks -------------------------------------------------
+
+// TestParserPreprocessorBlocks guards a defect where the statement terminator
+// check only looked for a "." prefix on the literal. Preprocessor statements
+// start with "#", so an instruction consumed the following #endif as its
+// operand, which produced "Unexpected token '#endif' in expression" and left
+// the #if block counted as unclosed.
+func TestParserPreprocessorBlocks(t *testing.T) {
+	tests := []struct {
+		name string
+		src  string
+	}{
+		{
+			name: "if block closed after instructions",
+			src:  "#define DEBUG\n#if DEBUG\n    nop\n    nop\n#endif\n",
+		},
+		{
+			name: "if block closed after a directive",
+			src:  "#define DEBUG\n#if DEBUG\n    .byte 1, 2, 3\n#endif\n",
+		},
+		{
+			name: "if else endif around instructions",
+			src:  "#define DEBUG\n#if DEBUG\n    nop\n#else\n    rts\n#endif\n",
+		},
+		{
+			name: "two consecutive blocks",
+			src:  "#define A\n#define B\n#if A\n    nop\n#endif\n#if B\n    rts\n#endif\n",
+		},
+		{
+			name: "importonce followed by an instruction",
+			src:  "#importonce\n    rts\n",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertNoErrors(t, tc.src)
+		})
+	}
+}
+
+// TestParserImmediateOperandIsNotMistakenForADirective is the counterpart to
+// the fix above: the "#" of an immediate operand must still be parsed as part
+// of the instruction, not treated as the start of a new statement.
+func TestParserImmediateOperandStillParses(t *testing.T) {
+	src := "*=$0801\nstart:\n    lda #$01\n    ldx #$02\n    rts\n"
+	assertNoErrors(t, src)
+}
+
+// TestParserReportsUnclosedPreprocessorBlock is the negative case: a missing
+// #endif must still be reported.
+func TestParserReportsUnclosedPreprocessorBlock(t *testing.T) {
+	src := "#define DEBUG\n#if DEBUG\n    nop\n"
+	_, diags := parseSource(t, src)
+
+	found := false
+	for _, d := range diags {
+		if strings.Contains(d.Message, "Unclosed #if") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("missing #endif was not reported; diagnostics: %v", messages(diags))
+	}
+}
+
+// --- enum blocks ---------------------------------------------------------
+
+// TestParserEnumBlocks covers .enum, which per the manual takes no name and
+// defines its members as constants in the surrounding scope.
+func TestParserEnumBlocks(t *testing.T) {
+	tests := []struct {
+		name    string
+		src     string
+		symbols []string
+	}{
+		{
+			name:    "explicit values",
+			src:     ".enum {BLACK = 0, WHITE = 1, RED = 2}\n",
+			symbols: []string{"BLACK", "WHITE", "RED"},
+		},
+		{
+			name:    "implicit values",
+			src:     ".enum {PLAYER, ENEMY, BULLET}\n",
+			symbols: []string{"PLAYER", "ENEMY", "BULLET"},
+		},
+		{
+			name:    "members spread over several lines",
+			src:     ".enum {\n    IDLE = 0,\n    RUNNING = 1\n}\n",
+			symbols: []string{"IDLE", "RUNNING"},
+		},
+		{
+			// Comment tokens inside the block used to end up in the "expected
+			// enum member identifier" error branch.
+			name:    "trailing comments between members",
+			src:     ".enum {\n    PLAYER,      // 0\n    ENEMY1,      // 1\n    BULLET       // 3\n}\n",
+			symbols: []string{"PLAYER", "ENEMY1", "BULLET"},
+		},
+		{
+			name:    "hex values",
+			src:     ".enum {SCREEN = $0400, CHARSET = $2000}\n",
+			symbols: []string{"SCREEN", "CHARSET"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			assertNoErrors(t, tc.src)
+			scope, _ := parseSource(t, tc.src)
+			assertHasSymbols(t, scope, tc.symbols...)
+		})
+	}
+}
+
+// TestParserEnumRequiresBrace is the negative case. .enum takes no name, so a
+// name between the directive and the brace has to be reported.
+func TestParserEnumRequiresBrace(t *testing.T) {
+	_, diags := parseSource(t, ".enum Colors {BLACK = 0}\n")
+	if len(errorsOnly(diags)) == 0 {
+		t.Errorf("named enum was accepted, expected an error; diagnostics: %v", messages(diags))
+	}
+}
+
+// --- symbol kinds --------------------------------------------------------
+
+// TestBuildScopeSymbolKinds guards the rule that a symbol's kind follows from
+// the directive that declared it. Deriving it from the shape of the statement
+// instead used to drop two cases silently: ".label name = value" carries a
+// value and therefore never reached the .label branch, and an enum member
+// without an explicit value has neither a value nor a block.
+func TestBuildScopeSymbolKinds(t *testing.T) {
+	tests := []struct {
+		name   string
+		src    string
+		symbol string
+		kind   SymbolKind
+	}{
+		{"const with value", ".const MAX = 10\n", "MAX", Constant},
+		{"var with value", ".var counter = 0\n", "counter", Variable},
+		{"label with value", ".label SCREEN = $0400\n", "SCREEN", Label},
+		{"code label", "start:\n    rts\n", "start", Label},
+		{"macro with block", ".macro clear() {\n    rts\n}\n", "clear", Macro},
+		{"function with block", ".function f(x) {\n    .return x\n}\n", "f", Function},
+		{"pseudocommand", ".pseudocommand mov src : dst {\n    rts\n}\n", "mov", PseudoCommand},
+		{"enum member with value", ".enum {RED = 2}\n", "RED", Constant},
+		{"enum member without value", ".enum {PLAYER}\n", "PLAYER", Constant},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			scope, _ := parseSource(t, tc.src)
+			sym, ok := scope.FindSymbol(tc.symbol)
+			if !ok {
+				t.Fatalf("symbol %q was not defined by %q", tc.symbol, tc.src)
+			}
+			if sym.Kind != tc.kind {
+				t.Errorf("symbol %q has kind %s, want %s", tc.symbol, sym.Kind.String(), tc.kind.String())
+			}
+		})
+	}
+}
+
+// --- helpers -------------------------------------------------------------
+
+func messages(diags []Diagnostic) []string {
+	out := make([]string, 0, len(diags))
+	for _, d := range diags {
+		out = append(out, d.Message)
+	}
+	return out
+}

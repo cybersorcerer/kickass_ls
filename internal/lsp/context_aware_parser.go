@@ -733,6 +733,12 @@ func (p *ContextAwareParser) parseEnumBlock() *BlockStatement {
 			continue
 		}
 
+		// Skip comments; they are legal between enum members
+		if p.currentToken.Type == TOKEN_COMMENT || p.currentToken.Type == TOKEN_COMMENT_BLOCK {
+			p.nextToken()
+			continue
+		}
+
 		// Parse enum member: IDENTIFIER = value
 		if p.currentToken.Type == TOKEN_IDENTIFIER {
 			// Create a simple assignment statement for the enum member
@@ -806,6 +812,23 @@ func (p *ContextAwareParser) parseEnumBlock() *BlockStatement {
 
 // Helper functions
 
+// isDirectiveTokenType reports whether a token starts a directive. Testing the
+// token type rather than a "." prefix on the literal also covers preprocessor
+// statements, which start with "#": without this an instruction swallows the
+// following #endif as its operand and the #if block is reported as unclosed.
+func isDirectiveTokenType(t TokenType) bool {
+	switch t {
+	case TOKEN_DIRECTIVE_PC,
+		TOKEN_DIRECTIVE_KICK_PRE,
+		TOKEN_DIRECTIVE_KICK_FLOW,
+		TOKEN_DIRECTIVE_KICK_ASM,
+		TOKEN_DIRECTIVE_KICK_DATA,
+		TOKEN_DIRECTIVE_KICK_TEXT:
+		return true
+	}
+	return false
+}
+
 // isStatementTerminator checks if current token terminates a statement
 func (p *ContextAwareParser) isStatementTerminator() bool {
 	return p.currentToken.Type == TOKEN_EOF ||
@@ -814,8 +837,7 @@ func (p *ContextAwareParser) isStatementTerminator() bool {
 		p.currentToken.Type == TOKEN_MNEMONIC_STD ||
 		p.currentToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.currentToken.Type == TOKEN_MNEMONIC_ILL ||
-		p.currentToken.Type == TOKEN_DIRECTIVE_PC ||
-		strings.HasPrefix(p.currentToken.Literal, ".")
+		isDirectiveTokenType(p.currentToken.Type)
 }
 
 func (p *ContextAwareParser) isNextTokenStatementTerminator() bool {
@@ -825,9 +847,8 @@ func (p *ContextAwareParser) isNextTokenStatementTerminator() bool {
 		p.peekToken.Type == TOKEN_MNEMONIC_STD ||
 		p.peekToken.Type == TOKEN_MNEMONIC_CTRL ||
 		p.peekToken.Type == TOKEN_MNEMONIC_ILL ||
-		p.peekToken.Type == TOKEN_DIRECTIVE_PC ||
 		p.peekToken.Type == TOKEN_RBRACE ||
-		strings.HasPrefix(p.peekToken.Literal, ".")
+		isDirectiveTokenType(p.peekToken.Type)
 }
 
 // isDataDirective checks if a directive is a data directive
@@ -2157,38 +2178,37 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 			var params []string
 			var signature string
 
-			if stmt.Value != nil {
-				switch directiveName {
-				case ".const", "const":
-					kind = Constant
-				case ".var", "var":
-					kind = Variable
-				default:
-					kind = UnknownSymbol
-				}
-			} else if stmt.Block != nil {
-				switch directiveName {
-				case ".function":
-					kind = Function
-				case ".macro":
-					kind = Macro
-				case ".pseudocommand":
-					kind = PseudoCommand
-				case ".namespace":
-					kind = Namespace
-				default:
-					kind = UnknownSymbol
-				}
-				if kind != UnknownSymbol && stmt.Parameters != nil {
-					for _, p := range stmt.Parameters {
-						if p != nil {
-							params = append(params, p.Value)
-						}
-					}
-					signature = fmt.Sprintf("%s(%s)", stmt.Name.Value, strings.Join(params, ", "))
-				}
-			} else if directiveName == ".label" {
+			// The symbol kind follows from the directive, not from whether a
+			// value or a block happens to be present. Deriving it from the
+			// shape of the statement used to drop ".label name = value"
+			// (has a value, so it never reached the .label branch) and enum
+			// members without an explicit value (neither value nor block).
+			switch directiveName {
+			case ".const", "const":
+				kind = Constant
+			case ".var", "var":
+				kind = Variable
+			case ".label", "label":
 				kind = Label
+			case ".function":
+				kind = Function
+			case ".macro":
+				kind = Macro
+			case ".pseudocommand":
+				kind = PseudoCommand
+			case ".namespace":
+				kind = Namespace
+			default:
+				kind = UnknownSymbol
+			}
+
+			if kind != UnknownSymbol && stmt.Block != nil && stmt.Parameters != nil {
+				for _, p := range stmt.Parameters {
+					if p != nil {
+						params = append(params, p.Value)
+					}
+				}
+				signature = fmt.Sprintf("%s(%s)", stmt.Name.Value, strings.Join(params, ", "))
 			}
 
 			if kind != UnknownSymbol {
