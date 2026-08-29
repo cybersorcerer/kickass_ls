@@ -1467,7 +1467,16 @@ func publishDiagnostics(writer *bufio.Writer, uri string, diagnostics []Diagnost
 	writeResponse(writer, response)
 }
 
+// writeMutex serializes writes to the shared stdout writer. The analysis worker
+// goroutine publishes diagnostics on the same *bufio.Writer that the main message
+// loop uses for responses; without this lock a header and a body can interleave
+// and the client loses framing for the rest of the session.
+var writeMutex sync.Mutex
+
 func writeResponse(writer *bufio.Writer, response []byte) {
+	writeMutex.Lock()
+	defer writeMutex.Unlock()
+
 	log.Logger.Printf("Sending response: %s\n", string(response))
 	fmt.Fprintf(writer, "Content-Length: %d\r\n\r\n", len(response))
 	writer.Write(response)
