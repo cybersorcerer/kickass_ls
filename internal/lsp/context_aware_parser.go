@@ -62,6 +62,7 @@ var precedences = map[TokenType]int{
 // ContextAwareParser represents the new context-aware parser
 type ContextAwareParser struct {
 	lexer        *ContextAwareLexer
+	uri          string // every diagnostic from one parse belongs to this file
 	currentToken *ContextToken
 	peekToken    *ContextToken
 	diagnostics  []Diagnostic
@@ -73,6 +74,7 @@ type ContextAwareParser struct {
 func NewContextAwareParser(lexer *ContextAwareLexer, processorCtx *ProcessorContext) *ContextAwareParser {
 	p := &ContextAwareParser{
 		lexer:        lexer,
+		uri:          lexer.uri,
 		diagnostics:  []Diagnostic{},
 		processorCtx: processorCtx,
 		debugMode:    IsParserDebugModeEnabled(),
@@ -83,6 +85,19 @@ func NewContextAwareParser(lexer *ContextAwareLexer, processorCtx *ProcessorCont
 	p.nextToken()
 
 	return p
+}
+
+// tokenFrom converts a lexer token into the AST token type, carrying the
+// originating file along so that diagnostics can be routed back to it once
+// several files have been spliced into one translation unit.
+func tokenFrom(ct *ContextToken) Token {
+	return Token{
+		Type:    ct.Type,
+		Literal: ct.Literal,
+		Line:    ct.Line,
+		Column:  ct.Column,
+		File:    ct.File,
+	}
 }
 
 // nextToken advances the parser to the next token
@@ -192,12 +207,7 @@ func (p *ContextAwareParser) parseStatement() Statement {
 // parseLabelStatement parses a label definition
 func (p *ContextAwareParser) parseLabelStatement() *LabelStatement {
 	stmt := &LabelStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 	}
 
 	// Extract label name (remove trailing ':')
@@ -218,12 +228,7 @@ func (p *ContextAwareParser) parseLabelStatement() *LabelStatement {
 // parseMultiLabelStatement parses a multi-label definition (!label:)
 func (p *ContextAwareParser) parseMultiLabelStatement() *LabelStatement {
 	stmt := &LabelStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 	}
 
 	// Extract multi-label name (remove leading '!' and trailing ':')
@@ -246,12 +251,7 @@ func (p *ContextAwareParser) parseMultiLabelStatement() *LabelStatement {
 // parseInstructionStatement parses a 6510 instruction with addressing mode
 func (p *ContextAwareParser) parseInstructionStatement() *InstructionStatement {
 	stmt := &InstructionStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 	}
 
 	// Store mnemonic info in token literal (for now, until we have enhanced AST)
@@ -433,12 +433,7 @@ func (p *ContextAwareParser) parseDirectiveStatement() *DirectiveStatement {
 	}
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Name: &Identifier{
 			Token: Token{
 				Type:    p.currentToken.Type,
@@ -468,12 +463,7 @@ func (p *ContextAwareParser) parseDataDirective() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Name: &Identifier{
 			Token: Token{
 				Type:    p.currentToken.Type,
@@ -535,12 +525,7 @@ func (p *ContextAwareParser) parseNamedDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Next token should be the identifier name (e.g., magic_number, counter)
@@ -549,12 +534,7 @@ func (p *ContextAwareParser) parseNamedDirective() *DirectiveStatement {
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		// Set the name to the identifier, not the directive
 		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		}
 
@@ -594,12 +574,7 @@ func (p *ContextAwareParser) parseNamedDirective() *DirectiveStatement {
 // parseForDirective parses .for loop directive
 func (p *ContextAwareParser) parseForDirective() *DirectiveStatement {
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Name: &Identifier{
 			Token: Token{
 				Type:    TOKEN_DIRECTIVE_KICK_FLOW,
@@ -648,12 +623,7 @@ func (p *ContextAwareParser) parseForDirective() *DirectiveStatement {
 // parseConditionalDirective parses .if/.else directive
 func (p *ContextAwareParser) parseConditionalDirective() *DirectiveStatement {
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Name: &Identifier{
 			Token: Token{
 				Type:    TOKEN_DIRECTIVE_KICK_FLOW,
@@ -689,12 +659,7 @@ func (p *ContextAwareParser) parseConditionalDirective() *DirectiveStatement {
 // parseBlockStatement parses a block { ... }
 func (p *ContextAwareParser) parseBlockStatement() *BlockStatement {
 	block := &BlockStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token:      tokenFrom(p.currentToken),
 		Statements: []Statement{},
 	}
 
@@ -724,12 +689,7 @@ func (p *ContextAwareParser) parseBlockStatement() *BlockStatement {
 	// Record the token the block ended on. Callers derive the block's range
 	// from it; leaving it at the zero value made every namespace scope end at
 	// line -1, so no scope ever matched a line lookup.
-	block.EndToken = Token{
-		Type:    p.currentToken.Type,
-		Literal: p.currentToken.Literal,
-		Line:    p.currentToken.Line,
-		Column:  p.currentToken.Column,
-	}
+	block.EndToken = tokenFrom(p.currentToken)
 
 	if p.debugMode {
 		log.Debug("parseBlockStatement: Exited loop, currentToken=%s", p.currentToken.Literal)
@@ -742,12 +702,7 @@ func (p *ContextAwareParser) parseBlockStatement() *BlockStatement {
 // Enum members have the format: IDENTIFIER = value [, IDENTIFIER = value]*
 func (p *ContextAwareParser) parseEnumBlock() *BlockStatement {
 	block := &BlockStatement{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token:      tokenFrom(p.currentToken),
 		Statements: []Statement{},
 	}
 
@@ -839,12 +794,7 @@ func (p *ContextAwareParser) parseEnumBlock() *BlockStatement {
 		}
 	}
 
-	block.EndToken = Token{
-		Type:    p.currentToken.Type,
-		Literal: p.currentToken.Literal,
-		Line:    p.currentToken.Line,
-		Column:  p.currentToken.Column,
-	}
+	block.EndToken = tokenFrom(p.currentToken)
 
 	return block
 }
@@ -934,6 +884,7 @@ func (p *ContextAwareParser) addError(message string, line, column int) {
 		},
 		Message: message,
 		Source:  "context-aware-parser",
+		URI:     p.uri,
 	}
 	p.diagnostics = append(p.diagnostics, diagnostic)
 }
@@ -1028,12 +979,7 @@ func (p *ContextAwareParser) parseExpression(precedence int) Expression {
 // parseIdentifier parses an identifier
 func (p *ContextAwareParser) parseIdentifier() Expression {
 	return &Identifier{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Value: p.currentToken.Literal,
 	}
 }
@@ -1066,12 +1012,7 @@ func (p *ContextAwareParser) parseMultiLabelReference() Expression {
 // parseIntegerLiteral parses numeric literals
 func (p *ContextAwareParser) parseIntegerLiteral() Expression {
 	lit := &IntegerLiteral{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 	}
 
 	var val int64
@@ -1112,12 +1053,7 @@ func (p *ContextAwareParser) parseIntegerLiteral() Expression {
 // parseProgramCounter parses the program counter (*) expression
 func (p *ContextAwareParser) parseProgramCounter() Expression {
 	return &ProgramCounterExpression{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 	}
 }
 
@@ -1130,12 +1066,7 @@ func (p *ContextAwareParser) parseStringLiteral() Expression {
 	}
 
 	return &StringLiteral{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Value: value,
 	}
 }
@@ -1143,12 +1074,7 @@ func (p *ContextAwareParser) parseStringLiteral() Expression {
 // parsePrefixExpression parses prefix expressions like #$00, -1, <addr, >addr
 func (p *ContextAwareParser) parsePrefixExpression() Expression {
 	expression := &PrefixExpression{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token:    tokenFrom(p.currentToken),
 		Operator: p.currentToken.Literal,
 	}
 
@@ -1178,12 +1104,7 @@ func (p *ContextAwareParser) parseBracketExpression() Expression {
 // already been parsed and the parser sits on the '?'.
 func (p *ContextAwareParser) parseTernaryExpression(condition Expression) Expression {
 	exp := &TernaryExpression{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token:     tokenFrom(p.currentToken),
 		Condition: condition,
 	}
 
@@ -1206,12 +1127,7 @@ func (p *ContextAwareParser) parseTernaryExpression(condition Expression) Expres
 // parseGroupedExpression parses expressions in parentheses
 // Also handles 6502 indirect addressing modes: ($80, x) and ($80), y
 func (p *ContextAwareParser) parseGroupedExpression() Expression {
-	openParen := Token{
-		Type:    p.currentToken.Type,
-		Literal: p.currentToken.Literal,
-		Line:    p.currentToken.Line,
-		Column:  p.currentToken.Column,
-	}
+	openParen := tokenFrom(p.currentToken)
 	openParenLine := p.currentToken.Line
 
 	p.nextToken() // skip (
@@ -1294,12 +1210,7 @@ func (p *ContextAwareParser) parseGroupedExpression() Expression {
 // parseInfixExpression parses infix expressions like a + b
 func (p *ContextAwareParser) parseInfixExpression(left Expression) Expression {
 	expression := &InfixExpression{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token:    tokenFrom(p.currentToken),
 		Operator: p.currentToken.Literal,
 		Left:     left,
 	}
@@ -1314,12 +1225,7 @@ func (p *ContextAwareParser) parseInfixExpression(left Expression) Expression {
 // parseCallExpression parses function calls
 func (p *ContextAwareParser) parseCallExpression(function Expression) Expression {
 	exp := &CallExpression{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token:    tokenFrom(p.currentToken),
 		Function: function,
 	}
 
@@ -1330,12 +1236,7 @@ func (p *ContextAwareParser) parseCallExpression(function Expression) Expression
 
 // parseBuiltinFunction parses built-in function calls
 func (p *ContextAwareParser) parseBuiltinFunction() Expression {
-	funcToken := Token{
-		Type:    p.currentToken.Type,
-		Literal: p.currentToken.Literal,
-		Line:    p.currentToken.Line,
-		Column:  p.currentToken.Column,
-	}
+	funcToken := tokenFrom(p.currentToken)
 
 	if p.peekToken == nil || p.peekToken.Type != TOKEN_LPAREN {
 		p.addError(fmt.Sprintf("Expected '(' after function '%s'", p.currentToken.Literal),
@@ -1358,12 +1259,7 @@ func (p *ContextAwareParser) parseBuiltinFunction() Expression {
 // parseBuiltinConstant parses built-in constants
 func (p *ContextAwareParser) parseBuiltinConstant() Expression {
 	return &Identifier{
-		Token: Token{
-			Type:    p.currentToken.Type,
-			Literal: p.currentToken.Literal,
-			Line:    p.currentToken.Line,
-			Column:  p.currentToken.Column,
-		},
+		Token: tokenFrom(p.currentToken),
 		Value: p.currentToken.Literal,
 	}
 }
@@ -1421,12 +1317,7 @@ func (p *ContextAwareParser) parseEncodingDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 		Name: &Identifier{
 			Token: Token{
 				Type:    directiveToken.Type,
@@ -1450,12 +1341,7 @@ func (p *ContextAwareParser) parseEncodingDirective() *DirectiveStatement {
 		}
 
 		stmt.Value = &StringLiteral{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: value,
 		}
 	} else {
@@ -1478,12 +1364,7 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Directives that take no arguments
@@ -1539,12 +1420,7 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 		// Expect string literal (filename)
 		if p.currentToken.Type == TOKEN_STRING {
 			stmt.Value = &StringLiteral{
-				Token: Token{
-					Type:    p.currentToken.Type,
-					Literal: p.currentToken.Literal,
-					Line:    p.currentToken.Line,
-					Column:  p.currentToken.Column,
-				},
+				Token: tokenFrom(p.currentToken),
 				Value: p.currentToken.Literal,
 			}
 			stmt.Name = nil // No symbol name for import
@@ -1567,12 +1443,7 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 		// #define, #undef: expect identifier (symbol name)
 		if p.currentToken.Type == TOKEN_IDENTIFIER {
 			stmt.Name = &Identifier{
-				Token: Token{
-					Type:    p.currentToken.Type,
-					Literal: p.currentToken.Literal,
-					Line:    p.currentToken.Line,
-					Column:  p.currentToken.Column,
-				},
+				Token: tokenFrom(p.currentToken),
 				Value: p.currentToken.Literal,
 			}
 			// No value for #define/#undef - just the symbol name
@@ -1601,20 +1472,17 @@ func (p *ContextAwareParser) parseDefineDirective() *DirectiveStatement {
 
 // parseImportDirective handles .import directive for data files
 // Format: .import binary "data.bin"
-//         .import c64 "music.sid"
-//         .import text "file.txt"
+//
+//	.import c64 "music.sid"
+//	.import text "file.txt"
+//
 // Note: For source files use #import (preprocessor directive)
 func (p *ContextAwareParser) parseImportDirective() *DirectiveStatement {
 	directiveName := strings.ToLower(p.currentToken.Literal)
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 		Name: &Identifier{
 			Token: Token{
 				Type:    directiveToken.Type,
@@ -1669,22 +1537,12 @@ func (p *ContextAwareParser) parseImportDirective() *DirectiveStatement {
 		}
 
 		elements = append(elements, &StringLiteral{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: value,
 		})
 
 		stmt.Value = &ArrayExpression{
-			Token: Token{
-				Type:    directiveToken.Type,
-				Literal: directiveToken.Literal,
-				Line:    directiveToken.Line,
-				Column:  directiveToken.Column,
-			},
+			Token:    tokenFrom(directiveToken),
 			Elements: elements,
 		}
 	} else {
@@ -1706,12 +1564,7 @@ func (p *ContextAwareParser) parseFunctionDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Move to next token (should be function name)
@@ -1720,12 +1573,7 @@ func (p *ContextAwareParser) parseFunctionDirective() *DirectiveStatement {
 	// Expect identifier (function name)
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		}
 		p.nextToken() // Move to parameter list or block
@@ -1762,12 +1610,7 @@ func (p *ContextAwareParser) parseMacroDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Move to next token (should be macro name)
@@ -1776,12 +1619,7 @@ func (p *ContextAwareParser) parseMacroDirective() *DirectiveStatement {
 	// Expect identifier (macro name)
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		}
 		p.nextToken() // Move to parameter list or block
@@ -1819,12 +1657,7 @@ func (p *ContextAwareParser) parsePseudocommandDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Move to next token (should be pseudocommand name)
@@ -1833,12 +1666,7 @@ func (p *ContextAwareParser) parsePseudocommandDirective() *DirectiveStatement {
 	// Expect identifier (pseudocommand name)
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		}
 		p.nextToken() // Move to parameter list or block
@@ -1876,12 +1704,7 @@ func (p *ContextAwareParser) parseNamespaceDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Move to next token (should be namespace name)
@@ -1890,12 +1713,7 @@ func (p *ContextAwareParser) parseNamespaceDirective() *DirectiveStatement {
 	// Expect identifier (namespace name)
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		stmt.Name = &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		}
 		p.nextToken() // Move to block
@@ -1925,12 +1743,7 @@ func (p *ContextAwareParser) parseEnumDirective() *DirectiveStatement {
 	directiveToken := p.currentToken
 
 	stmt := &DirectiveStatement{
-		Token: Token{
-			Type:    directiveToken.Type,
-			Literal: directiveToken.Literal,
-			Line:    directiveToken.Line,
-			Column:  directiveToken.Column,
-		},
+		Token: tokenFrom(directiveToken),
 	}
 
 	// Move to next token (should be opening brace '{')
@@ -1966,12 +1779,7 @@ func (p *ContextAwareParser) parseParameterList() []*Identifier {
 	// Parse first parameter
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		params = append(params, &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		})
 		p.nextToken()
@@ -1983,12 +1791,7 @@ func (p *ContextAwareParser) parseParameterList() []*Identifier {
 
 		if p.currentToken.Type == TOKEN_IDENTIFIER {
 			params = append(params, &Identifier{
-				Token: Token{
-					Type:    p.currentToken.Type,
-					Literal: p.currentToken.Literal,
-					Line:    p.currentToken.Line,
-					Column:  p.currentToken.Column,
-				},
+				Token: tokenFrom(p.currentToken),
 				Value: p.currentToken.Literal,
 			})
 			p.nextToken()
@@ -2020,12 +1823,7 @@ func (p *ContextAwareParser) parseColonSeparatedParameterList() []*Identifier {
 	// Parse first parameter
 	if p.currentToken.Type == TOKEN_IDENTIFIER {
 		params = append(params, &Identifier{
-			Token: Token{
-				Type:    p.currentToken.Type,
-				Literal: p.currentToken.Literal,
-				Line:    p.currentToken.Line,
-				Column:  p.currentToken.Column,
-			},
+			Token: tokenFrom(p.currentToken),
 			Value: p.currentToken.Literal,
 		})
 		p.nextToken()
@@ -2037,12 +1835,7 @@ func (p *ContextAwareParser) parseColonSeparatedParameterList() []*Identifier {
 
 		if p.currentToken.Type == TOKEN_IDENTIFIER {
 			params = append(params, &Identifier{
-				Token: Token{
-					Type:    p.currentToken.Type,
-					Literal: p.currentToken.Literal,
-					Line:    p.currentToken.Line,
-					Column:  p.currentToken.Column,
-				},
+				Token: tokenFrom(p.currentToken),
 				Value: p.currentToken.Literal,
 			})
 			p.nextToken()
@@ -2064,12 +1857,7 @@ func (p *ContextAwareParser) parseColonSeparatedParameterList() []*Identifier {
 // Format: macroName(arg1, arg2, ...)
 func (p *ContextAwareParser) parseMacroOrFunctionCallStatement() Statement {
 	// Current token is the identifier (macro/function name)
-	nameToken := Token{
-		Type:    p.currentToken.Type,
-		Literal: p.currentToken.Literal,
-		Line:    p.currentToken.Line,
-		Column:  p.currentToken.Column,
-	}
+	nameToken := tokenFrom(p.currentToken)
 
 	functionIdent := &Identifier{
 		Token: nameToken,
@@ -2106,12 +1894,7 @@ func (p *ContextAwareParser) parseMacroOrFunctionCallStatement() Statement {
 // Pseudocommands use colon-separated arguments instead of comma-separated
 func (p *ContextAwareParser) parsePseudocommandCallStatement() Statement {
 	// Current token is the identifier (pseudocommand name)
-	nameToken := Token{
-		Type:    p.currentToken.Type,
-		Literal: p.currentToken.Literal,
-		Line:    p.currentToken.Line,
-		Column:  p.currentToken.Column,
-	}
+	nameToken := tokenFrom(p.currentToken)
 
 	pseudocmdIdent := &Identifier{
 		Token: nameToken,
@@ -2237,6 +2020,7 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					Line:      stmt.Token.Line - 1,
 					Character: stmt.Token.Column - 1,
 				},
+				URI:   stmt.Token.File,
 				Scope: currentScope,
 			}
 
@@ -2252,6 +2036,7 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 					Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
 					Message:  err.Error(),
 					Source:   "parser",
+					URI:      symbol.URI,
 				}
 				sb.diagnostics = append(sb.diagnostics, diagnostic)
 			}
@@ -2338,6 +2123,7 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 						Line:      stmt.Name.Token.Line - 1,
 						Character: stmt.Name.Token.Column - 1,
 					},
+					URI:   stmt.Name.Token.File,
 					Scope: currentScope,
 				}
 				// A namespace may be declared more than once; the later
@@ -2411,6 +2197,7 @@ func (sb *scopeBuilder) buildScope(statements []Statement, currentScope *Scope) 
 								Line:      ident.Token.Line - 1,
 								Character: ident.Token.Column - 1,
 							},
+							URI:   ident.Token.File,
 							Scope: currentScope,
 						}
 						if err := currentScope.AddSymbol(symbol); err != nil {

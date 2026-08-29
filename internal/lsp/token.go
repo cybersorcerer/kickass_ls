@@ -18,6 +18,10 @@ type Token struct {
 	Literal string
 	Line    int
 	Column  int
+	// File is the document the token was read from. Line and Column are
+	// relative to that file, so after several files have been spliced into one
+	// translation unit this is what tells a diagnostic where it belongs.
+	File string
 }
 
 const (
@@ -93,24 +97,24 @@ const (
 	TOKEN_BUILTIN_COLOR_CONST
 
 	// Punctuation
-	TOKEN_COLON    // :
-	TOKEN_HASH     // #
-	TOKEN_DOT      // .
-	TOKEN_COMMA    // ,
-	TOKEN_PLUS     // +
-	TOKEN_MINUS    // -
-	TOKEN_ASTERISK // *
-	TOKEN_SLASH    // /
-	TOKEN_LPAREN   // (
-	TOKEN_RPAREN   // )
-	TOKEN_LBRACKET // [
-	TOKEN_RBRACKET // ]
-	TOKEN_LBRACE   // {
-	TOKEN_RBRACE   // }
-	TOKEN_EQUAL    // =
-	TOKEN_LESS     // <
-	TOKEN_GREATER  // >
-	TOKEN_AT       // @ (program counter reference)
+	TOKEN_COLON     // :
+	TOKEN_HASH      // #
+	TOKEN_DOT       // .
+	TOKEN_COMMA     // ,
+	TOKEN_PLUS      // +
+	TOKEN_MINUS     // -
+	TOKEN_ASTERISK  // *
+	TOKEN_SLASH     // /
+	TOKEN_LPAREN    // (
+	TOKEN_RPAREN    // )
+	TOKEN_LBRACKET  // [
+	TOKEN_RBRACKET  // ]
+	TOKEN_LBRACE    // {
+	TOKEN_RBRACE    // }
+	TOKEN_EQUAL     // =
+	TOKEN_LESS      // <
+	TOKEN_GREATER   // >
+	TOKEN_AT        // @ (program counter reference)
 	TOKEN_SEMICOLON // ; (for .for loops)
 )
 
@@ -202,9 +206,9 @@ type DirectiveInfo struct {
 
 // KickAssConfig represents the structure of the extended kickass.json
 type KickAssConfig struct {
-	Directives        []DirectiveInfo   `json:"directives"`
-	BuiltinFunctions  []BuiltinFunction `json:"builtinFunctions"`
-	BuiltinConstants  []BuiltinConstant `json:"builtinConstants"`
+	Directives       []DirectiveInfo   `json:"directives"`
+	BuiltinFunctions []BuiltinFunction `json:"builtinFunctions"`
+	BuiltinConstants []BuiltinConstant `json:"builtinConstants"`
 }
 
 // BuiltinFunction represents a built-in function from kickass.json
@@ -336,11 +340,11 @@ func loadDirectivesFromJSON() map[TokenType]*regexp.Regexp {
 	directives := config.Directives
 
 	// Group directives by category
-	preDirectives := []string{}    // #import, #importif etc
-	flowDirectives := []string{}   // .if, .for, .while, .return
-	asmDirectives := []string{}    // .align, .assert, .function, .macro etc
-	dataDirectives := []string{}   // .byte, .const, .var etc
-	textDirectives := []string{}   // .text, .te
+	preDirectives := []string{}  // #import, #importif etc
+	flowDirectives := []string{} // .if, .for, .while, .return
+	asmDirectives := []string{}  // .align, .assert, .function, .macro etc
+	dataDirectives := []string{} // .byte, .const, .var etc
+	textDirectives := []string{} // .text, .te
 
 	for _, directive := range directives {
 		dir := strings.ToLower(directive.Directive)
@@ -487,7 +491,7 @@ func initTokenDefs() {
 
 		// Numbers with optional # prefix - must have digits after prefix and end with word boundary
 		{TOKEN_NUMBER_HEX, regexp.MustCompile(`^#?\$[0-9a-fA-F]+\b`)},
-		{TOKEN_NUMBER_BIN, regexp.MustCompile(`^#?%[01][01]*`)}, // Must have at least one binary digit
+		{TOKEN_NUMBER_BIN, regexp.MustCompile(`^#?%[01][01]*`)},   // Must have at least one binary digit
 		{TOKEN_NUMBER_OCT, regexp.MustCompile(`^#?&[0-7][0-7]*`)}, // Must have at least one octal digit
 		{TOKEN_NUMBER_DEC, regexp.MustCompile(`^#?[0-9]+(\.[0-9]+)?`)},
 

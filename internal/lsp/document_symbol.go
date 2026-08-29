@@ -23,7 +23,7 @@ func toDocumentSymbolKind(kind SymbolKind) float64 {
 	case PseudoCommand:
 		return 12 // Function (closest match for pseudocommands)
 	case Namespace:
-		return 3  // Namespace
+		return 3 // Namespace
 	default:
 		return 1 // File (fallback)
 	}

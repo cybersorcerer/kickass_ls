@@ -16,4 +16,8 @@ type Diagnostic struct {
 	Severity DiagnosticSeverity
 	Source   string
 	Message  string
+	// URI is the document the diagnostic belongs to. It is empty for
+	// single-file analysis, where the caller already knows the document; after
+	// imports have been spliced together it names the originating file.
+	URI string
 }

@@ -18,6 +18,7 @@ type ForwardReference struct {
 	IsMultiLabel bool   // True if this is a multi-label reference
 	Direction    rune   // '+' for forward, '-' for backward (only for multi-labels)
 	Skip         int    // How many labels to skip: 1 for "!loop+", 3 for "!+++"
+	URI          string // Document the reference occurs in
 }
 
 // MacroDefinition represents a macro with enhanced analysis
@@ -439,6 +440,7 @@ func (a *SemanticAnalyzer) pass2ForwardReferenceResolution() {
 						},
 						Message: fmt.Sprintf("Forward reference: Branch distance %d out of range (-128 to +127)", distance),
 						Source:  "enhanced-analyzer",
+						URI:     ref.URI,
 					}
 					a.diagnostics = append(a.diagnostics, diagnostic)
 				}
@@ -453,6 +455,7 @@ func (a *SemanticAnalyzer) pass2ForwardReferenceResolution() {
 				},
 				Message: fmt.Sprintf("Undefined symbol '%s'", ref.SymbolName),
 				Source:  "enhanced-analyzer",
+				URI:     ref.URI,
 			}
 			a.diagnostics = append(a.diagnostics, diagnostic)
 		}
@@ -579,6 +582,7 @@ func (a *SemanticAnalyzer) walkExpression(expr Expression, currentScope *Scope) 
 							Range:    Range{Start: Position{Line: node.Token.Line - 1, Character: node.Token.Column - 1}, End: Position{Line: node.Token.Line - 1, Character: node.Token.Column}},
 							Message:  fmt.Sprintf("Incorrect number of arguments for %s '%s'. Expected %d, got %d", symbol.Kind.String(), symbol.Name, numParams, numArgs),
 							Source:   "analyzer",
+							URI:      node.Token.File,
 						}
 						a.diagnostics = append(a.diagnostics, diagnostic)
 					}
@@ -616,6 +620,7 @@ func (a *SemanticAnalyzer) checkForUnusedSymbols(scope *Scope) []Diagnostic {
 					Range:    Range{Start: symbol.Position, End: Position{Line: symbol.Position.Line, Character: symbol.Position.Character + len(symbol.Name)}},
 					Message:  fmt.Sprintf("Unused %s '%s'", symbol.Kind.String(), symbol.Name),
 					Source:   "analyzer",
+					URI:      symbol.URI,
 				}
 				diagnostics = append(diagnostics, diagnostic)
 			}
@@ -641,6 +646,7 @@ func (a *SemanticAnalyzer) addDiagnostic(severity DiagnosticSeverity, token Toke
 		},
 		Message: message,
 		Source:  "enhanced-analyzer",
+		URI:     token.File,
 	}
 	a.diagnostics = append(a.diagnostics, diagnostic)
 }
@@ -933,6 +939,7 @@ func (a *SemanticAnalyzer) validateBranchDistancePass1(operand Expression, token
 						Position:     Position{Line: token.Line - 1, Character: token.Column - 1},
 						Context:      "branch",
 						PC:           a.context.CurrentPC,
+						URI:          token.File,
 						IsMultiLabel: true,
 						Direction:    direction,
 						Skip:         skip,
@@ -957,6 +964,7 @@ func (a *SemanticAnalyzer) validateBranchDistancePass1(operand Expression, token
 					Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
 					Context:    "branch",
 					PC:         a.context.CurrentPC, // Store the PC where the branch instruction is
+					URI:        token.File,
 				})
 			}
 		}
@@ -975,6 +983,7 @@ func (a *SemanticAnalyzer) validateJumpTarget(operand Expression, token Token) {
 				Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
 				Context:    "jump",
 				PC:         a.context.CurrentPC,
+				URI:        token.File,
 			})
 		}
 	}
@@ -1006,6 +1015,7 @@ func (a *SemanticAnalyzer) validateSymbolsInExpression(expr Expression, token To
 				Position:   Position{Line: token.Line - 1, Character: token.Column - 1},
 				Context:    "operand",
 				PC:         a.context.CurrentPC,
+				URI:        token.File,
 			})
 		}
 	case *PrefixExpression:
@@ -1634,6 +1644,7 @@ func (a *SemanticAnalyzer) validateBuiltinFunctionCall(functionName string, args
 					Range:    Range{Start: Position{Line: token.Line - 1, Character: token.Column - 1}, End: Position{Line: token.Line - 1, Character: token.Column}},
 					Message:  fmt.Sprintf("Incorrect number of arguments for builtin function '%s'. Expected %d, got %d", functionName, expectedParams, actualParams),
 					Source:   "analyzer",
+					URI:      token.File,
 				}
 				a.diagnostics = append(a.diagnostics, diagnostic)
 			}

@@ -127,9 +127,9 @@ func (ctx *ProcessorContext) loadC64Memory(path string) error {
 
 	var memoryData struct {
 		MemoryMap struct {
-			Version string                       `json:"version"`
-			Source  string                       `json:"source"`
-			Regions map[string]json.RawMessage   `json:"regions"`
+			Version string                     `json:"version"`
+			Source  string                     `json:"source"`
+			Regions map[string]json.RawMessage `json:"regions"`
 		} `json:"memoryMap"`
 	}
 

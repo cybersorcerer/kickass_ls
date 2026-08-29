@@ -64,8 +64,8 @@ var (
 	labelRegex = regexp.MustCompile(`^(\s*)([a-zA-Z_][a-zA-Z0-9_]*|\![a-zA-Z_][a-zA-Z0-9_]*[\+\-]?)\s*:`)
 
 	// Comment patterns
-	lineCommentRegex  = regexp.MustCompile(`//.*$`)
-	blockCommentRegex = regexp.MustCompile(`/\*.*?\*/`)
+	lineCommentRegex      = regexp.MustCompile(`//.*$`)
+	blockCommentRegex     = regexp.MustCompile(`/\*.*?\*/`)
 	semicolonCommentRegex = regexp.MustCompile(`;.*$`)
 
 	// Block-starting directives

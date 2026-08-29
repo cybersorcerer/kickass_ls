@@ -27,7 +27,7 @@ func ParseDocument(uri string, text string) (*Scope, *AnalysisContext, []Diagnos
 	}
 
 	// Create context-aware lexer and parser
-	lexer := NewContextAwareLexer(text, processorCtx)
+	lexer := NewContextAwareLexer(text, uri, processorCtx)
 	parser := NewContextAwareParser(lexer, processorCtx)
 	program = parser.ParseProgram()
 	parserDiagnostics = parser.Errors()

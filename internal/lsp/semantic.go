@@ -25,9 +25,9 @@ func generateSemanticTokens(uri string, text string) []int {
 		symbolStore.contexts[uri] = context
 		symbolStore.Unlock()
 	}
-	
+
 	// Create context-aware lexer to tokenize the text
-	lexer := NewContextAwareLexer(text, globalProcessorContext)
+	lexer := NewContextAwareLexer(text, uri, globalProcessorContext)
 	tokens := []int{}
 
 	// Solution A: Dual Position Tracking (Single Pass)
@@ -118,7 +118,7 @@ func generateSemanticTokens(uri string, text string) []int {
 		lastEmittedLine = line
 		lastEmittedChar = char
 	}
-	
+
 	log.Debug("generateSemanticTokens: Generated %d tokens", len(tokens)/5)
 
 	// Debug: Output raw token values for enum section (tokens 875-900 = values 4375-4500)
@@ -136,7 +136,7 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 		return SemanticTokenMnemonic, 0 // Mnemonics (LDA, STA, JMP, etc.)
 
 	case TOKEN_DIRECTIVE_PC, TOKEN_DIRECTIVE_KICK_FLOW,
-		 TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
+		TOKEN_DIRECTIVE_KICK_ASM, TOKEN_DIRECTIVE_KICK_DATA, TOKEN_DIRECTIVE_KICK_TEXT:
 		return SemanticTokenDirective, SemanticTokenModifierDeclaration // Directives (.byte, .const, etc.)
 
 	case TOKEN_DIRECTIVE_KICK_PRE:
@@ -160,7 +160,7 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 
 	case TOKEN_LABEL:
 		return SemanticTokenLabel, 0 // Labels
-		
+
 	case TOKEN_IDENTIFIER:
 		// Check if it's a known symbol
 		if tree != nil {
@@ -169,7 +169,7 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 			}
 		}
 		return SemanticTokenVariable, 0 // Default to variable
-		
+
 	case TOKEN_BUILTIN_MATH_FUNC, TOKEN_BUILTIN_STRING_FUNC, TOKEN_BUILTIN_FILE_FUNC, TOKEN_BUILTIN_3D_FUNC:
 		return SemanticTokenFunction, SemanticTokenModifierReadonly // Built-in functions
 
@@ -187,7 +187,7 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 		return SemanticTokenOperator, 0 // Operators
 
 	case TOKEN_LPAREN, TOKEN_RPAREN, TOKEN_LBRACKET, TOKEN_RBRACKET,
-		 TOKEN_LBRACE, TOKEN_RBRACE, TOKEN_COMMA, TOKEN_COLON, TOKEN_SEMICOLON, TOKEN_DOT:
+		TOKEN_LBRACE, TOKEN_RBRACE, TOKEN_COMMA, TOKEN_COLON, TOKEN_SEMICOLON, TOKEN_DOT:
 		// Skip punctuation completely - let default editor highlighting handle them
 		// Solution A ensures positions remain correct even when skipping tokens
 		return -1, 0
@@ -199,19 +199,19 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 
 // TokenType constants for semantic highlighting
 const (
-	SemanticTokenKeyword = iota        // 0: "keyword" (generic fallback)
-	SemanticTokenVariable              // 1: "variable"
-	SemanticTokenFunction              // 2: "function"
-	SemanticTokenMacro                 // 3: "macro"
-	SemanticTokenPseudoCommand         // 4: "pseudocommand"
-	SemanticTokenNumber                // 5: "number"
-	SemanticTokenComment               // 6: "comment"
-	SemanticTokenString                // 7: "string"
-	SemanticTokenOperator              // 8: "operator"
-	SemanticTokenMnemonic              // 9: "mnemonic"
-	SemanticTokenDirective             // 10: "directive"
-	SemanticTokenPreprocessor          // 11: "preprocessor"
-	SemanticTokenLabel                 // 12: "label"
+	SemanticTokenKeyword       = iota // 0: "keyword" (generic fallback)
+	SemanticTokenVariable             // 1: "variable"
+	SemanticTokenFunction             // 2: "function"
+	SemanticTokenMacro                // 3: "macro"
+	SemanticTokenPseudoCommand        // 4: "pseudocommand"
+	SemanticTokenNumber               // 5: "number"
+	SemanticTokenComment              // 6: "comment"
+	SemanticTokenString               // 7: "string"
+	SemanticTokenOperator             // 8: "operator"
+	SemanticTokenMnemonic             // 9: "mnemonic"
+	SemanticTokenDirective            // 10: "directive"
+	SemanticTokenPreprocessor         // 11: "preprocessor"
+	SemanticTokenLabel                // 12: "label"
 )
 
 // TokenModifier constants. The LSP transmits modifiers as a bit set indexed by

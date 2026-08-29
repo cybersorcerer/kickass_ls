@@ -21,11 +21,11 @@ const (
 	StateForLoop
 	StateBlock
 	StateConditional
-	StateInstruction      // NEW: Inside 6510 instruction
-	StateAddressingMode   // NEW: Parsing addressing mode
-	StateOperand         // NEW: Parsing instruction operand
-	StateKickFunction    // NEW: Inside Kick Assembler function
-	StateKickConstant    // NEW: Kick Assembler constant context
+	StateInstruction    // NEW: Inside 6510 instruction
+	StateAddressingMode // NEW: Parsing addressing mode
+	StateOperand        // NEW: Parsing instruction operand
+	StateKickFunction   // NEW: Inside Kick Assembler function
+	StateKickConstant   // NEW: Kick Assembler constant context
 )
 
 // String returns the string representation of the lexer state
@@ -74,24 +74,24 @@ type ProcessorContext struct {
 	Constants              map[string]*ConstantInfo      `json:"constants"`
 
 	// C64 memory regions from c64memory.json
-	MemoryRegions    []*MemoryRegion `json:"memory_regions"`
-	MemoryMap        map[uint16]*MemoryRegion `json:"memory_map"` // For fast address lookups
+	MemoryRegions []*MemoryRegion          `json:"memory_regions"`
+	MemoryMap     map[uint16]*MemoryRegion `json:"memory_map"` // For fast address lookups
 
 	// Cached lookups for performance
-	AllMnemonics     map[string]*EnhancedMnemonicInfo `json:"-"` // Combined mnemonics cache
-	DirectiveNames   []string                         `json:"-"` // For completion
-	FunctionNames    []string                         `json:"-"` // For completion
-	ConstantNames    []string                         `json:"-"` // For completion
+	AllMnemonics   map[string]*EnhancedMnemonicInfo `json:"-"` // Combined mnemonics cache
+	DirectiveNames []string                         `json:"-"` // For completion
+	FunctionNames  []string                         `json:"-"` // For completion
+	ConstantNames  []string                         `json:"-"` // For completion
 
 	mutex sync.RWMutex
 }
 
 // EnhancedMnemonicInfo represents a 6510 mnemonic with all addressing modes for context-aware parser
 type EnhancedMnemonicInfo struct {
-	Name            string                 `json:"mnemonic"`
-	Description     string                 `json:"description"`
-	Type            string                 `json:"type"`
-	AddressingModes []*AddressingModeInfo  `json:"addressing_modes"`
+	Name            string                `json:"mnemonic"`
+	Description     string                `json:"description"`
+	Type            string                `json:"type"`
+	AddressingModes []*AddressingModeInfo `json:"addressing_modes"`
 }
 
 // AddressingModeInfo represents a specific addressing mode for a mnemonic
@@ -147,11 +147,11 @@ type ConstantInfo struct {
 type MemoryRegion struct {
 	Address     uint16            `json:"address"`
 	Name        string            `json:"name"`
-	Category    string            `json:"category"`    // "System", "Graphics", "Sound", etc.
-	Type        string            `json:"type"`        // "register", "ram", "rom", etc.
+	Category    string            `json:"category"` // "System", "Graphics", "Sound", etc.
+	Type        string            `json:"type"`     // "register", "ram", "rom", etc.
 	Size        int               `json:"size"`
 	Description string            `json:"description"`
-	Access      string            `json:"access"`      // "read", "write", "read/write"
+	Access      string            `json:"access"` // "read", "write", "read/write"
 	BitFields   map[string]string `json:"bitFields,omitempty"`
 	Examples    []string          `json:"examples,omitempty"`
 	Tips        []string          `json:"tips,omitempty"`
@@ -159,71 +159,73 @@ type MemoryRegion struct {
 
 // LexerContext represents the context stack for the lexer
 type LexerContext struct {
-	State      LexerState                 `json:"state"`
-	Directive  string                     `json:"directive,omitempty"`  // Current directive (.byte, .for, etc.)
-	Depth      int                        `json:"depth"`                // Nesting depth
-	Parameters map[string]interface{}     `json:"parameters,omitempty"` // Context-specific parameters
+	State      LexerState             `json:"state"`
+	Directive  string                 `json:"directive,omitempty"`  // Current directive (.byte, .for, etc.)
+	Depth      int                    `json:"depth"`                // Nesting depth
+	Parameters map[string]interface{} `json:"parameters,omitempty"` // Context-specific parameters
 }
 
 // ContextAwareLexer represents the new context-aware lexer
 type ContextAwareLexer struct {
-	input           string
-	position        int
-	line            int
-	column          int
-	contextStack    []LexerContext
-	processorCtx    *ProcessorContext
-	debugMode       bool
+	input        string
+	uri          string // document the input came from, stamped onto every token
+	position     int
+	line         int
+	column       int
+	contextStack []LexerContext
+	processorCtx *ProcessorContext
+	debugMode    bool
 
 	// Token buffer for lookahead
-	tokenBuffer     []*ContextToken
-	bufferPos       int
+	tokenBuffer []*ContextToken
+	bufferPos   int
 
 	// Parenthesis depth tracking for ; handling in .for loops
-	parenDepth      int
+	parenDepth int
 
-	mutex           sync.RWMutex
+	mutex sync.RWMutex
 }
 
 // ContextToken represents a token with enhanced context information
 type ContextToken struct {
-	Type        TokenType       `json:"type"`
-	Literal     string          `json:"literal"`
-	Line        int             `json:"line"`
-	Column      int             `json:"column"`
-	Context     LexerContext    `json:"context"`     // NEW: Context information
-	Metadata    *TokenMetadata  `json:"metadata"`    // NEW: Additional semantic info
+	Type     TokenType      `json:"type"`
+	Literal  string         `json:"literal"`
+	Line     int            `json:"line"`
+	Column   int            `json:"column"`
+	File     string         `json:"file"`     // document the token was read from
+	Context  LexerContext   `json:"context"`  // NEW: Context information
+	Metadata *TokenMetadata `json:"metadata"` // NEW: Additional semantic info
 }
 
 // TokenMetadata contains additional semantic information about tokens
 type TokenMetadata struct {
 	// Directive context
-	IsPartOfDirective   bool   `json:"is_part_of_directive,omitempty"`
-	DirectiveName       string `json:"directive_name,omitempty"`
-	ParameterIndex      int    `json:"parameter_index,omitempty"`
-	ExpressionDepth     int    `json:"expression_depth,omitempty"`
+	IsPartOfDirective bool   `json:"is_part_of_directive,omitempty"`
+	DirectiveName     string `json:"directive_name,omitempty"`
+	ParameterIndex    int    `json:"parameter_index,omitempty"`
+	ExpressionDepth   int    `json:"expression_depth,omitempty"`
 
 	// 6510 Instruction context
-	IsInstruction       bool                     `json:"is_instruction,omitempty"`
-	MnemonicInfo        *EnhancedMnemonicInfo    `json:"mnemonic_info,omitempty"`
-	AddressingMode      string                   `json:"addressing_mode,omitempty"`
-	IsOperand          bool                      `json:"is_operand,omitempty"`
-	OperandType        string                    `json:"operand_type,omitempty"` // "immediate", "absolute", "zeropage", etc.
+	IsInstruction  bool                  `json:"is_instruction,omitempty"`
+	MnemonicInfo   *EnhancedMnemonicInfo `json:"mnemonic_info,omitempty"`
+	AddressingMode string                `json:"addressing_mode,omitempty"`
+	IsOperand      bool                  `json:"is_operand,omitempty"`
+	OperandType    string                `json:"operand_type,omitempty"` // "immediate", "absolute", "zeropage", etc.
 
 	// Memory context
-	MemoryRegion       *MemoryRegion        `json:"memory_region,omitempty"`
-	IsMemoryAddress    bool                 `json:"is_memory_address,omitempty"`
-	AddressType        string               `json:"address_type,omitempty"` // "zeropage", "absolute", "relative"
+	MemoryRegion    *MemoryRegion `json:"memory_region,omitempty"`
+	IsMemoryAddress bool          `json:"is_memory_address,omitempty"`
+	AddressType     string        `json:"address_type,omitempty"` // "zeropage", "absolute", "relative"
 
 	// Kick Assembler context
-	IsKickFunction     bool                 `json:"is_kick_function,omitempty"`
-	FunctionInfo       *FunctionInfo        `json:"function_info,omitempty"`
-	IsKickConstant     bool                 `json:"is_kick_constant,omitempty"`
-	ConstantInfo       *ConstantInfo        `json:"constant_info,omitempty"`
+	IsKickFunction bool          `json:"is_kick_function,omitempty"`
+	FunctionInfo   *FunctionInfo `json:"function_info,omitempty"`
+	IsKickConstant bool          `json:"is_kick_constant,omitempty"`
+	ConstantInfo   *ConstantInfo `json:"constant_info,omitempty"`
 
 	// Validation hints
-	ValidationHints    []string             `json:"validation_hints,omitempty"`
-	Suggestions        []string             `json:"suggestions,omitempty"`
+	ValidationHints []string `json:"validation_hints,omitempty"`
+	Suggestions     []string `json:"suggestions,omitempty"`
 }
 
 // Global processor context instance
@@ -279,9 +281,10 @@ func LoadProcessorContext(mnemonicPath, kickassPath, c64MemoryPath string) error
 // Helper methods for ProcessorContext are implemented in context_aware_loader.go
 
 // NewContextAwareLexer creates a new context-aware lexer instance
-func NewContextAwareLexer(input string, processorCtx *ProcessorContext) *ContextAwareLexer {
+func NewContextAwareLexer(input string, uri string, processorCtx *ProcessorContext) *ContextAwareLexer {
 	return &ContextAwareLexer{
 		input:        input,
+		uri:          uri,
 		position:     0,
 		line:         1,
 		column:       1,
@@ -305,9 +308,9 @@ func (l *ContextAwareLexer) PushContext(state LexerState, directive string) {
 	defer l.mutex.Unlock()
 
 	newContext := LexerContext{
-		State:     state,
-		Directive: directive,
-		Depth:     len(l.contextStack),
+		State:      state,
+		Directive:  directive,
+		Depth:      len(l.contextStack),
 		Parameters: make(map[string]interface{}),
 	}
 
@@ -344,8 +347,19 @@ func (l *ContextAwareLexer) CurrentContext() LexerContext {
 	return l.contextStack[len(l.contextStack)-1]
 }
 
-// Main tokenization method - context-aware tokenization
+// NextToken returns the next token, stamped with the document it came from.
+// Every token the lexer produces passes through here, so this is the single
+// place the provenance has to be recorded.
 func (l *ContextAwareLexer) NextToken() *ContextToken {
+	token := l.nextToken()
+	if token != nil {
+		token.File = l.uri
+	}
+	return token
+}
+
+// Main tokenization method - context-aware tokenization
+func (l *ContextAwareLexer) nextToken() *ContextToken {
 	l.skipWhitespace()
 
 	// Check for EOF
@@ -478,11 +492,11 @@ func (l *ContextAwareLexer) readLineComment() *ContextToken {
 
 	literal := l.input[start:l.position]
 	token := &ContextToken{
-		Type:    TOKEN_COMMENT,
-		Literal: literal,
-		Line:    startLine,
-		Column:  startCol,
-		Context: l.CurrentContext(),
+		Type:     TOKEN_COMMENT,
+		Literal:  literal,
+		Line:     startLine,
+		Column:   startCol,
+		Context:  l.CurrentContext(),
 		Metadata: &TokenMetadata{},
 	}
 
@@ -518,11 +532,11 @@ func (l *ContextAwareLexer) readBlockComment() *ContextToken {
 
 	literal := l.input[start:l.position]
 	token := &ContextToken{
-		Type:    TOKEN_COMMENT_BLOCK,
-		Literal: literal,
-		Line:    startLine,
-		Column:  startCol,
-		Context: l.CurrentContext(),
+		Type:     TOKEN_COMMENT_BLOCK,
+		Literal:  literal,
+		Line:     startLine,
+		Column:   startCol,
+		Context:  l.CurrentContext(),
 		Metadata: &TokenMetadata{},
 	}
 
@@ -539,7 +553,7 @@ func (l *ContextAwareLexer) createToken(tokenType TokenType, literal string, sta
 		Type:     tokenType,
 		Literal:  literal,
 		Line:     l.line,
-		Column:   startCol,  // Use start column, not current column
+		Column:   startCol, // Use start column, not current column
 		Context:  l.CurrentContext(),
 		Metadata: metadata,
 	}
@@ -862,11 +876,11 @@ func (l *ContextAwareLexer) tokenizeOperand() *ContextToken {
 		// Make sure it's just a single letter (not part of a longer identifier)
 		if l.position >= len(l.input) || !isAlphaNumeric(l.peek()) {
 			token := &ContextToken{
-				Type:     TOKEN_IDENTIFIER, // Could create TOKEN_INDEX_REGISTER
-				Literal:  string(register),
-				Line:     l.line,
-				Column:   startCol,
-				Context:  l.CurrentContext(),
+				Type:    TOKEN_IDENTIFIER, // Could create TOKEN_INDEX_REGISTER
+				Literal: string(register),
+				Line:    l.line,
+				Column:  startCol,
+				Context: l.CurrentContext(),
 				Metadata: &TokenMetadata{
 					IsOperand:   true,
 					OperandType: "index_register",

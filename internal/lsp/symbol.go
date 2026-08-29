@@ -58,14 +58,15 @@ type Symbol struct {
 	Kind       SymbolKind
 	Value      string   // e.g., the value of a constant
 	Position   Position // The position of the definition
+	URI        string   // Document the definition lives in, for cross file jumps
 	Scope      *Scope   // The scope in which the symbol is defined
 	Params     []string // For functions and macros
 	Signature  string   // For functions and macros
 	UsageCount int      // To track references
 	// Enhanced semantic analysis fields
-	Address    int64      // Memory address of symbol (for labels, constants)
-	Size       int64      // Size in bytes (for data symbols)
-	CrossRefs  []Position // All usage positions for cross-references
+	Address   int64      // Memory address of symbol (for labels, constants)
+	Size      int64      // Size in bytes (for data symbols)
+	CrossRefs []Position // All usage positions for cross-references
 }
 
 // Scope represents a scope (e.g., a file, a namespace, or a function).
@@ -191,33 +192,33 @@ type Reference struct {
 // FindAllReferences finds all references to a symbol in the document
 func (s *Scope) FindAllReferences(symbolName, documentText, uri string) []map[string]interface{} {
 	references := []map[string]interface{}{}
-	
+
 	// Normalize the symbol name
 	normalizedName := normalizeLabel(symbolName)
-	
+
 	// Split document into lines for searching
 	lines := strings.Split(documentText, "\n")
-	
+
 	// Search through all lines
 	for lineNum, line := range lines {
 		// Find all occurrences of the symbol in this line
 		references = append(references, findReferencesInLine(line, lineNum, normalizedName, uri)...)
 	}
-	
+
 	return references
 }
 
 // findReferencesInLine finds all references to a symbol in a single line
 func findReferencesInLine(line string, lineNum int, symbolName, uri string) []map[string]interface{} {
 	references := []map[string]interface{}{}
-	
+
 	// Convert line to lowercase for case-insensitive search, but preserve original positions
 	lowerLine := strings.ToLower(line)
 	lowerSymbol := strings.ToLower(symbolName)
-	
+
 	// Find comment positions to exclude them from search
 	commentStart := findCommentStart(line)
-	
+
 	// Find all occurrences
 	searchIndex := 0
 	for {
@@ -225,15 +226,15 @@ func findReferencesInLine(line string, lineNum int, symbolName, uri string) []ma
 		if index == -1 {
 			break
 		}
-		
+
 		actualIndex := searchIndex + index
-		
+
 		// Skip if this occurrence is in a comment
 		if commentStart != -1 && actualIndex >= commentStart {
 			searchIndex = actualIndex + 1
 			continue
 		}
-		
+
 		// Check if this is a complete word (not part of another identifier)
 		if isCompleteWord(line, actualIndex, len(symbolName)) {
 			reference := map[string]interface{}{
@@ -251,17 +252,17 @@ func findReferencesInLine(line string, lineNum int, symbolName, uri string) []ma
 			}
 			references = append(references, reference)
 		}
-		
+
 		searchIndex = actualIndex + 1
 	}
-	
+
 	return references
 }
 
 // isCompleteWord checks if the found text is a complete word and not part of another identifier
 func isCompleteWord(line string, startPos, length int) bool {
 	endPos := startPos + length
-	
+
 	// Check character before (if exists)
 	if startPos > 0 {
 		charBefore := line[startPos-1]
@@ -269,7 +270,7 @@ func isCompleteWord(line string, startPos, length int) bool {
 			return false
 		}
 	}
-	
+
 	// Check character after (if exists)
 	if endPos < len(line) {
 		charAfter := line[endPos]
@@ -277,7 +278,7 @@ func isCompleteWord(line string, startPos, length int) bool {
 			return false
 		}
 	}
-	
+
 	return true
 }
 
@@ -297,10 +298,10 @@ func normalizeLabel(label string) string {
 func findCommentStart(line string) int {
 	inString := false
 	stringChar := byte(0)
-	
+
 	for i := 0; i < len(line); i++ {
 		c := line[i]
-		
+
 		// Handle string literals
 		if !inString {
 			if c == '"' || c == '\'' {
@@ -319,20 +320,20 @@ func findCommentStart(line string) int {
 			}
 			continue
 		}
-		
+
 		// If not in string, check for comments
 		if !inString {
 			// Check for C-style comments (//)
 			if c == '/' && i+1 < len(line) && line[i+1] == '/' {
 				return i
 			}
-			
+
 			// Check for assembly-style comments (;)
 			if c == ';' {
 				return i
 			}
 		}
 	}
-	
+
 	return -1
 }

@@ -18,7 +18,7 @@ type wantToken struct {
 func lexAll(t *testing.T, input string) []*ContextToken {
 	t.Helper()
 
-	l := NewContextAwareLexer(input, GetProcessorContext())
+	l := NewContextAwareLexer(input, "file:///test.asm", GetProcessorContext())
 	var got []*ContextToken
 
 	limit := len(input)*2 + 16
