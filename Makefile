@@ -21,7 +21,6 @@ BUILD_FLAGS := -trimpath
 
 # Cross-compilation targets
 PLATFORMS := \
-	darwin/amd64 \
 	darwin/arm64 \
 	linux/amd64 \
 	linux/arm64 \
@@ -102,13 +101,6 @@ install: build ## Install server to ~/.local/bin and config to ~/.config/kickass
 build-all: $(PLATFORMS) ## Build for all supported platforms
 	@echo "$(GREEN)✓ All platforms built successfully$(RESET)"
 
-darwin/amd64: ## Build for macOS Intel (x86_64)
-	@echo "$(CYAN)Building for macOS Intel (amd64)...$(RESET)"
-	@mkdir -p dist/darwin-amd64
-	@GOOS=darwin GOARCH=amd64 go build $(BUILD_FLAGS) $(LDFLAGS) -o dist/darwin-amd64/$(SERVER_NAME) .
-	@cd kickass_cl && GOOS=darwin GOARCH=amd64 go build $(BUILD_FLAGS) $(LDFLAGS) -o ../dist/darwin-amd64/$(CLIENT_NAME) .
-	@echo "$(GREEN)✓ macOS Intel build complete$(RESET)"
-
 darwin/arm64: ## Build for macOS Apple Silicon (ARM64)
 	@echo "$(CYAN)Building for macOS Apple Silicon (arm64)...$(RESET)"
 	@mkdir -p dist/darwin-arm64
@@ -138,8 +130,8 @@ windows/amd64: ## Build for Windows x86_64
 	@echo "$(GREEN)✓ Windows amd64 build complete$(RESET)"
 
 # Convenience targets for building all binaries per OS
-build-darwin: darwin/amd64 darwin/arm64 ## Build all macOS variants
-	@echo "$(GREEN)✓ All macOS builds complete$(RESET)"
+build-darwin: darwin/arm64 ## Build for macOS (Apple Silicon)
+	@echo "$(GREEN)✓ macOS build complete$(RESET)"
 
 build-linux: linux/amd64 linux/arm64 ## Build all Linux variants
 	@echo "$(GREEN)✓ All Linux builds complete$(RESET)"

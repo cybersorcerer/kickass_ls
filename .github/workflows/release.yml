@@ -59,7 +59,6 @@ jobs:
 
           ### Supported Platforms
 
-          - macOS (Intel): `kickass_ls-${{ steps.get_version.outputs.VERSION }}-darwin-amd64.tar.gz`
           - macOS (Apple Silicon): `kickass_ls-${{ steps.get_version.outputs.VERSION }}-darwin-arm64.tar.gz`
           - Linux (x86_64): `kickass_ls-${{ steps.get_version.outputs.VERSION }}-linux-amd64.tar.gz`
           - Linux (ARM64): `kickass_ls-${{ steps.get_version.outputs.VERSION }}-linux-arm64.tar.gz`

@@ -192,7 +192,6 @@ The installer will:
 ### Manual Installation
 
 1. Download the appropriate archive for your platform from the [releases page](https://github.com/cybersorcerer/kickass_ls/releases):
-   - macOS Intel: `kickass_ls-vX.X.X-darwin-amd64.tar.gz`
    - macOS Apple Silicon: `kickass_ls-vX.X.X-darwin-arm64.tar.gz`
    - Linux x86_64: `kickass_ls-vX.X.X-linux-amd64.tar.gz`
    - Linux ARM64: `kickass_ls-vX.X.X-linux-arm64.tar.gz`
