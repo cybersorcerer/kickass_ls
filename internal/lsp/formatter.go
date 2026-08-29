@@ -159,16 +159,13 @@ func (f *Formatter) phase1ParseLines(text string) {
 			continue
 		}
 
-		// Extract comment (if any) - we'll do this first to avoid confusing it with other elements
+		// Extract comment (if any) - we'll do this first to avoid confusing it with other elements.
+		// findCommentStart skips over string literals, so the // in .text "a // b"
+		// is not mistaken for a comment and the string survives reconstruction.
 		workingLine := line
 		comment := ""
 
-		// Check for line comment (//)
-		if idx := strings.Index(workingLine, "//"); idx >= 0 {
-			comment = workingLine[idx:]
-			workingLine = workingLine[:idx]
-		} else if idx := strings.Index(workingLine, ";"); idx >= 0 {
-			// Check for semicolon comment
+		if idx := findCommentStart(workingLine); idx >= 0 {
 			comment = workingLine[idx:]
 			workingLine = workingLine[:idx]
 		}
@@ -364,10 +361,19 @@ func (f *Formatter) phase4Reconstruct() string {
 
 	indentStr := f.makeIndentString(1)
 
+	// A trailing newline in the input produces a final empty element in f.lines.
+	// Every branch must therefore separate lines rather than terminate them, or
+	// each format run appends another newline to the document.
+	writeLineEnd := func(i int) {
+		if i < len(f.lines)-1 {
+			result.WriteString("\n")
+		}
+	}
+
 	for i, line := range f.lines {
 		// Blank lines - preserve as-is
 		if line.IsBlank {
-			result.WriteString("\n")
+			writeLineEnd(i)
 			continue
 		}
 
@@ -378,7 +384,7 @@ func (f *Formatter) phase4Reconstruct() string {
 				result.WriteString(indentStr)
 			}
 			result.WriteString(line.Comment)
-			result.WriteString("\n")
+			writeLineEnd(i)
 			continue
 		}
 
@@ -393,7 +399,7 @@ func (f *Formatter) phase4Reconstruct() string {
 				result.WriteString(" ")
 				result.WriteString(line.Comment)
 			}
-			result.WriteString("\n")
+			writeLineEnd(i)
 			continue
 		}
 
@@ -414,9 +420,7 @@ func (f *Formatter) phase4Reconstruct() string {
 				lineStr += line.Comment
 			}
 			result.WriteString(lineStr)
-			if i < len(f.lines)-1 {
-				result.WriteString("\n")
-			}
+			writeLineEnd(i)
 			continue
 		}
 
@@ -478,11 +482,7 @@ func (f *Formatter) phase4Reconstruct() string {
 		}
 
 		result.WriteString(lineStr)
-
-		// Add newline except for last line (to avoid adding extra newline at end)
-		if i < len(f.lines)-1 {
-			result.WriteString("\n")
-		}
+		writeLineEnd(i)
 	}
 
 	return result.String()
