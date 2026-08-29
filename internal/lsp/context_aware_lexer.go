@@ -1186,6 +1186,14 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 	startCol := l.column
 	ch := l.peek()
 
+	// Backtracking must undo the column too, not just the position. The prefix
+	// characters below ($ % & ' #) are also operators, so this path is taken for
+	// ordinary expressions like "a & b" or "a % b".
+	restore := func() {
+		l.position = start
+		l.column = startCol
+	}
+
 	// Optional # prefix for immediate values
 	if ch == '#' {
 		l.advance()
@@ -1229,7 +1237,7 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 			tokenType = TOKEN_NUMBER_HEX
 		} else {
 			// Just '$' with nothing after - not a number token
-			l.position = start
+			restore()
 			return nil
 		}
 	} else if ch == '%' {
@@ -1243,7 +1251,7 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 			literal = l.input[start:l.position]
 			tokenType = TOKEN_NUMBER_BIN
 		} else {
-			l.position = start
+			restore()
 			return nil
 		}
 	} else if ch == '&' {
@@ -1257,14 +1265,14 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 			literal = l.input[start:l.position]
 			tokenType = TOKEN_NUMBER_OCT
 		} else {
-			l.position = start
+			restore()
 			return nil
 		}
 	} else if ch == '\'' {
 		// Character literal ('A') - converts to ASCII value
 		l.advance() // skip opening '
 		if l.position >= len(l.input) {
-			l.position = start
+			restore()
 			return nil
 		}
 		charByte := l.peek() // the character itself
@@ -1272,7 +1280,7 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 
 		// Check for closing '
 		if l.peek() != '\'' {
-			l.position = start
+			restore()
 			return nil
 		}
 		l.advance() // skip closing '
@@ -1305,7 +1313,7 @@ func (l *ContextAwareLexer) tryTokenizeNumber() *ContextToken {
 		tokenType = TOKEN_NUMBER_DEC
 	} else {
 		// Not a number
-		l.position = start
+		restore()
 		return nil
 	}
 
