@@ -69,9 +69,11 @@ type TestExpected struct {
 
 	// Budgets for diagnostics tests. Pointers so that an explicit 0 is
 	// distinguishable from an absent field.
-	MaxErrors   *int `json:"maxErrors,omitempty"`
-	MinWarnings *int `json:"minWarnings,omitempty"`
-	MaxWarnings *int `json:"maxWarnings,omitempty"`
+	MaxErrors      *int `json:"maxErrors,omitempty"`
+	MinWarnings    *int `json:"minWarnings,omitempty"`
+	MaxWarnings    *int `json:"maxWarnings,omitempty"`
+	MinDiagnostics *int `json:"minDiagnostics,omitempty"`
+	MaxDiagnostics *int `json:"maxDiagnostics,omitempty"`
 
 	// For definition/references tests
 	Locations []ExpectedLocation `json:"locations,omitempty"`
@@ -489,6 +491,18 @@ func (tr *TestRunner) testDiagnostics(testCase TestCase, uri string, result Test
 	if exp := testCase.Expected.MaxWarnings; exp != nil && warnings > *exp {
 		result.Status = "FAIL"
 		result.Message = fmt.Sprintf("got %d warnings, expected at most %d", warnings, *exp)
+		result.Details = diagnostics
+		return result
+	}
+	if exp := testCase.Expected.MinDiagnostics; exp != nil && len(diagnostics) < *exp {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("got %d diagnostics, expected at least %d", len(diagnostics), *exp)
+		result.Details = diagnostics
+		return result
+	}
+	if exp := testCase.Expected.MaxDiagnostics; exp != nil && len(diagnostics) > *exp {
+		result.Status = "FAIL"
+		result.Message = fmt.Sprintf("got %d diagnostics, expected at most %d", len(diagnostics), *exp)
 		result.Details = diagnostics
 		return result
 	}

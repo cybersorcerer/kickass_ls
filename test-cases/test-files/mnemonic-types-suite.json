@@ -1,53 +1,60 @@
 {
-  "name": "Mnemonic Type Classification Test Suite",
-  "description": "Tests Branch/Jump/Return type classification from mnemonic.json",
+  "name": "Mnemonic Type Classification",
+  "description": "Branch, Jump and Return come from the type field in mnemonic.json. Only Jump and Return end a basic block, so only they may start a dead code region.",
+  "version": "1.1.0",
+  "setup": {
+    "serverPath": "kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
   "testCases": [
     {
-      "name": "Branch Instructions - BEQ recognized",
-      "file": "test-cases/test-mnemonic-types.asm",
+      "name": "Jump - dead code after JMP",
+      "description": "The instruction following an unconditional JMP is unreachable",
       "type": "diagnostics",
-      "expected": {
-        "minDiagnostics": 0,
-        "maxDiagnostics": 10
-      }
-    },
-    {
-      "name": "Dead Code Detection - After JMP",
-      "file": "test-cases/test-mnemonic-types.asm",
-      "type": "diagnostics",
+      "input": { "file": "test-mnemonic-types.asm" },
       "expected": {
         "diagnostics": [
-          {
-            "severity": "Warning",
-            "message": "Dead code: This code is unreachable"
-          }
+          { "line": 21, "severity": 2, "message": "Unreachable code after unconditional jump" }
         ]
       }
     },
     {
-      "name": "Dead Code Detection - After RTS",
-      "file": "test-cases/test-mnemonic-types.asm",
+      "name": "Return - dead code after RTS",
+      "description": "RTS has type Return and ends the block just like JMP",
       "type": "diagnostics",
+      "input": { "file": "test-mnemonic-types.asm" },
       "expected": {
         "diagnostics": [
-          {
-            "severity": "Warning",
-            "message": "Dead code: This code is unreachable"
-          }
+          { "line": 27, "severity": 2, "message": "Unreachable code after unconditional jump" }
         ]
       }
     },
     {
-      "name": "Completion after JMP - Only labels",
-      "file": "test-cases/completion-test.asm",
-      "type": "completion",
-      "position": {
-        "line": 24,
-        "character": 8
-      },
+      "name": "Return - dead code after RTI",
+      "description": "RTI carries the same type as RTS",
+      "type": "diagnostics",
+      "input": { "file": "test-mnemonic-types.asm" },
       "expected": {
-        "maxItems": 20,
-        "comment": "Should show only labels, not 130 items with directives/mnemonics"
+        "diagnostics": [
+          { "line": 33, "severity": 2, "message": "Unreachable code after unconditional jump" }
+        ]
+      }
+    },
+    {
+      "name": "Branch - conditional branches keep the following code reachable",
+      "description": "BEQ, BNE and BCC must not start a dead code region",
+      "type": "diagnostics",
+      "input": { "file": "test-mnemonic-types.asm" },
+      "expected": {
+        "forbiddenDiagnostics": [
+          { "line": 12, "message": "Unreachable" },
+          { "line": 13, "message": "Unreachable" },
+          { "line": 16, "message": "Unreachable" }
+        ],
+        "maxErrors": 0,
+        "maxDiagnostics": 7
       }
     }
   ]
