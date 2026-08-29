@@ -37,11 +37,20 @@ Correctness release. Every fix below is covered by a test that fails without it.
 - Preprocessor statements terminate a statement, so an instruction no longer swallows the following `#endif`
 - Comments between enum members are allowed
 
+**Cross-file symbols**
+
+- `#import` is followed: a file is analysed together with everything it imports, as one translation unit, the way the assembler sees it. Symbols defined in an imported file are known to the importer, so a shared constants file no longer reports every entry as unused
+- The workspace folder is scanned on startup to find out which file imports which; a file nobody imports is its own unit, so opening a single file without a folder behaves exactly as before
+- Import paths resolve relative to the importing file, with a fallback to any known file of the same name
+- Import cycles and missing imported files are reported on the `#import` line; `#importonce` is honoured
+- `#importif` parses its condition instead of mistaking it for the filename; the import is always followed so the symbols behind it stay known
+
 **Symbols, hover and completion**
 
 - `.label NAME = value` and enum members without an explicit value define symbols again, so hover and go-to-definition work on them
 - Hover works on symbols used as immediate operands (`lda #MYCONST`)
 - Namespace scopes now have a valid range, so completion inside a namespace sees its own symbols
+- Operands starting with `X` or `Y` lost their first letter: `lda #YELLOW` looked up a symbol named `ELLOW`
 - Built-in functions and constants are loaded from `kickass.json` again; the loader was reading keys that do not exist in the file
 
 **Semantic highlighting**
@@ -59,7 +68,7 @@ Correctness release. Every fix below is covered by a test that fails without it.
 
 **Tests**
 
-- Added the first Go unit tests: 201 cases covering the lexer, parser, formatter, expression evaluation and program counter arithmetic. `make test` and `make test-race`
+- Added the first Go unit tests: 260 cases covering the lexer, parser, formatter, expression evaluation and program counter arithmetic. `make test` and `make test-race`
 - The integration test runner now enforces `maxErrors`, `minWarnings` and `maxWarnings`, which were silently ignored, and gained `forbiddenDiagnostics` for asserting that a diagnostic is absent
 - Baseline test fixtures corrected to valid Kick Assembler (`.enum` takes no name, conditional assembly uses `#if`/`#endif`/`#undef`)
 
