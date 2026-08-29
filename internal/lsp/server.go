@@ -599,27 +599,23 @@ func startAnalysisWorker() {
 
 // processAnalysisJob processes a single analysis job
 func processAnalysisJob(job AnalysisJob) {
-	// Parse document with caching
-	symbolTree, analysisContext, diagnostics := ParseDocumentCached(job.URI, job.Content)
+	// The edited document is stale in the workspace; everything it is spliced
+	// into has to be rebuilt from it.
+	workspace.Invalidate(job.URI)
 
-	// Update symbol store
-	symbolStore.Lock()
-	symbolStore.trees[job.URI] = symbolTree
-	symbolStore.contexts[job.URI] = analysisContext
-	symbolStore.Unlock()
+	byDocument, members := analyzeUnit(job.URI)
 
 	if job.IsOpen {
-		log.Info("Parsed document and updated symbol store for %s", job.URI)
+		log.Info("Analysed unit for %s (%d documents)", job.URI, len(members))
 	} else {
-		log.Info("Reparsed document and updated symbol store for %s", job.URI)
+		log.Info("Reanalysed unit for %s (%d documents)", job.URI, len(members))
 	}
 
-	// Publish diagnostics
-	publishDiagnostics(job.Writer, job.URI, diagnostics)
-
-	// Note: We don't return diagnostics to the pool here because they may be
-	// referenced in the cache. The pool is mainly for temporary diagnostic slices
-	// during analysis. The cache will eventually be evicted and GC will clean up.
+	// Publish for every member, empty lists included, so that diagnostics which
+	// no longer apply disappear from the other files of the unit.
+	for member, diagnostics := range byDocument {
+		publishDiagnostics(job.Writer, member, diagnostics)
+	}
 }
 
 // submitAnalysisJob submits a job to the analysis queue (non-blocking)
@@ -842,6 +838,9 @@ func Start() {
 		switch method {
 		case "initialize":
 			log.Debug("Handling initialize request.")
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				initWorkspace(params)
+			}
 			result := map[string]interface{}{
 				"jsonrpc": "2.0",
 				"id":      message["id"],
@@ -956,6 +955,48 @@ func Start() {
 					}
 				}
 			}
+		case "workspace/didChangeWatchedFiles":
+			log.Debug("Handling workspace/didChangeWatchedFiles notification.")
+			if params, ok := message["params"].(map[string]interface{}); ok {
+				if changes, ok := params["changes"].([]interface{}); ok {
+					touched := []string{}
+					for _, raw := range changes {
+						change, ok := raw.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						uri, ok := change["uri"].(string)
+						if !ok {
+							continue
+						}
+						// 1 created, 2 changed, 3 deleted
+						if kind, ok := change["type"].(float64); ok && int(kind) == 3 {
+							workspace.Forget(uri)
+						} else {
+							workspace.Invalidate(uri)
+							workspace.Load(uri)
+						}
+						touched = append(touched, uri)
+					}
+
+					// Re-analyse the open documents whose unit may have changed.
+					documentStore.RLock()
+					open := make([]string, 0, len(documentStore.documents))
+					for openURI := range documentStore.documents {
+						open = append(open, openURI)
+					}
+					documentStore.RUnlock()
+
+					for _, openURI := range open {
+						byDocument, _ := analyzeUnit(openURI)
+						for member, diagnostics := range byDocument {
+							publishDiagnostics(writer, member, diagnostics)
+						}
+					}
+					log.Info("Watched files changed: %d, reanalysed %d open documents", len(touched), len(open))
+				}
+			}
+
 		case "textDocument/didOpen":
 			log.Debug("Handling textDocument/didOpen notification.")
 			if params, ok := message["params"].(map[string]interface{}); ok {
