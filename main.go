@@ -12,9 +12,10 @@ import (
 	lsp "c64.nvim/internal/lsp"
 )
 
-// Version information (set via ldflags during build)
+// Version information (set via ldflags during build). This is the single place
+// the version is written down; the LSP server reads it through lsp.SetVersion.
 var (
-	Version   = "1.0.5"
+	Version   = "1.1.0"
 	BuildDate = "unknown"
 )
 
@@ -55,6 +56,7 @@ func main() {
 	}
 
 	lsp.SetWarnUnusedLabels(*warnUnused)
+	lsp.SetVersion(Version)
 
 	// Initialize logger
 	if err := log.InitLogger(); err != nil {

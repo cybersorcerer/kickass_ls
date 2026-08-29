@@ -685,6 +685,16 @@ func SetWarnUnusedLabels(enabled bool) {
 	warnUnusedLabelsEnabled = enabled
 }
 
+// serverVersion is what the server reports in the initialize result. It is set
+// once from main so the version lives in a single place and can be overridden
+// at build time through ldflags.
+var serverVersion = "dev"
+
+// SetVersion sets the version reported to the client.
+func SetVersion(version string) {
+	serverVersion = version
+}
+
 // Start initializes and runs the LSP server.
 func Start() {
 	log.Info("LSP server starting...")
@@ -882,7 +892,7 @@ func Start() {
 					},
 					"serverInfo": map[string]interface{}{
 						"name":    "kickass_ls",
-						"version": "1.0.7", // Version updated
+						"version": serverVersion,
 					},
 				},
 			}

@@ -4,9 +4,10 @@ build/
 dist/
 bin/
 
-# Old binaries (before Makefile)
-kickass_ls
-kickass_cl
+# Old binaries (before Makefile). Anchored so the patterns do not also
+# match the kickass_cl source directory.
+/kickass_ls
+/kickass_cl
 kickass_cl/kickass_cl
 kickass_cl/test-client
 

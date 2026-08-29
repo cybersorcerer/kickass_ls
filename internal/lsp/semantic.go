@@ -177,7 +177,13 @@ func getSemanticTokenType(token Token, tree *Scope) (int, int) {
 		return SemanticTokenVariable, SemanticTokenModifierReadonly // Built-in constants
 
 	case TOKEN_HASH, TOKEN_LESS, TOKEN_GREATER, TOKEN_PLUS, TOKEN_MINUS,
-		 TOKEN_ASTERISK, TOKEN_SLASH, TOKEN_EQUAL:
+		TOKEN_ASTERISK, TOKEN_SLASH, TOKEN_EQUAL,
+		TOKEN_LEFT_SHIFT, TOKEN_RIGHT_SHIFT,
+		TOKEN_BITWISE_AND, TOKEN_BITWISE_OR, TOKEN_BITWISE_XOR, TOKEN_BITWISE_NOT,
+		TOKEN_MODULO,
+		TOKEN_EQUAL_EQUAL, TOKEN_NOT_EQUAL, TOKEN_LESS_EQUAL, TOKEN_GREATER_EQUAL,
+		TOKEN_LOGICAL_NOT, TOKEN_LOGICAL_AND, TOKEN_LOGICAL_OR,
+		TOKEN_QUESTION:
 		return SemanticTokenOperator, 0 // Operators
 
 	case TOKEN_LPAREN, TOKEN_RPAREN, TOKEN_LBRACKET, TOKEN_RBRACKET,
@@ -208,10 +214,13 @@ const (
 	SemanticTokenLabel                 // 12: "label"
 )
 
-// TokenModifier constants
+// TokenModifier constants. The LSP transmits modifiers as a bit set indexed by
+// the legend, not as an index into it: bit 0 is "declaration", bit 1 is
+// "readonly". Numbering them with iota sent 0 (no modifier at all) for
+// declarations and 1 ("declaration") for read only symbols.
 const (
-	SemanticTokenModifierDeclaration = iota
-	SemanticTokenModifierReadonly
+	SemanticTokenModifierDeclaration = 1 << iota // legend index 0
+	SemanticTokenModifierReadonly                // legend index 1
 )
 
 // encodeSemanticToken encodes a semantic token for LSP
