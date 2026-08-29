@@ -36,7 +36,7 @@ RESET := \033[0m
 
 .PHONY: all help clean build build-server build-client install \
 	build-all build-darwin build-linux build-windows \
-	test test-integration test-client \
+	test test-race test-integration test-client \
 	release clean-bin version
 
 # Default target
@@ -178,6 +178,16 @@ release: build-all ## Create release packages for all platforms
 	@echo "$(GREEN)✓ Checksums generated in dist/releases/checksums.txt$(RESET)"
 
 # Testing targets
+test: ## Run Go unit tests
+	@echo "$(CYAN)Running unit tests...$(RESET)"
+	@go test ./...
+	@echo "$(GREEN)✓ Unit tests passed$(RESET)"
+
+test-race: ## Run Go unit tests with the race detector
+	@echo "$(CYAN)Running unit tests with race detector...$(RESET)"
+	@go test -race ./...
+	@echo "$(GREEN)✓ Unit tests passed (race detector clean)$(RESET)"
+
 test-integration: build ## Run integration tests with test client
 	@echo "$(CYAN)Running integration tests...$(RESET)"
 	@$(GOBIN)/$(CLIENT_BIN) -server $(GOBIN)/$(SERVER_NAME) -suite test-cases/test-files/test-encoding-suite.json
