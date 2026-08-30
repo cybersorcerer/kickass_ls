@@ -2,6 +2,7 @@ package lsp
 
 import (
 	"os"
+	"sort"
 
 	log "c64.nvim/internal/log"
 )
@@ -106,4 +107,27 @@ func workspaceRootFrom(params map[string]interface{}) string {
 		return path
 	}
 	return ""
+}
+
+// referencesInUnit collects references from every file of the translation unit
+// the document belongs to. A symbol declared in an imported file is used across
+// the whole unit, so searching the open buffer alone finds only some of them.
+func referencesInUnit(scope *Scope, symbolName, uri, text string) []map[string]interface{} {
+	sources := workspace.UnitSources(workspace.PrimaryRootFor(uri))
+	if len(sources) == 0 {
+		return scope.FindAllReferences(symbolName, text, uri)
+	}
+
+	// Sorted so the editor lists the hits the same way on every request.
+	members := make([]string, 0, len(sources))
+	for member := range sources {
+		members = append(members, member)
+	}
+	sort.Strings(members)
+
+	references := []map[string]interface{}{}
+	for _, member := range members {
+		references = append(references, scope.FindAllReferences(symbolName, sources[member], member)...)
+	}
+	return references
 }

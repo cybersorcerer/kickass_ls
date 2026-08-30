@@ -1,0 +1,34 @@
+{
+  "name": "Cross-file navigation",
+  "description": "Go to definition and find references must reach across #import, not stop at the open file.",
+  "version": "1.1.1",
+  "setup": {
+    "serverPath": "kickass_ls",
+    "serverArgs": ["--debug"],
+    "rootPath": ".",
+    "files": {}
+  },
+  "testCases": [
+    {
+      "name": "Definition of an imported constant lands in the imported file",
+      "type": "definition",
+      "input": { "file": "xref-main.asm", "line": 6, "character": 14 },
+      "expected": {
+        "locations": [
+          { "file": "xref-constants.asm", "line": 1, "character": 7 }
+        ]
+      }
+    },
+    {
+      "name": "References to an imported constant include the definition",
+      "type": "references",
+      "input": { "file": "xref-main.asm", "line": 6, "character": 14 },
+      "expected": {
+        "locations": [
+          { "file": "xref-constants.asm", "line": 1, "character": 7 },
+          { "file": "xref-main.asm", "line": 6, "character": 12 }
+        ]
+      }
+    }
+  ]
+}

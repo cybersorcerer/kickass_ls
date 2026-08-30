@@ -10,6 +10,12 @@ Made with love for the retro computing community.
 
 ## Changelog
 
+### v1.1.1
+
+- Go to definition on a symbol from an imported file jumped to that line in the **current** file instead of the file the symbol is declared in. The position was right, the document was not
+- Find references searched only the open buffer, so uses in other files of the same translation unit were missing — including the declaration itself
+- With references now spanning files, the filter for `includeDeclaration: false` compares the document as well; the same line and column in a different file is a different place
+
 ### v1.1.0
 
 Correctness release. Every fix below is covered by a test that fails without it.

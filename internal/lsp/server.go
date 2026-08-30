@@ -1255,18 +1255,23 @@ func Start() {
 														// First check if the symbol exists
 														if symbol, found := symbolTree.FindSymbol(normalizedWord); found {
 															// Find all references to this symbol
-															references := symbolTree.FindAllReferences(normalizedWord, text, uri)
+															references := referencesInUnit(symbolTree, normalizedWord, uri, text)
 
 															// If includeDeclaration is false, filter out the declaration
 															if !includeDeclaration && len(references) > 0 {
 																filteredReferences := []map[string]interface{}{}
+																declarationURI := definitionURI(symbol, uri)
 																for _, ref := range references {
 																	if refRange, ok := ref["range"].(map[string]interface{}); ok {
 																		if start, ok := refRange["start"].(map[string]interface{}); ok {
 																			if refLine, ok := start["line"].(float64); ok {
 																				if refChar, ok := start["character"].(float64); ok {
-																					// Skip if this is the declaration position
-																					if int(refLine) != symbol.Position.Line ||
+																					// Across files the same line and column can
+																					// belong to a different document, so the URI
+																					// has to match too.
+																					refURI, _ := ref["uri"].(string)
+																					if refURI != declarationURI ||
+																						int(refLine) != symbol.Position.Line ||
 																						int(refChar) != symbol.Position.Character {
 																						filteredReferences = append(filteredReferences, ref)
 																					}
@@ -1851,6 +1856,16 @@ func getWordAtPosition(line string, char int) string {
 }
 
 // handleGotoDefinition handles goto definition requests for both regular labels and multi-labels
+// definitionURI is the document a symbol was declared in. Symbols spliced in
+// from an imported file carry it; fall back to the requesting document when a
+// symbol predates that field.
+func definitionURI(symbol *Symbol, fallback string) string {
+	if symbol != nil && symbol.URI != "" {
+		return symbol.URI
+	}
+	return fallback
+}
+
 func handleGotoDefinition(uri string, lineNum int, charNum int) interface{} {
 	documentStore.RLock()
 	text, docFound := documentStore.documents[uri]
@@ -1913,7 +1928,7 @@ func handleGotoDefinition(uri string, lineNum int, charNum int) interface{} {
 			// The token in the source is "!" + name + the terminator.
 			length := len(labelName) + 2
 			return map[string]interface{}{
-				"uri": uri,
+				"uri": definitionURI(sym, uri),
 				"range": map[string]interface{}{
 					"start": map[string]interface{}{"line": sym.Position.Line, "character": sym.Position.Character},
 					"end":   map[string]interface{}{"line": sym.Position.Line, "character": sym.Position.Character + length},
@@ -1962,7 +1977,9 @@ func handleGotoDefinition(uri string, lineNum int, charNum int) interface{} {
 	scopeAtCursor := symbolTree.findInnermostScope(lineNum)
 	if symbol, found := scopeAtCursor.FindSymbol(normalizeLabel(word)); found {
 		return map[string]interface{}{
-			"uri": uri,
+			// The definition may well live in an imported file, so the symbol
+			// carries its own document. Falling back keeps older trees working.
+			"uri": definitionURI(symbol, uri),
 			"range": map[string]interface{}{
 				"start": map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character},
 				"end":   map[string]interface{}{"line": symbol.Position.Line, "character": symbol.Position.Character + len(symbol.Name)},
