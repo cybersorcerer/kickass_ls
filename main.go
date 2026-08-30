@@ -15,7 +15,7 @@ import (
 // Version information (set via ldflags during build). This is the single place
 // the version is written down; the LSP server reads it through lsp.SetVersion.
 var (
-	Version   = "1.1.0"
+	Version   = "1.1.1"
 	BuildDate = "unknown"
 )
 
